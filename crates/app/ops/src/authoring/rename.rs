@@ -5,7 +5,8 @@
 //! editor. The edits are exactly the tokens the graph's finder reads (ADR 0163: the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
-//! and is left alone (ADR 0016).
+//! and is left alone (ADR 0016). A rename changes the graph by a substitution only: a name written for no entity that
+//! its new ID would capture refuses it (`name_captured`, ADR 0198).
 
 use crate::authoring::entity_id::validate_id;
 use crate::authoring::planned::PlannedChange;
@@ -14,6 +15,7 @@ use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_graph::{Form, Holder, Node, written_tokens};
 use specforge_parser::lex::lex;
 use std::collections::BTreeSet;
 
@@ -32,6 +34,9 @@ pub const TAKEN: &str = "entity_exists";
 pub const NOT_RENAMEABLE: &str = "not_renameable";
 /// A source that does not parse spells the ID: the rename cannot see its references.
 pub const UNPARSED: &str = "source_unparsed";
+/// The project writes the new ID for no entity (a type name, a reference that does not resolve): the rename would make
+/// it name the renamed entity.
+pub const CAPTURED: &str = "name_captured";
 /// The edits that rename one entity: its declaration and every reference, and the change they make.
 #[derive(Debug, Clone)]
 pub struct RenamePlan {
@@ -61,7 +66,8 @@ impl RenamePlan {
 /// longer spells the ID where the graph says, or a source that does not parse
 /// and spells the ID as a name) is refused, rather than guessing or leaving a
 /// reference behind; so is a spec block, whose name is a string, not an
-/// entity ID (`not_renameable`). Refused with `config_invalid`
+/// entity ID (`not_renameable`), and so is a new ID the project already writes for no entity, which the rename would
+/// capture (`name_captured`). Refused with `config_invalid`
 /// when the compile's `specforge.json` does not say which files are the
 /// project's sources
 /// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites)).
@@ -99,6 +105,21 @@ pub fn plan(
         .with_entity(old_id)
         .about(RenameField::OldId));
     }
+    let captured = captured(nav, node, new_id);
+    if !captured.is_empty() {
+        return Err(OpError::new(
+            OpErrorKind::Conflict,
+            CAPTURED,
+            format!(
+                "cannot rename '{old_id}' to '{new_id}': the project writes '{new_id}' for no entity at {}, \
+                 which the rename would make name '{old_id}'",
+                captured.join(", ")
+            ),
+        )
+        .with_suggestion("choose another name, or change the name written there first")
+        .with_entity(old_id)
+        .about(RenameField::NewId));
+    }
     let occurrences = nav
         .tokens(old_id, true)
         .map_err(|refusal| refusal.map_subject(|EntityField::EntityId| Some(RenameField::OldId)))?;
@@ -119,13 +140,13 @@ pub fn plan(
         )
         .into());
     }
-    let unparsed = unparsed(nav, old_id);
+    let unparsed = unparsed(nav, [old_id, new_id]);
     if !unparsed.is_empty() {
         return Err(OpError::new(
             OpErrorKind::PreconditionFailed,
             UNPARSED,
             format!(
-                "cannot rename '{old_id}': {} do not parse, and spell it where no reference can be read",
+                "cannot rename '{old_id}': {} do not parse, and spell '{old_id}' or '{new_id}' where no reference can be read",
                 unparsed.join(", ")
             ),
         )
@@ -175,10 +196,41 @@ pub fn plan(
     })
 }
 
-/// The sources whose parse failed (E001) and whose text spells `id` as a name (an identifier or ref
+/// Where the project writes `new_id` as a name no entity carries, which the rename would make name `node` (a
+/// capture): each token the graph's finder reads in the compiled parses as naming `new_id`, were an entity of `node`'s
+/// kind declared under it (ADR 0163; the delete's referrer scan asks the same), as `file:line (holder, field)`, once
+/// each, in key order. A type name in `node`'s own block is not one: a block derives no edge to itself.
+fn captured(nav: &Navigator<'_>, node: &Node, new_id: &str) -> Vec<String> {
+    let inputs = nav.view().registries().graph_inputs();
+    let kind = node.kind.raw;
+    let kind_of = |name: &str| (name == new_id).then_some(kind);
+    let mut places = Vec::new();
+    for (key, file) in nav.view().project().parsed() {
+        for token in written_tokens(file, inputs, kind_of) {
+            let own = token.holder == Holder::Block(node.id.raw) && token.form == Form::Derived;
+            if token.target.as_str() != new_id || own {
+                continue;
+            }
+            let holder = match token.holder {
+                Holder::Block(id) => id.to_string(),
+                Holder::Defaults(kind) => format!("defaults {kind}"),
+            };
+            let place = format!(
+                "{key}:{} ({holder}, {})",
+                token.span.start_line, token.field
+            );
+            if !places.contains(&place) {
+                places.push(place);
+            }
+        }
+    }
+    places
+}
+
+/// The sources whose parse failed (E001) and whose text spells one of `ids` as a name (an identifier or ref
 /// ID lexeme, so not in a string or a comment), in key order: references the graph does not hold,
 /// which a rename would leave behind. A source whose text is unknown is not judged.
-fn unparsed<'n>(nav: &'n Navigator<'_>, id: &str) -> Vec<&'n str> {
+fn unparsed<'n>(nav: &'n Navigator<'_>, ids: [&str; 2]) -> Vec<&'n str> {
     nav.view()
         .project()
         .parsed()
@@ -187,7 +239,7 @@ fn unparsed<'n>(nav: &'n Navigator<'_>, id: &str) -> Vec<&'n str> {
             nav.source_text(key).is_some_and(|text| {
                 lex(&text)
                     .iter()
-                    .any(|l| l.is_name() && l.text(&text) == id)
+                    .any(|l| l.is_name() && ids.contains(&l.text(&text)))
             })
         })
         .map(|(key, _)| key)
