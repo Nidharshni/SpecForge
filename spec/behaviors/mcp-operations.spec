@@ -293,6 +293,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "each string in extensions is one specifier, as add_extension reads each of specifiers"
   verify unit "default version is 0.1.0"
   verify unit "path inside current project returns error"
+  verify unit "with nothing served, init refuses a directory whose files an enclosing project reads, as a conflict on path, before anything is written"
   verify unit "init inside the served project is refused by the call target as a conflict on path, before anything is written"
   verify unit "init refuses a directory whose starter file exists, writing nothing"
   verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"

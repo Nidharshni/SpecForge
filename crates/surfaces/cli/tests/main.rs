@@ -34,6 +34,7 @@ mod format;
 mod format_corpus;
 mod hard_links;
 mod init;
+mod init_enclosing;
 mod init_starter;
 mod inspect_views;
 mod installed_extensions;

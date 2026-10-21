@@ -17,6 +17,7 @@ mod format_config_links;
 mod format_forms;
 mod hard_links;
 mod infer_sources;
+mod init_enclosing;
 mod invariants;
 mod lifecycle;
 mod local_specifier_containment;
