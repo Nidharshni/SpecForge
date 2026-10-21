@@ -349,6 +349,7 @@ fn graph_after(change: Option<Change>) -> Graph {
             methods: if methods {
                 vec![MethodDecl {
                     name: "run".into(),
+                    name_span: None,
                     params: Vec::new(),
                     returns: None,
                     returns_span: None,

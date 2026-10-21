@@ -260,6 +260,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_line: 17,
             end_col: 2,
         },
+        name_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 2,
+                start_col: 10,
+                end_line: 2,
+                end_col: 21,
+            },
+        ),
         methods: [],
         obligations: [
             VerifyStatement {

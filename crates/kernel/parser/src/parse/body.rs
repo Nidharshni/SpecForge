@@ -176,8 +176,8 @@ impl<'a> ParseContext<'a> {
     }
 
     fn parse_method_statement(&self, node: Node) -> MethodDecl {
-        let name = node
-            .child_by_field_name(field::NAME)
+        let name_node = node.child_by_field_name(field::NAME);
+        let name = name_node
             .map(|n| self.text(n).to_string())
             .unwrap_or_default();
         let returns_node = node.child_by_field_name(field::RETURNS);
@@ -213,6 +213,7 @@ impl<'a> ParseContext<'a> {
         }
         MethodDecl {
             name,
+            name_span: name_node.map(|n| self.span(n)),
             params,
             returns,
             returns_span: returns_node.map(|n| self.span(n)),

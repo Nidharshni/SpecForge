@@ -6,10 +6,8 @@ impl<'a> ParseContext<'a> {
             .child_by_field_name(field::KIND)
             .map(|n| Sym::new(self.text(n)))
             .unwrap_or_else(|| Sym::new(""));
-        let name = node
-            .child_by_field_name(field::NAME)
-            .map(|n| Sym::new(self.text(n)))
-            .unwrap_or_else(|| Sym::new(""));
+        let name_node = node.child_by_field_name(field::NAME);
+        let name = name_node.map_or_else(|| Sym::new(""), |n| Sym::new(self.text(n)));
         let title = node
             .child_by_field_name(field::TITLE)
             .map(|n| self.unquote(n));
@@ -21,16 +19,15 @@ impl<'a> ParseContext<'a> {
             title,
             fields,
             span: self.span(node),
+            name_span: name_node.map(|n| self.span(n)),
             methods,
             obligations: verify,
         });
     }
 
     pub(super) fn parse_spec_block(&mut self, node: Node) {
-        let name = node
-            .child_by_field_name(field::NAME)
-            .map(|n| self.unquote(n))
-            .unwrap_or_default();
+        let name_node = node.child_by_field_name(field::NAME);
+        let name = name_node.map(|n| self.unquote(n)).unwrap_or_default();
 
         let (fields, verify, methods) = self.parse_block_body(node);
         self.entities.push(Entity {
@@ -43,6 +40,7 @@ impl<'a> ParseContext<'a> {
             title: Some(name),
             fields,
             span: self.span(node),
+            name_span: name_node.map(|n| self.span(n)),
             methods,
             obligations: verify,
         });
@@ -53,10 +51,8 @@ impl<'a> ParseContext<'a> {
             self.push_error_node(node);
             return;
         };
-        let id_text = inner
-            .child_by_field_name(field::ID)
-            .map(|n| self.text(n))
-            .unwrap_or_default();
+        let id_node = inner.child_by_field_name(field::ID);
+        let id_text = id_node.map(|n| self.text(n)).unwrap_or_default();
         let title = inner
             .child_by_field_name(field::TITLE)
             .map(|n| self.unquote(n));
@@ -88,6 +84,7 @@ impl<'a> ParseContext<'a> {
             title,
             fields,
             span: self.span(node),
+            name_span: id_node.map(|n| self.span(n)),
             methods: Vec::new(),
             obligations: Vec::new(),
         });
@@ -98,10 +95,8 @@ impl<'a> ParseContext<'a> {
             .child_by_field_name(field::KIND)
             .map(|n| Sym::new(self.text(n)))
             .unwrap_or_else(|| Sym::new(""));
-        let name = node
-            .child_by_field_name(field::NAME)
-            .map(|n| Sym::new(self.text(n)))
-            .unwrap_or_else(|| Sym::new(""));
+        let name_node = node.child_by_field_name(field::NAME);
+        let name = name_node.map_or_else(|| Sym::new(""), |n| Sym::new(self.text(n)));
 
         let title = node
             .child_by_field_name(field::TITLE)
@@ -144,16 +139,15 @@ impl<'a> ParseContext<'a> {
             title,
             fields,
             span: self.span(node),
+            name_span: name_node.map(|n| self.span(n)),
             methods: Vec::new(),
             obligations: Vec::new(),
         });
     }
 
     pub(super) fn parse_define_block(&mut self, node: Node) {
-        let name = node
-            .child_by_field_name(field::NAME)
-            .map(|n| Sym::new(self.text(n)))
-            .unwrap_or_else(|| Sym::new(""));
+        let name_node = node.child_by_field_name(field::NAME);
+        let name = name_node.map_or_else(|| Sym::new(""), |n| Sym::new(self.text(n)));
 
         let (fields, verify, methods) = self.parse_block_body(node);
         self.entities.push(Entity {
@@ -164,6 +158,7 @@ impl<'a> ParseContext<'a> {
             title: None,
             fields,
             span: self.span(node),
+            name_span: name_node.map(|n| self.span(n)),
             methods,
             obligations: verify,
         });
