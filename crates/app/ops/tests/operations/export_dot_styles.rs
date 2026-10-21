@@ -49,7 +49,6 @@ fn dot(project: &Assembled) -> String {
     behavior = "render_extension_defined_dot_shapes",
     verify = "dot_fillcolor sets DOT node fillcolor and style=filled attributes"
 )]
-#[ignore = "flipped by T3"]
 fn a_declared_fill_color_fills_the_node() {
     let text = dot(&styled());
     assert!(

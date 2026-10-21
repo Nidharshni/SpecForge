@@ -63,6 +63,7 @@ pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
                 }
                 if let Some(fill) = &entry.declared.dot_fillcolor {
                     style.push_str(&format!(" fillcolor=\"{}\"", escape_dot(fill)));
+                    style.push_str(" style=\"filled\"");
                 }
             }
             let label = if options.labels {
