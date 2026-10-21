@@ -2,18 +2,14 @@
 
 use super::super::defaults::{self, Change};
 use super::super::path::{self, FieldPath};
-use super::super::write::{not_editable, written};
+use super::super::write::not_editable;
 use super::super::{EditField, Input};
 use super::{Block, Items, Site, items_of, list_text, unreadable};
 use crate::Refusal;
-use specforge_graph::field_form::{FieldForm, Reading, spell};
+use specforge_graph::field_form::{Reading, spell};
 use specforge_parser::FieldValue;
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_protocol_types::FieldType;
-
-fn block_form() -> FieldForm {
-    FieldForm::new(FieldType::String, Vec::new())
-}
 
 fn finish_edit(
     site: &Site<'_>,
@@ -45,7 +41,6 @@ pub fn set(
         FieldPath::Entry {
             field: outer,
             entry: inner,
-            form,
         } => defaults::change(site, text, outer, |block, _| {
             let Input::One(one) = input else {
                 return Err(not_editable(
@@ -53,54 +48,7 @@ pub fn set(
                     format!("'{outer}.{inner}' takes one text"),
                 ));
             };
-            match path::nested(site, block, outer, inner)? {
-                Some((_, Some(entry))) => {
-                    let span = entry
-                        .value_span
-                        .clone()
-                        .ok_or_else(|| unreadable(site.id))?;
-                    let lead = block.lead(span.start_line - 1).to_string();
-                    let new = written(
-                        Reading::Declared(&block_form()),
-                        inner,
-                        input,
-                        &lead,
-                        &block.config,
-                    )?;
-                    block.replace_value(&span, &new, annotations);
-                }
-                Some((outer_entry, None)) => {
-                    let span = outer_entry
-                        .value_span
-                        .clone()
-                        .ok_or_else(|| unreadable(site.id))?;
-                    let lead = format!(
-                        "{}{}",
-                        block.lead(span.start_line - 1),
-                        block.config.indent_str()
-                    );
-                    let new = written(
-                        Reading::Declared(&block_form()),
-                        inner,
-                        input,
-                        &lead,
-                        &block.config,
-                    )?;
-                    let line = format!("{lead}{inner} {new}");
-                    block.insert(span.end_line - 1, &line);
-                }
-                None => {
-                    let entries = Input::Entries([(inner.to_string(), one.clone())].into());
-                    let value = written(
-                        Reading::Declared(form),
-                        outer,
-                        &entries,
-                        &block.member_lead(),
-                        &block.config,
-                    )?;
-                    block.insert_member(site, outer, &value, &[]);
-                }
-            }
+            block.put_entry(site, outer, inner, one, annotations)?;
             Ok(Change::Changed)
         }),
     }

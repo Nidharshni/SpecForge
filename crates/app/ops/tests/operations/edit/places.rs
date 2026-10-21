@@ -157,8 +157,10 @@ behavior empty_requires "Empty Requires" {
 }
 "#;
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "set of an entry into a block field written as none writes it inside"
+)]
 fn set_of_an_entry_into_a_block_field_written_as_none_writes_it_inside() {
     let c = compile(BOTH, &[("g.spec", NONE)]);
     let rows: [(&str, Vec<Edit>); 2] = [
@@ -209,8 +211,10 @@ behavior bare "Bare" {
 }
 "#;
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "set of a new entry writes its annotations"
+)]
 fn set_of_a_new_entry_writes_its_annotations() {
     let c = compile(BOTH, &[("g.spec", REQUIRING_AND_BARE)]);
     for id in ["check_graph", "bare"] {

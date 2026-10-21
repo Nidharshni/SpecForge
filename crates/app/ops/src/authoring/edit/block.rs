@@ -2,14 +2,16 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes. `site` holds what the kind's registry answers about the entity; `verbs` the edits that change a block.
 
+use super::path;
 use super::write::written;
 use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, codes};
 use specforge_formatter::FormatConfig;
-use specforge_graph::field_form::{Reading, spell};
+use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
+use specforge_protocol_types::FieldType;
 
 mod site;
 mod verbs;
@@ -338,6 +340,72 @@ impl Block {
             Some(span) => self.replace_value(&span, value, annotations),
             None => self.insert_member(site, name, value, annotations.unwrap_or_default()),
         }
+    }
+
+    /// `text` as entry `inner` of the block field `outer`: the entry's value replaced, else a new last entry; with
+    /// `annotations`, the text after the entry's value becomes them (a trailing comment is kept), new or not. A block
+    /// field the block does not write, or writes as none (`{}`), is first opened as an empty block at its rank.
+    /// Refused: `not_editable` when the block writes `outer` as a value (`path::nested`), or as the writer refuses
+    /// `text`. The lines are not laid out between the opening and the insert: only spans are read from them, and the
+    /// caller's `defaults::change` lays the block out afterwards.
+    pub(super) fn put_entry(
+        &mut self,
+        site: &Site<'_>,
+        outer: &str,
+        inner: &str,
+        text: &str,
+        annotations: Option<&[String]>,
+    ) -> Result<(), Refusal<EditField>> {
+        let open = path::nested(site, self, outer, inner)?.is_some_and(|(o, _)| {
+            o.value_span
+                .as_ref()
+                .is_some_and(|s| s.end_line > s.start_line)
+        });
+        if !open {
+            // Absent, or written as none (`{}`, one line): open it at its rank, so the entry has a closing line.
+            let empty = format!("{{\n{}}}", self.lead_of(outer));
+            self.place(site, outer, &empty, None);
+            self.reread(site)?;
+        }
+        let (outer_span, own) = match path::nested(site, self, outer, inner)? {
+            Some((o, e)) => (o.value_span.clone(), e.and_then(|e| e.value_span.clone())),
+            None => (None, None),
+        };
+        let outer_span = outer_span.ok_or_else(|| unreadable(site.id))?;
+        let lead = match &own {
+            Some(span) => self.lead(span.start_line - 1).to_string(),
+            None => format!(
+                "{}{}",
+                self.lead(outer_span.start_line - 1),
+                self.config.indent_str()
+            ),
+        };
+        let form = FieldForm::new(FieldType::String, Vec::new());
+        let value = written(
+            Reading::Declared(&form),
+            inner,
+            &Input::One(text.into()),
+            &lead,
+            &self.config,
+        )?;
+        match own {
+            Some(span) => self.replace_value(&span, &value, annotations),
+            None => {
+                let note = annotation_text(annotations.unwrap_or_default());
+                self.insert(
+                    outer_span.end_line - 1,
+                    &format!("{lead}{inner} {value}{note}"),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// The lines read again, without a layout.
+    fn reread(&mut self, site: &Site<'_>) -> Result<(), Refusal<EditField>> {
+        self.file = parse(&self.text(), site.key);
+        self.index = position(&self.file, site).ok_or_else(|| unreadable(site.id))?;
+        Ok(())
     }
 
     /// A `verify` statement line, after the last one (else before the closing brace), at the members' lead.

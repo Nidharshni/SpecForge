@@ -54,7 +54,9 @@ behavior edit_entity_field "Edit an Entity Field" {
     parts are not each one identifier, is refused not_editable, and so is a path into a block field the entity
     writes as a value. A block field the block inherits from its
     file's defaults is copied into an own field before an entry of it is set or unset, and an own field that then
-    restates the default is removed; a block field left with no entry over a default is written `{}`. An unset of an
+    restates the default is removed; a set of an entry of a block field the block writes as none, or not at all,
+    writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
+    included; a block field left with no entry over a default is written `{}`. An unset of an
     entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
     replaces the header title. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
@@ -70,6 +72,8 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "every verb reads a field.entry path the same way"
   verify unit "an entry of a block field written as a value is refused"
   verify unit "every verb leaves a field holding what it says, own or inherited"
+  verify unit "set of an entry into a block field written as none writes it inside"
+  verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
 }
 

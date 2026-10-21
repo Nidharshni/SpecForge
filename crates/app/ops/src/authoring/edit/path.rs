@@ -6,7 +6,7 @@ use super::EditField;
 use super::block::{Block, Site};
 use super::write::{NOT_EDITABLE, not_editable};
 use crate::{OpError, OpErrorKind, Refusal};
-use specforge_graph::field_form::{FieldForm, Reading, is_word};
+use specforge_graph::field_form::{Reading, is_word};
 use specforge_parser::{FieldEntry, FieldValue};
 use specforge_protocol_types::FieldType;
 
@@ -14,12 +14,8 @@ use specforge_protocol_types::FieldType;
 pub enum FieldPath<'p, 'r> {
     /// A field the kind declares, or a member of a kind that takes any field (never `Reading::Undeclared`).
     Field { name: &'p str, reading: Reading<'r> },
-    /// `field.entry`: one entry of the block field `field`, which the kind declares with `form`.
-    Entry {
-        field: &'p str,
-        entry: &'p str,
-        form: &'r FieldForm,
-    },
+    /// `field.entry`: one entry of the block field `field`, which the kind declares.
+    Entry { field: &'p str, entry: &'p str },
 }
 
 /// `path` read against `site`'s kind. `target` is a link's or unlink's value: an undeclared field is then told as the
@@ -48,7 +44,7 @@ pub fn resolve<'p, 'r>(
     }
     match site.reading_toward(field, target)? {
         Reading::Declared(form) if form.field_type() == FieldType::Block => {
-            Ok(FieldPath::Entry { field, entry, form })
+            Ok(FieldPath::Entry { field, entry })
         }
         _ => Err(not_editable(
             EditField::Field,
