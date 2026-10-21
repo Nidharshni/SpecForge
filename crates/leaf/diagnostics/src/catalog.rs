@@ -624,7 +624,7 @@ catalog! {
         "The same entity ID is declared with two different entity kinds, either within the same compilation pass or across different files. Entity IDs share one flat namespace regardless of kind, so rename one of the conflicting declarations; the first declaration encountered is retained and later ones are skipped.";
     W061: Warning core,
         "Reference cycle detected",
-        "The resolved reference graph contains a cycle among entity references. Break the cycle by removing or inverting one of the references in the reported path.";
+        "The resolved reference graph contains a cycle among entity references. Cycles that share an entity are one warning, whose path walks every entity on them. Break each cycle by removing or inverting one of its references.";
     W092: Warning product,
         "Release dependency cycle",
         "Two or more `release` entities form a cycle through their `depends_on` edges. Break the cycle by removing or restructuring one of the dependency references.";

@@ -6,7 +6,7 @@ expression: markdown
 
 reference cycle detected: alpha -> beta -> alpha
 
-The resolved reference graph contains a cycle among entity references. Break the cycle by removing or inverting one of the references in the reported path.
+The resolved reference graph contains a cycle among entity references. Cycles that share an entity are one warning, whose path walks every entity on them. Break each cycle by removing or inverting one of its references.
 
 [Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w061)
 

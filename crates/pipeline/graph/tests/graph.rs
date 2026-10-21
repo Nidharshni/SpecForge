@@ -939,58 +939,6 @@ fn edges_from_returns_correct_edges_after_multiple_adds() {
     assert!(from_a.is_empty(), "a has no outgoing edges");
 }
 
-// === cycle detection ===
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "detects cycles in directed graph"
-)]
-fn detect_cycles_finds_simple_cycle() {
-    let mut graph = Graph::new();
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "behavior"));
-    graph.add_node(make_node("c", "behavior"));
-    graph.add_edge(make_edge("a", "b", "depends_on"));
-    graph.add_edge(make_edge("b", "c", "depends_on"));
-    graph.add_edge(make_edge("c", "a", "depends_on")); // cycle: a->b->c->a
-
-    let cycles = graph.detect_cycles();
-    assert!(!cycles.is_empty(), "should detect the cycle");
-    // The cycle should contain a, b, c
-    let cycle = &cycles[0];
-    assert!(cycle.len() >= 3, "cycle should have at least 3 nodes");
-}
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "no false positives for acyclic graph"
-)]
-fn detect_cycles_returns_empty_for_dag() {
-    let mut graph = Graph::new();
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "behavior"));
-    graph.add_node(make_node("c", "feature"));
-    graph.add_edge(make_edge("c", "a", "behaviors"));
-    graph.add_edge(make_edge("c", "b", "behaviors"));
-    graph.add_edge(make_edge("b", "a", "depends_on"));
-
-    let cycles = graph.detect_cycles();
-    assert!(cycles.is_empty(), "DAG should have no cycles");
-}
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "detects self-referencing cycle"
-)]
-fn detect_cycles_finds_self_loop() {
-    let mut graph = Graph::new();
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_edge(make_edge("a", "a", "depends_on")); // self-loop
-
-    let cycles = graph.detect_cycles();
-    assert!(!cycles.is_empty(), "self-loop should be detected as cycle");
-}
-
 // === cycle detection in build_graph ===
 
 #[specforge_test(

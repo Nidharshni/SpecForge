@@ -18,7 +18,6 @@ fn names<'a>(ids: impl IntoIterator<Item = &'a str>) -> BTreeSet<String> {
     behavior = "detect_module_cycles",
     verify = "E007, W061 and module-depth name the same modules on a cycle"
 )]
-#[ignore = "flipped by T4"]
 fn check_and_module_depth_name_the_same_modules_on_a_cycle() {
     let dir = TestProject::new()
         .enabling(&["@specforge/product"])

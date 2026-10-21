@@ -11,7 +11,7 @@
     "crates/pipeline/emitter/tests/model.rs": 1518,
     "crates/pipeline/emitter/tests/outline.rs": 1159,
     "crates/pipeline/emitter/tests/schema.rs": 1614,
-    "crates/pipeline/graph/tests/graph.rs": 1648,
+    "crates/pipeline/graph/tests/graph.rs": 1596,
     "crates/runtime/wasm/tests/calls.rs": 839,
     "crates/session/project/tests/changes.rs": 855,
     "crates/session/project/tests/compile.rs": 1230,

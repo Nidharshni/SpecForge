@@ -71,12 +71,13 @@ impl Graph {
         diagnostics
     }
 
-    /// W061 for every reference cycle among the edges added so far.
+    /// W061 for every cycle among the edges added so far: one per strongly
+    /// connected set, its path walking every entity of it.
     fn cycle_warnings(&self) -> Vec<Diagnostic> {
-        self.detect_cycles()
-            .iter()
+        self.cycles()
+            .into_iter()
             .map(|cycle| {
-                let path: Vec<String> = cycle.iter().map(|s| s.to_string()).collect();
+                let path: Vec<String> = cycle.path.iter().map(|s| s.to_string()).collect();
                 Diagnostic::new(
                     codes::W061,
                     format!("reference cycle detected: {}", path.join(" -> ")),

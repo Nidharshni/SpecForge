@@ -2639,8 +2639,9 @@ Level: warning
 ```
 W061: Reference cycle detected
 
-The resolved reference graph contains a cycle among entity references. Break the
-cycle by removing or inverting one of the references in the reported path.
+The resolved reference graph contains a cycle among entity references. Cycles
+that share an entity are one warning, whose path walks every entity on them.
+Break each cycle by removing or inverting one of its references.
 
 Owner: core
 Level: warning
