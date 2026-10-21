@@ -42,7 +42,6 @@ fn a_first_signing_key_is_0600_in_a_0700_directory() {
     invariant = "credential_secrecy",
     verify = "every file in the user's registry directory is created 0600 in a 0700 directory"
 )]
-#[ignore = "flipped by T4"]
 fn a_first_pin_save_is_0600_in_a_0700_directory() {
     let home = tempfile::tempdir().unwrap();
     let dir = home.path().join(".specforge");
@@ -86,7 +85,6 @@ fn a_kept_secret_is_never_written_through_a_link_at_its_temporary_name() {
     invariant = "credential_secrecy",
     verify = "a user's registry file is never written through a link at its temporary name"
 )]
-#[ignore = "flipped by T4"]
 fn a_pin_save_is_never_written_through_a_link_at_its_temporary_name() {
     let home = tempfile::tempdir().unwrap();
     let outside = home.path().join("outside.txt");
