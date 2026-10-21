@@ -58,17 +58,25 @@ pub(super) async fn publish_package(
     let mut declaration_json: Option<String> = None;
     let mut signature_json: Option<String> = None;
 
-    while let Ok(Some(field)) = multipart.next_field().await {
+    // An upload past the body limit is too large, not unsigned or badly signed.
+    let too_large = |e: axum::extract::multipart::MultipartError| {
+        if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            ApiError::payload_too_large("the upload is larger than this registry accepts")
+        } else {
+            ApiError::bad_request(ErrorCode::BadRequest, e.to_string())
+        }
+    };
+    while let Some(field) = multipart.next_field().await.map_err(too_large)? {
         let field_name = field.name().unwrap_or("").to_string();
         match field_name.as_str() {
             form::WASM => {
-                wasm_bytes = field.bytes().await.ok().map(|b| b.to_vec());
+                wasm_bytes = Some(field.bytes().await.map_err(too_large)?.to_vec());
             }
             form::MANIFEST => {
-                declaration_json = field.text().await.ok();
+                declaration_json = Some(field.text().await.map_err(too_large)?);
             }
             form::SIGNATURE => {
-                signature_json = field.text().await.ok();
+                signature_json = Some(field.text().await.map_err(too_large)?);
             }
             _ => {}
         }
