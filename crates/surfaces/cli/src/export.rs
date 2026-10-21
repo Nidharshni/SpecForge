@@ -140,9 +140,11 @@ pub(crate) struct SchemaArgs {
     publish: bool,
 
     /// Export format the published schema describes
+    // clap waives requires = "publish" beside an argument that conflicts with --publish
     #[arg(
         long,
         requires = "publish",
+        conflicts_with_all = ["kind", "no_edges", "validation_rules"],
         value_parser = options::choice(&specforge_ops::read::export::AGENT_FORMAT),
         default_value = specforge_ops::read::export::AGENT_FORMAT.default_name()
     )]
@@ -243,7 +245,6 @@ mod tests {
         behavior = "publish_schema_specification",
         verify = "--kind with --publish, and --format without it, are refused"
     )]
-    #[ignore = "flipped by T2"]
     fn format_needs_publish_beside_every_schema_flag() {
         for flag in [
             &["--kind", "behavior"][..],
