@@ -1,4 +1,8 @@
 //! A download is the stored version it names (ADR 0192).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
