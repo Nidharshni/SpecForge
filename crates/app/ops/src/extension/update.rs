@@ -11,7 +11,7 @@
 //! update that is not applied pins nothing (ADR 0059).
 
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened};
-use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
+use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{Caller, OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
@@ -281,8 +281,9 @@ pub struct BatchUpdateCompleted {
 /// when `specforge.json` cannot be used, with E033 when `specforge.lock` is there and can't be read
 /// (the lock plan's refusal, as `add` and `remove` give it) and when the project has no lock file
 /// (`precondition_failed`, naming `specforge add`), with `extension_not_found` (E072 for a name
-/// that is no package name) when the name it was given is not locked, and with E063 when a registry install needs a
-/// registry and none is configured. Fails with the change's error (E032
+/// that is no package name) when the name it was given is not locked, and with the registry's refusal to open (E063
+/// when none is configured, E067 when an entry can't be read, R012 when the user's credential store can't
+/// be read) when a selected extension is a registry install. Fails with the change's error (E032
 /// naming the package whose binary could not be placed, E033 for the lock)
 /// when applying it fails; everything is put back, and what could not be is
 /// the error's writes.
@@ -326,12 +327,19 @@ pub fn update(
         return Err(not_locked(name));
     }
 
+    let selected = || {
+        lock.entries
+            .iter()
+            .filter(|e| req.name.is_none_or(|n| e.name.as_str() == n))
+    };
+    // A registry install asks the registry: open it first, so a refusal of the whole project (E063,
+    // E067, R012) is the update's, given once, and no extension's (ADR 0044 as amended). An update of
+    // local installs opens none.
+    if selected().any(|entry| entry.source.is_registry()) {
+        registry.open()?;
+    }
     let mut extensions = Vec::new();
-    for entry in lock
-        .entries
-        .iter()
-        .filter(|e| req.name.is_none_or(|n| e.name.as_str() == n))
-    {
+    for entry in selected() {
         let status = if !entry.source.is_registry() {
             UpdateStatus::NotFromRegistry {
                 source: entry.source.to_string(),
@@ -357,7 +365,6 @@ pub fn update(
                     debug_assert_eq!(asked, Asked::Changes, "an upgrade is answered unchanged");
                     status
                 }
-                Err(error) if error.is(NO_REGISTRY) => return Err(error),
                 Err(error) => UpdateStatus::Failed(error),
             }
         };
