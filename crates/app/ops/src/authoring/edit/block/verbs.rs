@@ -179,8 +179,12 @@ pub fn link(
         let current = match &own {
             Some(entry) => {
                 // A list written as one value is its one item, as the graph build stores it (ADR 0093).
-                let stored = form.coerce(&entry.value, entry.value_span.as_ref());
-                match stored.as_ref().unwrap_or(&entry.value) {
+                match &*site
+                    .view
+                    .registries()
+                    .field_forms()
+                    .stored(site.kind, entry)
+                {
                     value @ FieldValue::List(_) => items_of(value),
                     _ if matches!(form.field_type(), FieldType::Reference) => None,
                     _ => {

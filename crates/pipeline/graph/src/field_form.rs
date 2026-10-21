@@ -4,6 +4,7 @@
 //! graph build's coercion, E061, the export writer, the graph delta and the
 //! published schema read it; nothing else decides a field value's form.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::Serialize;
@@ -381,6 +382,17 @@ impl FieldForms {
         }
     }
 
+    /// `entry`'s value as the graph build stores it on a block of `kind` (ADR 0093, ADR 0156 D1, ADR 0182 D1):
+    /// coerced by its field's form when declared and not already in it, else the value as written (borrowed).
+    /// Idempotent. What [`Reading::references`], the derived walk and every copy of an inherited value read.
+    pub fn stored<'e>(&self, kind: &str, entry: &'e FieldEntry) -> Cow<'e, FieldValue> {
+        let coerced = match self.reading(kind, entry.key.as_str()) {
+            Reading::Declared(form) => form.coerce(&entry.value, entry.value_span.as_ref()),
+            Reading::Member | Reading::Undeclared => None,
+        };
+        coerced.map_or(Cow::Borrowed(&entry.value), Cow::Owned)
+    }
+
     /// The form `kind`'s field `field` writes a value in, when `written`/`text`
     /// is not it (ADR 0147); `None` leaves the value as written: the field
     /// has no declared form, the value is already in it or is neither bare
@@ -500,18 +512,9 @@ pub enum Reading<'f> {
 }
 
 impl Reading<'_> {
-    /// What the graph build stores for `value`: the form's coercion when
-    /// declared, else `None` (as written).
-    pub fn coerce(&self, value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
-        match self {
-            Self::Declared(form) => form.coerce(value, span),
-            Self::Member | Self::Undeclared => None,
-        }
-    }
-
     /// What `entry`'s value references, in written order, each with its
     /// span (ADR 0093). The one rule every reader asks, of an entry as the graph build stores it: a written entry is
-    /// first coerced ([`Self::coerce`]), as a typed edit's referrer scan does:
+    /// stored ([`FieldForms::stored`]), as a typed edit's referrer scan does:
     ///
     /// | reading | a single value | a list item |
     /// |---|---|---|
@@ -606,8 +609,7 @@ impl Graph {
         for node in self.nodes_mut() {
             let kind = node.kind.raw.as_str();
             for entry in node.fields.entries_mut() {
-                let reading = forms.reading(kind, entry.key.as_str());
-                if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
+                if let Cow::Owned(value) = forms.stored(kind, entry) {
                     entry.value = value;
                 }
             }

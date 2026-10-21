@@ -78,18 +78,13 @@ pub fn change(
 /// The own field `default` is copied into: a list as the graph stores it (ADR 0154 D4), a block field as its
 /// defaults block writes it; `None` for anything else.
 fn copy(site: &Site<'_>, block: &Block, field: &str, default: &FieldEntry) -> Option<String> {
-    let Reading::Declared(form) = site
-        .view
-        .registries()
-        .field_forms()
-        .reading(site.kind, field)
-    else {
+    let forms = site.view.registries().field_forms();
+    let Reading::Declared(form) = forms.reading(site.kind, field) else {
         return None;
     };
     match form.field_type() {
         FieldType::ReferenceList | FieldType::StringList => {
-            let stored = form.coerce(&default.value, default.value_span.as_ref());
-            items_of(stored.as_ref().unwrap_or(&default.value)).map(|items| list_text(&items))
+            items_of(&forms.stored(site.kind, default)).map(|items| list_text(&items))
         }
         FieldType::Block => default.value_span.as_ref().map(|span| block.text_of(span)),
         _ => None,

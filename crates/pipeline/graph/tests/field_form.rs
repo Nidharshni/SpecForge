@@ -2,10 +2,14 @@
 //! (`admit`), how a written value is stored (`coerce`) and what every output
 //! writes (`write`) agree with the schema of that JSON (`json_schema`).
 
+use std::borrow::Cow;
+
 use specforge_common::shape::{self, Definitions};
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::field_form::{self, FieldForm, FieldJson, ValueShape};
-use specforge_parser::{FieldMap, FieldValue, ListItem, TypeMember, Written, parse_expression};
+use specforge_graph::field_form::{self, FieldForm, FieldForms, FieldJson, ValueShape};
+use specforge_parser::{
+    FieldEntry, FieldMap, FieldValue, ListItem, TypeMember, Written, parse_expression,
+};
 use specforge_protocol_types::FieldType;
 use specforge_test_macros::test as specforge_test;
 
@@ -215,4 +219,43 @@ fn a_scalar_on_a_list_field_is_stored_as_a_one_item_list() {
         ),
         None
     );
+}
+
+#[test]
+fn stored_is_the_coerced_value_or_the_value_as_written() {
+    let forms = FieldForms::new(
+        [("refs", FieldType::StringList), ("rpn", FieldType::Integer)]
+            .into_iter()
+            .map(|(f, t)| {
+                (
+                    ("k".to_string(), f.to_string()),
+                    FieldForm::new(t, Vec::new()),
+                )
+            })
+            .collect(),
+        Default::default(),
+        Default::default(),
+    );
+    let entry = |key: &str, value| FieldEntry {
+        key: Sym::new(key),
+        value,
+        annotations: Vec::new(),
+        value_span: Some(span()),
+    };
+    let one = entry("refs", FieldValue::Identifier("a".into()));
+    let stored = forms.stored("k", &one);
+    assert_eq!(*stored, FieldValue::List(vec![item("a", Written::Bare)]));
+    assert!(matches!(stored, Cow::Owned(_)));
+    let number = entry("rpn", FieldValue::String("100".into()));
+    assert!(matches!(
+        forms.stored("k", &number),
+        Cow::Owned(FieldValue::Integer(100))
+    ));
+    // Already in its form, undeclared, and a stored value passed back in: borrowed.
+    let list = entry("refs", FieldValue::List(vec![item("a", Written::Bare)]));
+    let undeclared = entry("x", FieldValue::Identifier("a".into()));
+    let again = entry("refs", (*stored).clone());
+    for e in [&list, &undeclared, &again] {
+        assert!(matches!(forms.stored("k", e), Cow::Borrowed(_)), "{e:?}");
+    }
 }

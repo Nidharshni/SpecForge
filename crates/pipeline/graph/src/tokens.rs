@@ -127,13 +127,11 @@ pub fn written_tokens(
     tokens
 }
 
-/// `entries` as the graph build stores them (`Graph::coerce_field_values`): each value its reading coerces, coerced;
-/// borrowed when none is.
+/// `entries` as the graph build stores them (`FieldForms::stored`): borrowed when no value is coerced.
 fn stored<'e>(forms: &FieldForms, kind: &str, entries: &'e [FieldEntry]) -> Cow<'e, [FieldEntry]> {
     let mut owned: Option<Vec<FieldEntry>> = None;
     for (i, entry) in entries.iter().enumerate() {
-        let reading = forms.reading(kind, entry.key.as_str());
-        if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
+        if let Cow::Owned(value) = forms.stored(kind, entry) {
             owned.get_or_insert_with(|| entries.to_vec())[i].value = value;
         }
     }
