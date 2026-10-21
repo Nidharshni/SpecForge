@@ -46,7 +46,7 @@ type ProviderConfig "Provider Config" {
 
 // ── Registry Types ──────────────────────────────────────────
 
-type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per registry root in ~/.specforge, never here." {
+type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; scope_filter is a scope (@ and one name part, specforge_package::Scope) and another is E067 naming the scope to write; none is R-OPS-001 (ADR 0045). A credential is kept per registry root in ~/.specforge, never here." {
   alias            string  @readonly @unique
   url              string
   scope_filter     string  @optional

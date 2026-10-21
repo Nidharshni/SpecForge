@@ -1116,7 +1116,7 @@ behavior configure_registries "Configure Registries" {
   }
   ensures {
     registry_entries_created      "All registries array entries are parsed into RegistryConfig objects"
-    scope_filters_set             "Scope filters are configured for routing @scope/ specifiers"
+    scope_filters_set             "Each scope_filter is a scope (@ and one name part); another refuses every registry operation with E067 naming the scope to write"
     no_registries_diagnosed       "Empty registries configuration produces I003 info diagnostic"
     no_hardcoded_urls             "No registry URLs are compiled-in constants in compiler source"
     registries_configured_emitted "registries_configured event fires after all entries are parsed"
@@ -1129,7 +1129,9 @@ behavior configure_registries "Configure Registries" {
     alias (unique identifier) and a url naming the registry's root (an http
     or https URL with no query, fragment or user info; the client adds the
     protocol's version prefix /v1, and a url ending in it is refused with
-    E067 naming the root), and MAY have a scope_filter.
+    E067 naming the root), and MAY have a scope_filter, which MUST be a
+    scope (@ and one name part); one that is not is E067 naming the scope to
+    write, so no name of that scope goes to another registry.
     When resolving extension specifiers, scope_filter MUST route @scope/
     prefixed specifiers to the matching registry. A configuration with no
     registries array, or with no entry marked `default_registry: true`,

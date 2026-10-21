@@ -21,8 +21,9 @@ registries it trusts in `specforge.json`:
 - `url` is the registry's root: SpecForge adds the protocol's `/v1` to every
   request. A url ending in `/v1`, or one that isn't an `http`/`https` URL, is refused with
   [E067](diagnostics.md#e067), and so is every registry operation while any entry can't be read.
-- A package whose scope matches an entry's `scope_filter` comes from that
-  registry; every other package comes from the entry marked
+- A package whose scope is an entry's `scope_filter` (`@acme`) comes from that
+  registry. A `scope_filter` that isn't a scope (`acme`, `@acme/`, `@Acme`) is
+  [E067](diagnostics.md#e067), and no registry is asked. Every other package comes from the entry marked
   `default_registry`.
 - With no `registries`, `specforge add @scope/name@version`, `update`,
   `search`, `publish` and `login` (and the MCP `add_extension` tool) fail with

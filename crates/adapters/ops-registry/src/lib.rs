@@ -51,16 +51,15 @@ pub struct Configured {
 
 impl Configured {
     /// The one registry that serves `name`: the first entry whose
-    /// `scope_filter` is its scope, else the first entry marked
+    /// `scope_filter` covers it, else the first entry marked
     /// `default_registry`. With neither, R-OPS-001 naming the scope and the
     /// configured aliases, before any request. `add`, `update` and `publish`
     /// ask this one (ADR 0045); `search` asks every entry.
     pub fn registry_for(&self, name: &PackageName) -> Result<&RegistryConfig, OpError> {
-        if let Some(scope) = name.scope()
-            && let Some(registry) = self
-                .registries
-                .iter()
-                .find(|r| r.scope_filter.as_deref() == Some(scope.as_str()))
+        if let Some(registry) = self
+            .registries
+            .iter()
+            .find(|r| r.scope_filter.as_ref().is_some_and(|s| s.covers(name)))
         {
             return Ok(registry);
         }
@@ -166,7 +165,7 @@ pub fn configured(
             unreadable.join("; "),
         )
         .with_suggestion(
-            "fix the \"registries\" entries in specforge.json: each needs an \"alias\" and a \"url\" naming the registry's root (an http or https URL such as https://registry.example); no registry is asked until every entry reads",
+            "fix the \"registries\" entries in specforge.json: each needs an \"alias\" and a \"url\" naming the registry's root (an http or https URL such as https://registry.example), and a \"scope_filter\", when present, is a scope such as \"@acme\"; no registry is asked until every entry reads",
         ));
     }
     if registries.is_empty() {

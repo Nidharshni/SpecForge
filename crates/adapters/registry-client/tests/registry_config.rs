@@ -1,4 +1,5 @@
 use specforge_common::Severity;
+use specforge_package::Scope;
 use specforge_registry_client::registry_config::{RegistryConfig, parse_registries_from_config};
 
 // B:configure_registries — verify unit "RegistryConfig deserializes from JSON"
@@ -13,7 +14,10 @@ fn registry_config_deserializes_from_json() {
     let config: RegistryConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.alias, "main");
     assert_eq!(config.url.as_str(), "https://registry.example.com");
-    assert_eq!(config.scope_filter, Some("@specforge".to_string()));
+    assert_eq!(
+        config.scope_filter.as_ref().map(Scope::as_str),
+        Some("@specforge")
+    );
     assert!(config.default_registry);
 }
 
@@ -198,7 +202,6 @@ fn a_url_that_is_not_an_http_url_is_refused() {
     behavior = "configure_registries",
     verify = "a scope_filter that is not a scope refuses every registry operation with E067 naming the scope to write"
 )]
-#[ignore = "flipped by T4"]
 fn a_scope_filter_that_is_no_scope_is_e067_naming_the_scope_to_write() {
     for (text, write) in [
         ("sdk", Some("@sdk")),

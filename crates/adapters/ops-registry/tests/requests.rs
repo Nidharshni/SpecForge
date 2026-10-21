@@ -178,7 +178,6 @@ fn the_registry_is_chosen_once() {
     behavior = "resolve_registry_source",
     verify = "a scope_filter that is not a scope sends none of its scope's names to another registry"
 )]
-#[ignore = "flipped by T4"]
 fn a_scope_filter_that_is_no_scope_asks_no_registry() {
     for text in ["sdk", "@sdk/", "@SDK", ""] {
         let public = serving(&["1.0.0"]);

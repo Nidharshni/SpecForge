@@ -614,7 +614,6 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
     behavior = "resolve_registry_source",
     verify = "a scope_filter that is not a scope sends none of its scope's names to another registry"
 )]
-#[ignore = "flipped by T4"]
 fn a_scope_filter_that_is_no_scope_publishes_nowhere() {
     let world = World::with(serde_json::json!([
         { "alias": "public", "url": "https://public.invalid", "default_registry": true },

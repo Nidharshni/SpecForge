@@ -788,9 +788,10 @@ valid JSON, `registries` isn't an array, or an entry at the reported index is
 missing a required field, has the wrong type, or has a `url` that isn't a
 registry's root (an `http` or `https` URL with no query, fragment or user name;
 write `https://registry.example`, not `https://registry.example/v1`: SpecForge
-adds the protocol's `/v1`). No registry is asked while an entry can't be read,
-so a package whose scope that entry serves never goes to another registry. Fix
-the reported entry.
+adds the protocol's `/v1`), or has a `scope_filter` that isn't a scope (`@acme`:
+`@` and one name part; the message names the scope to write). No registry is
+asked while an entry can't be read, so a package whose scope that entry serves
+never goes to another registry. Fix the reported entry.
 
 Owner: core
 Level: error

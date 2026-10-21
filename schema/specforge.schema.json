@@ -235,7 +235,8 @@
         },
         "scope_filter": {
           "type": "string",
-          "description": "Only operate on scopes matching this filter"
+          "pattern": "^@[a-z0-9][a-z0-9._-]*$",
+          "description": "The scope (@name) whose packages this registry serves; any other value refuses every registry operation (E067)"
         },
         "default_registry": {
           "type": "boolean",
