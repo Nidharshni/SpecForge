@@ -51,6 +51,10 @@ enum Commands {
 enum TokenAction {
     /// Create a new token
     Create {
+        /// The account the token is issued to; it owns the scopes the token claims
+        #[arg(long, value_parser = parse_account)]
+        account: String,
+
         /// Scope filter (e.g., "@myorg") — empty means full access
         #[arg(long)]
         scope: Option<String>,
@@ -152,6 +156,7 @@ async fn run(cli: Cli) -> Result<(), String> {
         }
         Commands::Token { action } => match action {
             TokenAction::Create {
+                account,
                 scope,
                 label,
                 expires_in_days,
@@ -172,10 +177,18 @@ async fn run(cli: Cli) -> Result<(), String> {
                 } else {
                     Some(expires_in_days)
                 };
-                let token =
-                    auth::create_token(&database, scope.as_deref(), &label, expires_in_days, admin);
+                let known = database.has_account(&account);
+                let token = auth::create_token(
+                    &database,
+                    &account,
+                    scope.as_deref(),
+                    &label,
+                    expires_in_days,
+                    admin,
+                );
                 println!("Token created successfully.\n");
                 println!("  token: {}", token);
+                println!("  account: {account}{}", if known { "" } else { " (new)" });
                 println!("  scope: {}", scope.as_deref().unwrap_or("(full access)"));
                 println!("  label: {}", label);
                 println!(
@@ -195,12 +208,16 @@ async fn run(cli: Cli) -> Result<(), String> {
                 if tokens.is_empty() {
                     println!("No tokens found.");
                 } else {
-                    println!("{:<12} {:<20} {:<16} CREATED", "ID", "LABEL", "SCOPE");
+                    println!(
+                        "{:<12} {:<20} {:<16} {:<16} CREATED",
+                        "ID", "LABEL", "ACCOUNT", "SCOPE"
+                    );
                     for t in &tokens {
                         println!(
-                            "{:<12} {:<20} {:<16} {}",
+                            "{:<12} {:<20} {:<16} {:<16} {}",
                             &t.token_hash[..8],
                             t.label,
+                            t.account,
                             t.scope.as_deref().unwrap_or("(all)"),
                             t.created_at,
                         );
@@ -225,4 +242,9 @@ fn open_database(data_dir: &Path) -> Result<Database, String> {
     let path = data_dir.join("registry.db");
     Database::open(&path)
         .map_err(|e| format!("cannot open the token database {}: {e}", path.display()))
+}
+
+/// An account name as the operator types it.
+fn parse_account(text: &str) -> Result<String, String> {
+    specforge_registry_server::ownership::account_name(text).map(str::to_string)
 }

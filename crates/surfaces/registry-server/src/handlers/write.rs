@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::db::{PackageVersion, PublishRefused};
-use crate::ownership::account_id_for;
 use crate::publish::publish_target;
 use crate::state::AppState;
 use crate::storage::LocalStorage;
@@ -81,7 +80,7 @@ pub(super) async fn publish_package(
         .scope()
         .expect("publish_target refuses unscoped names")
         .to_string();
-    let publisher_account = account_id_for(&token_record.token_hash);
+    let publisher_account = token_record.account.clone();
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.

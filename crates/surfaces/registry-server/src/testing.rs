@@ -62,7 +62,14 @@ impl LocalRegistry {
         let data = TempDir::new().expect("a temporary data directory");
         let state =
             Arc::new(AppState::open(data.path(), limits, read_access).expect("an empty registry"));
-        let token = auth::create_token(&state.database, None, "publisher", Some(1), false);
+        let token = auth::create_token(
+            &state.database,
+            "publisher",
+            None,
+            "publisher",
+            Some(1),
+            false,
+        );
         let requests = Arc::new(Mutex::new(Vec::new()));
         let app = handlers::router(Arc::clone(&state)).layer(axum::middleware::from_fn_with_state(
             Arc::clone(&requests),

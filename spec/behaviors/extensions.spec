@@ -822,6 +822,7 @@ behavior publish_to_registry "Publish to Registry" {
     receipt_checked             "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
     registry_url_returned       "Successful publish returns the registry URL for the published version"
     published_event_emitted     "extension_published_to_registry event fires on successful publish"
+    scope_owned_by_account      "A scope belongs to the account of the token that claimed it, not to the token"
     yank_held_to_owner          "A yank by a token of an account that does not own the package's scope is refused (SCOPE_OWNED) and the version stays installable"
   }
   contract   """
@@ -840,9 +841,11 @@ behavior publish_to_registry "Publish to Registry" {
     version it refuses stays publishable; it judges no key's trust
     (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
-    On the registry server, the first accepted publish into a scope claims
-    the scope for its publisher; only that publisher publishes into it
-    after. A publish the registry refuses (an invalid upload, a duplicate
+    On the registry server, every token is issued to an account; the first
+    accepted publish into a scope claims the scope for the publishing
+    token's account, and only tokens issued to that account publish or
+    yank in it after, whichever token, so a revoked or expired token's
+    replacement keeps the scope (SCOPE_OWNED otherwise). A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
     A yank is held to the same rule as a publish: only a token the scope's
@@ -882,6 +885,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "a version already published is refused with R007"
   verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
   verify integration "a publish the registry refuses claims no scope"
+  verify integration "a token is issued to an account; the registry refuses a token request that names none"
   verify integration "a scope belongs to the account its tokens are issued to: a revoked or expired token's replacement publishes into it"
   verify integration "a yank is refused unless the yanking token's account owns the package's scope, and the version stays installable"
   verify unit "successful publish returns registry URL"
@@ -894,7 +898,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, yank_held_to_owner"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, scope_owned_by_account, yank_held_to_owner"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {

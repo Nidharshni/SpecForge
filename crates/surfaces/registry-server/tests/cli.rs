@@ -26,7 +26,15 @@ fn registry(args: &[&str]) -> Output {
 #[test]
 fn token_create_with_an_unusable_data_dir_exits_1() {
     let (_file, dir) = unusable_data_dir();
-    let output = registry(&["token", "create", "--no-expiry", "--data-dir", &dir]);
+    let output = registry(&[
+        "token",
+        "create",
+        "--account",
+        "a",
+        "--no-expiry",
+        "--data-dir",
+        &dir,
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(
@@ -79,4 +87,12 @@ fn scope_assign_hands_a_scope_to_an_account() {
         stdout.contains("scope @acme assigned to acme (was unclaimed)"),
         "{stdout}"
     );
+}
+
+#[test]
+fn token_create_needs_an_account() {
+    let output = registry(&["token", "create", "--no-expiry"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("--account"), "{stderr}");
 }
