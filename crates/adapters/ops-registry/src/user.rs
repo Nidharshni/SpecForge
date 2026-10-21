@@ -206,24 +206,23 @@ impl ConfiguredRegistry {
     pub fn log_in(&self, alias: Option<&str>, source: TokenSource) -> Result<LoggedIn, OpError> {
         let registry = self.registries()?.named(alias)?.clone();
         let root = registry.url.clone();
-        let (reference, kept) = match &source {
-            TokenSource::Given(_) => (None, Kept::Secret),
-            TokenSource::Env(var) => (Some(TokenReference::Env(var.clone())), Kept::Env),
-            TokenSource::File(path) => (Some(TokenReference::File(path.clone())), Kept::File),
-        };
-
         // Resolve the token before any request: a reference that can't be read is R010/R011.
-        let credential = match (&reference, source) {
-            (_, TokenSource::Given(token)) => RegistryCredential::new(root.clone(), token),
-            (Some(reference), _) => {
-                let mut probe = CredentialStore::empty(&self.user.dir);
-                probe.keep_reference(root.clone(), reference.clone());
-                match probe.credential(&root).map_err(unusable_credential)? {
-                    Some(credential) => credential,
-                    None => unreachable!("a reference was just kept"),
-                }
+        let referenced = |reference: TokenReference, kept: Kept| -> Result<_, OpError> {
+            let mut probe = CredentialStore::empty(&self.user.dir);
+            probe.keep_reference(root.clone(), reference.clone());
+            match probe.credential(&root).map_err(unusable_credential)? {
+                Some(credential) => Ok((credential, Some(reference), kept)),
+                None => unreachable!("a reference was just kept"),
             }
-            (None, _) => unreachable!("a reference is kept for every source but a given token"),
+        };
+        let (credential, reference, kept) = match source {
+            TokenSource::Given(token) => (
+                RegistryCredential::new(root.clone(), token),
+                None,
+                Kept::Secret,
+            ),
+            TokenSource::Env(var) => referenced(TokenReference::Env(var), Kept::Env)?,
+            TokenSource::File(path) => referenced(TokenReference::File(path), Kept::File)?,
         };
 
         // An unreadable store is refused before any request, as publish refuses it (ADR 0045).
