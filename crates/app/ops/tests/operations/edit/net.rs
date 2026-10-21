@@ -61,7 +61,6 @@ fn a_new_file_the_edits_leave_empty_is_not_written() {
     behavior = "validate_typed_edit",
     verify = "the report names what the edits change taken together"
 )]
-#[ignore = "flipped by T3"]
 fn an_edit_list_that_cancels_out_names_no_entity() {
     let c = tasks();
     let lists = [
@@ -103,7 +102,6 @@ fn an_edit_list_that_cancels_out_names_no_entity() {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn a_real_change_beside_a_cancelled_one_names_only_its_entity() {
     let c = tasks();
     let planned = plan(

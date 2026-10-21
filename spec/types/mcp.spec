@@ -571,7 +571,7 @@ type McpRenameResult "Mcp Rename Result" {
 }
 
 type McpEditResult "Mcp Edit Result" {
-  /// The entities the edits created, changed or deleted, sorted.
+  /// The entities whose blocks the edits, taken together, create, change or delete, sorted.
   entities       string[]
   /// The files the edits change, relative to the spec root.
   affected_files string[]

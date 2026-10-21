@@ -181,7 +181,6 @@ fn edit_on_another_project_by_path_leaves_the_served_one() {
     behavior = "provide_mcp_edit_tool",
     verify = "specforge.edit of a list that cancels out writes nothing and names no entity"
 )]
-#[ignore = "flipped by T3"]
 fn specforge_edit_of_a_list_that_cancels_out_writes_and_names_nothing() {
     let (mut server, root) = served();
     let reply = edit(

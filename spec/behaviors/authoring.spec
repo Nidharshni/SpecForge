@@ -168,7 +168,10 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     is refused with E080 and writes nothing. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project
     change: a file changed since the compile refuses the whole plan, and a
-    failed write puts every file already written back.
+    failed write puts every file already written back. The report names the net
+    change: the entities whose blocks the list, taken together, creates, changes or deletes, and the
+    files whose text it changes; an entity a later edit puts back as it was is not named, and a
+    block that only moves within its file is not either.
   """
   verify unit "an edit that adds an error is E080 and writes nothing"
   verify unit "an edit that adds a warning is written and reports it"

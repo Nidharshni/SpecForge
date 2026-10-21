@@ -104,7 +104,6 @@ impl Planner<'_> {
         self.created
             .insert(id.to_string(), (kind.to_string(), file.to_string()));
         self.deleted.remove(id);
-        self.entities.insert(id.to_string());
         Ok(())
     }
 

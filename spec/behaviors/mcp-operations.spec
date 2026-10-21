@@ -221,7 +221,7 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
     compiling the edited project, and written as one project change. An edit
     list that leaves an error the project did not have MUST be refused as
     E080 and nothing written. The response MUST list the entities and files
-    changed, a unified diff and the warnings and infos the edit adds. When
+    the list changes, taken together (none for a list that cancels out), a unified diff and the warnings and infos the edit adds. When
     dry_run is true, the tool MUST return the same document and write nothing.
   """
   verify unit "specforge.edit applies a list of edits all or nothing"

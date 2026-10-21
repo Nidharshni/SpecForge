@@ -6,7 +6,7 @@ use crate::change::ProjectChange;
 use crate::read::navigate::{SourceText, TextEdit};
 use crate::{Caller, OpError, Writes};
 use specforge_common::Sym;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -83,6 +83,22 @@ impl PlannedChange {
         edits
     }
 
+    /// The entities whose block the change creates, changes or deletes, sorted: each ID whose blocks (the file and
+    /// the whole lines each spans, as the parser reads the planned-on and the after text of every file in the change)
+    /// differ between the two. A block that only moves within its file is not named; one moved to another file is.
+    pub fn entities(&self) -> Vec<String> {
+        let (mut before, mut after) = (Blocks::new(), Blocks::new());
+        for (key, (planned_on, text)) in &self.files {
+            blocks(&mut before, key, planned_on.as_deref().unwrap_or(""));
+            blocks(&mut after, key, text);
+        }
+        let ids: BTreeSet<&String> = before.keys().chain(after.keys()).collect();
+        ids.into_iter()
+            .filter(|id| before.get(*id) != after.get(*id))
+            .cloned()
+            .collect()
+    }
+
     /// A unified diff of every file, spec-root-relative headers, in key order. Empty when nothing changes.
     pub fn diff(&self) -> String {
         self.files
@@ -108,6 +124,21 @@ impl PlannedChange {
             );
         }
         change.commit()
+    }
+}
+
+/// Each entity's blocks, by ID: (file, the whole lines the block spans), in file then text order.
+type Blocks = BTreeMap<String, Vec<(String, String)>>;
+
+/// The blocks of `text` (the file `key`) into `into`. A span a recovered parse ends past the text is cut at its end.
+fn blocks(into: &mut Blocks, key: &str, text: &str) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    for entity in specforge_parser::parse(text, key).entities {
+        let end = entity.span.end_line.min(lines.len());
+        let start = entity.span.start_line.saturating_sub(1).min(end);
+        into.entry(entity.id.raw.to_string())
+            .or_default()
+            .push((key.to_string(), lines[start..end].join("\n")));
     }
 }
 
@@ -163,5 +194,31 @@ mod tests {
         let c = change(vec![("a.spec", None, ""), ("b.spec", None, "b\n")]);
         assert_eq!(c.affected_files().collect::<Vec<_>>(), ["b.spec"]);
         assert!(change(vec![("a.spec", None, "")]).is_empty());
+    }
+
+    #[test]
+    fn entities_are_the_blocks_that_differ() {
+        let c = change(vec![
+            (
+                "a.spec",
+                text("type a \"A\" {\n}\n\ntype b \"B\" {\n}\n"),
+                "type a \"A\" {\n}\n\ntype b \"Bee\" {\n}\n",
+            ),
+            ("c.spec", None, "type c \"C\" {\n}\n"),
+        ]);
+        assert_eq!(c.entities(), ["b", "c"]);
+    }
+
+    #[test]
+    fn a_block_moved_to_another_file_is_named_and_one_moved_within_its_file_is_not() {
+        let c = change(vec![
+            (
+                "a.spec",
+                text("type x \"X\" {\n}\n\ntype y \"Y\" {\n}\n"),
+                "// above\ntype y \"Y\" {\n}\n",
+            ),
+            ("b.spec", None, "type x \"X\" {\n}\n"),
+        ]);
+        assert_eq!(c.entities(), ["x"]);
     }
 }

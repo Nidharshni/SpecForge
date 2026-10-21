@@ -177,7 +177,8 @@ pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
 /// What a plan will write.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct EditReport {
-    /// The entities the edits created, changed or deleted, sorted.
+    /// The entities whose block the edits, taken together, create, change or delete, sorted
+    /// (`PlannedChange::entities`).
     pub entities: Vec<String>,
     /// The files the edits change, relative to the spec root, sorted.
     pub affected_files: Vec<String>,
@@ -211,7 +212,6 @@ struct Planner<'v> {
     /// The plan's one configuration lookup, through the view's disk (ADR 0169).
     configs: Configs<'v>,
     texts: BTreeMap<String, String>,
-    entities: BTreeSet<String>,
     created: BTreeMap<String, (String, String)>,
     deleted: BTreeSet<String>,
 }
@@ -277,7 +277,6 @@ impl<'v> Planner<'v> {
         let new = change(&site, &text)?;
         if new != text {
             self.texts.insert(located.key, new);
-            self.entities.insert(id.to_string());
         }
         Ok(())
     }
@@ -357,7 +356,7 @@ impl<'v> Planner<'v> {
             validate::check(self.view, &change.after())?
         };
         let report = EditReport {
-            entities: self.entities.into_iter().collect(),
+            entities: change.entities(),
             affected_files: change.affected_files().map(String::from).collect(),
             diff: change.diff(),
             added: DiagnosticList(added),
@@ -399,7 +398,6 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
         view,
         configs: Configs::new(Forms::none(), &disk),
         texts: BTreeMap::new(),
-        entities: BTreeSet::new(),
         created: BTreeMap::new(),
         deleted: BTreeSet::new(),
     };
