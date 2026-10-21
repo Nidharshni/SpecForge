@@ -655,7 +655,9 @@ fn diagnostic_hover(
     position: Position,
 ) -> Option<String> {
     specforge_lsp::hover::diagnostics(&specforge_lsp::hover::diagnostics_at(
-        published, index, position,
+        published,
+        |span| Some(index.range(span)),
+        position,
     ))
 }
 

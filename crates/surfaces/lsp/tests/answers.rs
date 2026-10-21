@@ -170,20 +170,10 @@ fn a_stale_cursor_names_its_own_word() {
         hover_at(&state, on_alpha).starts_with("**type** `alpha` \u{2014} A"),
         "the buffer's alpha is one line below the compile's"
     );
-    let Some(GotoDefinitionResponse::Link(links)) = answers::definition(&state, &uri, on_beta)
-    else {
-        panic!("a link");
-    };
-    assert_eq!(
-        links[0].origin_selection_range.map(quad),
-        Some((2, 5, 2, 9))
-    );
-    // Locations stay positions in the compiled text (ADR 0023 D3).
-    assert_eq!(quad(links[0].target_range), (1, 0, 1, 16));
-    assert_eq!(quad(links[0].target_selection_range), (1, 5, 1, 9));
-    let references = answers::references(&state, &uri, on_beta, true).expect("its declaration");
-    assert_eq!(references.len(), 1);
-    assert_eq!(quad(references[0].range), (1, 5, 1, 9));
+    // Its declaration lies in the buffer typed since: no location of the compile is a place in it
+    // (ADR 0205).
+    assert!(answers::definition(&state, &uri, on_beta).is_none());
+    assert!(answers::references(&state, &uri, on_beta, true).is_none());
 
     // The compile catches up: the same entity is named, now placed where
     // the buffer has it.

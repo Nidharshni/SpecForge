@@ -122,8 +122,8 @@ fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Op
 }
 
 /// The hover at `position` of the open document `uri`: the published
-/// diagnostics under it while the document is the compiled text (their
-/// ranges are positions in that text) explained from the catalog, then what the cursor names: an entity's
+/// diagnostics under it whose range is a position in the editor's text
+/// (`Compiled::range`) explained from the catalog, then what the cursor names: an entity's
 /// facts (the inspect read view reporting what was published; while the
 /// project rebuilds, the last complete compile's coverage) or a field's help. Sections are
 /// joined by a rule. `None` for a document that is not open or a position
@@ -133,17 +133,17 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let files = state.files();
     let doc = files.document(&key)?;
     let compiled = Compiled::new(state);
-    // The compile's diagnostics are positions in the text it read: under the cursor only while the
-    // document is that text, through its own index (ADR 0023 D3).
-    let mut shown = if compiled.is_stale(&key) {
-        Vec::new()
-    } else {
-        hover::diagnostics_at(files.compile_diagnostics(&key), doc.index(), position)
-    };
+    // The compile's diagnostics are positions in the text it read: under the cursor only where the
+    // editor's text is that text (`Compiled::range`).
+    let mut shown = hover::diagnostics_at(
+        files.compile_diagnostics(&key),
+        |span| compiled.range(span),
+        position,
+    );
     // The formatter's findings are positions in the buffer it formatted, which is this one.
     shown.extend(hover::diagnostics_at(
         files.formatter_diagnostics(&key),
-        doc.index(),
+        |span| Some(doc.index().range(span)),
         position,
     ));
     let published: Vec<specforge_common::Diagnostic> = files.published().cloned().collect();
@@ -195,7 +195,7 @@ pub fn completion(state: &LspState, uri: &Url, position: Position) -> Option<Com
 /// Where what the cursor names is declared: a `use` path's file (its
 /// start), an entity's block with its name selected as a `LocationLink` for
 /// a client declaring links, else a `Location` at its name. `None` when its
-/// file has no compiled text.
+/// file's editor text is not the compiled text.
 pub fn definition(
     state: &LspState,
     uri: &Url,
@@ -218,7 +218,7 @@ pub fn definition(
         }
         Some(Target::Entity { id, origin }) => {
             let definition = compiled.navigator().definition(id.as_str()).ok()?;
-            // A definition whose file's text is unknown is not answered
+            // A definition in a file whose editor text is not the compiled text is not answered
             // (no range of it is honest).
             if state.client().definition_links {
                 let (target_range, target_selection_range) = (
@@ -257,7 +257,7 @@ pub fn references(
         .navigator()
         .tokens(id.as_str(), include_declaration)
         .unwrap_or_default();
-    // An occurrence whose file's text is unknown is left out.
+    // An occurrence in a file whose editor text is not the compiled text is left out.
     let locations: Vec<Location> = refs
         .iter()
         .filter_map(|o| compiled.location(&o.span))
@@ -432,7 +432,7 @@ pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeA
 /// The document's outline (`specforge_ops::read::navigate::outline`, what MCP
 /// outline returns): nested symbols, methods as children, each selecting
 /// its name, for a client that declared hierarchicalDocumentSymbolSupport;
-/// flat otherwise.
+/// flat otherwise. An entry in a file whose editor text is not the compiled text is left out.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
     let entries = outline(&compiled.navigator(), &state.key_of(uri))
@@ -446,7 +446,8 @@ pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolRes
 }
 
 /// The entities whose names match `query`, by navigation's one ranking:
-/// what MCP search and completion rank alike.
+/// what MCP search and completion rank alike. An entity in a file whose editor text is not the
+/// compiled text is left out.
 pub fn workspace_symbols(state: &LspState, query: &str) -> Option<Vec<SymbolInformation>> {
     let query = EntityQuery::new(query, MatchScope::Names);
     let found = find_entities(state.graph(), &query);
@@ -466,7 +467,7 @@ pub fn workspace_symbols(state: &LspState, query: &str) -> Option<Vec<SymbolInfo
             Some(SymbolInformation {
                 // Graph byte columns convert to UTF-16 against the text
                 // the graph was compiled from; an entity whose file's
-                // text is unknown is left out.
+                // editor text is not the compiled text is left out.
                 location: compiled.location(&m.node.source_span)?,
                 name: m.node.id.raw.to_string(),
                 kind: symbol_kind_from_entity(m.node.kind.raw.as_str(), kind_reg),

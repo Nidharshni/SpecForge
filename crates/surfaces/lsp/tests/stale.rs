@@ -190,8 +190,10 @@ fn place(file: &str, line: u32, character: u32) -> (String, u32, u32) {
     (file.to_string(), line, character)
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "an outline of a buffer typed since the compile places no symbol at a line of the compiled text"
+)]
 fn an_outline_of_a_buffer_typed_since_places_no_symbol_at_a_compiled_line() {
     for hierarchical in [false, true] {
         let client = ClientSupport {
@@ -208,8 +210,10 @@ fn an_outline_of_a_buffer_typed_since_places_no_symbol_at_a_compiled_line() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "references from a buffer typed since leave out its lines and keep those of files that are the compiled text"
+)]
 fn references_from_a_buffer_typed_since_leave_out_its_compiled_lines() {
     let mut served = typed_three_lines_above(ClientSupport::default());
     let a = served.uri("a.spec");
@@ -224,8 +228,10 @@ fn references_from_a_buffer_typed_since_leave_out_its_compiled_lines() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "a definition in a buffer typed since is not placed at its compiled position; one in a file that is the compiled text is"
+)]
 fn a_definition_in_a_buffer_typed_since_is_not_placed_at_its_compiled_line() {
     let mut served = typed_three_lines_above(ClientSupport::default());
     assert_eq!(definition_at(&served, "a.spec", 5, 10), None);
@@ -241,8 +247,10 @@ fn a_definition_in_a_buffer_typed_since_is_not_placed_at_its_compiled_line() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "workspace symbols leave out the entities of a buffer typed since the compile"
+)]
 fn workspace_symbols_leave_out_a_buffer_typed_since() {
     let mut served = typed_three_lines_above(ClientSupport::default());
     let found = |served: &Served, query: &str| {
@@ -256,8 +264,10 @@ fn workspace_symbols_leave_out_a_buffer_typed_since() {
     assert_eq!(found(&served, "alpha"), vec![place("a.spec", 3, 0)]);
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "a list leaves out a closed file changed on disk since the compile until its change is compiled"
+)]
 fn a_list_leaves_out_a_closed_file_changed_on_disk_since_the_compile() {
     let mut served = Served::new(&[("a.spec", ALPHA), ("b.spec", BETA)]).open(&["a.spec"]);
     served.write("b.spec", &format!("// one\n// two\n{BETA}"));
