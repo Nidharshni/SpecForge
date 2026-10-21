@@ -36,6 +36,7 @@ mod rename;
 mod semantic_tokens;
 mod served;
 mod session;
+mod snippets;
 mod stale;
 mod state;
 mod union_title;
