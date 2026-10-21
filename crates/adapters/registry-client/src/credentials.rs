@@ -59,7 +59,7 @@ impl CredentialStore {
     /// `<dir>/credentials.json`, or an empty store when there is none. R012 when it can't be read or
     /// parsed (a file keyed by aliases, from before ADR 0178, is one: its keys are not roots).
     pub fn read(dir: &Path) -> Result<Self, Diagnostic> {
-        let path = dir.join(FILE);
+        let path = dir.join(CREDENTIALS_FILE);
         if !path.exists() {
             return Ok(Self::empty(dir));
         }
@@ -88,7 +88,7 @@ impl CredentialStore {
 
     /// Written whole to `<dir>/credentials.json`, 0600. R013.
     pub fn write(&self) -> Result<(), Diagnostic> {
-        let path = self.dir.join(FILE);
+        let path = self.dir.join(CREDENTIALS_FILE);
         let json = serde_json::to_string_pretty(self).map_err(|e| {
             Diagnostic::new(
                 codes::R013,
@@ -219,13 +219,11 @@ impl CredentialStore {
         token: String,
         expires_at: Option<String>,
     ) -> Result<(), String> {
-        #[derive(Serialize)]
-        struct Stored<'a> {
-            secret: &'a str,
-        }
         let path = self.secret_path(&root);
-        let json = serde_json::to_string(&Stored { secret: &token })
-            .map_err(|e| format!("failed to serialize secret: {}", e))?;
+        let json = serde_json::to_string(&Stored {
+            secret: token.clone(),
+        })
+        .map_err(|e| format!("failed to serialize secret: {}", e))?;
         write_private(&path, json.as_bytes())
             .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
         self.registries.insert(
@@ -257,10 +255,6 @@ impl CredentialStore {
 
     /// `Ok(None)` = no secret kept for `root`.
     fn read_secret(&self, root: &RegistryRoot) -> Result<Option<String>, String> {
-        #[derive(Deserialize)]
-        struct Stored {
-            secret: String,
-        }
         let path = self.secret_path(root);
         let Ok(content) = std::fs::read_to_string(&path) else {
             return Ok(None);
@@ -270,6 +264,12 @@ impl CredentialStore {
             // The parse error is not shown: serde_json echoes a wrong-shaped value, which is the token.
             .map_err(|_| format!("corrupt secret file {}", path.display()))
     }
+}
+
+/// The JSON a kept secret is stored as.
+#[derive(Serialize, Deserialize)]
+struct Stored {
+    secret: String,
 }
 
 /// Writes `bytes` to `path` through a sibling temp file renamed into place, so the file is never
@@ -302,7 +302,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
-const FILE: &str = "credentials.json";
+const CREDENTIALS_FILE: &str = "credentials.json";
 
 #[cfg(test)]
 mod tests {
@@ -327,7 +327,7 @@ mod tests {
         store.write().unwrap();
 
         // The store on disk must not contain the token.
-        let on_disk = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
+        let on_disk = std::fs::read_to_string(dir.path().join(CREDENTIALS_FILE)).unwrap();
         assert!(
             !on_disk.contains("sfr_super_secret"),
             "plaintext token leaked to file"
