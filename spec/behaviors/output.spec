@@ -430,6 +430,31 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "an empty kind is a kind the project does not know: it lists nothing and is an I020 notice"
 }
 
+// A spec file a request names (specforge_ops::view::ProjectView::source and source_place, ADR 0195).
+behavior read_a_named_spec_file "Read a Spec File a Request Names" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  contract   """
+    A spec file a request names (a typed create's file, outline's file, the
+    fixes' file_path) MUST be read into its source key, the path relative to
+    the spec root that the compile and the editor name it by: every spelling
+    of one file is that file (a leading or inner ., a doubled separator, its
+    absolute path under the spec root). A spelling that leaves the spec root
+    (a .. or an absolute path elsewhere) MUST be refused as not_a_source. A
+    read of a file that is none of the compiled sources MUST be
+    file_not_found; a create MUST be refused as not_a_source unless the file
+    is one discovery would keep. A spelling from the project root of an
+    existing source MUST be refused naming its spec-root spelling.
+  """
+  verify unit "every spelling of a spec file under the spec root reads as its source key"
+  verify unit "a spelling that leaves the spec root is not_a_source"
+  verify unit "a read of a file that is no compiled source is file_not_found"
+  verify unit "a spec file named from the project root is refused naming its spec-root spelling"
+}
+
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
 // the context prompt and the LSP hover render them.
 behavior inspect_entity_facts "Inspect an Entity's Facts" {

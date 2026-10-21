@@ -22,6 +22,7 @@ mod connectivity;
 mod entity;
 mod kinds;
 mod selection;
+mod source_file;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -38,6 +39,7 @@ pub use connectivity::Connectivity;
 pub use entity::{DEPTH_WITHOUT_ENTITY, EntityField, not_found};
 pub use kinds::{KindFilter, KnownKinds, UNKNOWN_KIND};
 pub use selection::{Entity, Select, Selection};
+pub use source_file::NOT_A_SOURCE;
 
 use crate::schema_version::{SchemaCache, VersionedSchema};
 use crate::{Containment, OpError};

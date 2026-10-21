@@ -117,3 +117,119 @@ fn the_fixes_refuse_a_file_that_is_no_source() {
     assert_eq!(refusal("nope.spec"), "file_not_found");
     assert_eq!(refusal("../x.spec"), "not_a_source");
 }
+
+const A: &str = "invariant rule_a \"A\" {\n  guarantee \"x\"\n}\n";
+const B: &str = "invariant rule_b \"B\" {\n  guarantee \"x\"\n}\n";
+
+/// A project with `spec_root` `spec/`, holding `a.spec` and `sub/b.spec`, compiled.
+fn spec_dir_project() -> (tempfile::TempDir, specforge_project::CompiledProject) {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        serde_json::json!({"name": "n", "spec_root": "spec", "extensions": ["@specforge/software"]})
+            .to_string(),
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("spec/sub")).unwrap();
+    std::fs::write(dir.path().join("spec/a.spec"), A).unwrap();
+    std::fs::write(dir.path().join("spec/sub/b.spec"), B).unwrap();
+    let project = compile_at(
+        dir.path(),
+        Some(specforge_project::testing::component_runtime()),
+    );
+    (dir, project)
+}
+
+fn kind_and_code(error: &specforge_ops::OpError) -> (specforge_ops::OpErrorKind, &str) {
+    (error.kind, &error.code)
+}
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "every spelling of a spec file under the spec root reads as its source key"
+)]
+fn the_view_reads_every_spelling_into_its_source_key() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    let spec_root = project.environment().spec_root().to_path_buf();
+    let absolute = spec_root.join("a.spec");
+    for (named, key) in [
+        ("a.spec", "a.spec"),
+        ("./a.spec", "a.spec"),
+        (".//a.spec", "a.spec"),
+        (absolute.to_str().unwrap(), "a.spec"),
+        ("sub/./b.spec", "sub/b.spec"),
+        ("sub//b.spec", "sub/b.spec"),
+    ] {
+        assert_eq!(view.source(named).unwrap(), key, "{named}");
+        assert_eq!(view.source_place(named).unwrap(), key, "{named}");
+    }
+    // The LSP's and the stub fix's keys read as themselves.
+    for key in project.source_keys() {
+        assert_eq!(view.source(key).unwrap(), key);
+        assert_eq!(view.source_place(key).unwrap(), key);
+    }
+    assert_eq!(view.source_place("new/c.spec").unwrap(), "new/c.spec");
+}
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "a spelling that leaves the spec root is not_a_source"
+)]
+fn the_view_refuses_a_spelling_outside_the_spec_root() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    for named in ["../x.spec", "sub/../a.spec", "/elsewhere/x.spec"] {
+        for refused in [view.source(named), view.source_place(named)] {
+            let error = refused.unwrap_err();
+            assert_eq!(
+                kind_and_code(&error),
+                (specforge_ops::OpErrorKind::InvalidInput, "not_a_source"),
+                "{named}"
+            );
+        }
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "a read of a file that is no compiled source is file_not_found"
+)]
+fn the_view_reads_no_source_as_file_not_found() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    for named in ["nope.spec", "", ".", "specforge.json", "notes.txt"] {
+        let error = view.source(named).unwrap_err();
+        assert_eq!(
+            kind_and_code(&error),
+            (specforge_ops::OpErrorKind::FileNotFound, "file_not_found"),
+            "{named:?}"
+        );
+    }
+    for named in ["notes.txt", "", "node_modules/x.spec"] {
+        let error = view.source_place(named).unwrap_err();
+        assert_eq!(kind_and_code(&error).1, "not_a_source", "{named:?}");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "a spec file named from the project root is refused naming its spec-root spelling"
+)]
+fn the_view_refuses_a_project_root_spelling_naming_its_key() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    let error = view.source("spec/a.spec").unwrap_err();
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::FileNotFound);
+    assert!(
+        error.suggestion.as_deref().unwrap().contains("'a.spec'"),
+        "{error:?}"
+    );
+    let error = view.source_place("spec/a.spec").unwrap_err();
+    assert_eq!(error.code, "not_a_source");
+    assert!(
+        error.suggestion.as_deref().unwrap().contains("'a.spec'"),
+        "{error:?}"
+    );
+    assert_eq!(view.source_place("spec/new.spec").unwrap(), "spec/new.spec");
+}
