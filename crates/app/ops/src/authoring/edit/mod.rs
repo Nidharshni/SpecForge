@@ -151,6 +151,8 @@ pub struct FieldInfo {
     pub name: String,
     pub field_type: specforge_protocol_types::FieldType,
     pub description: String,
+    /// Whether the kind requires the field.
+    pub required: bool,
 }
 
 /// The fields `kind` declares, in the order a new block writes them (the kind's own, then its enhancements');
@@ -163,6 +165,7 @@ pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
             Some(FieldInfo {
                 field_type: entry.field_type(),
                 description: entry.declared().description.clone().unwrap_or_default(),
+                required: entry.declared().required,
                 name,
             })
         })

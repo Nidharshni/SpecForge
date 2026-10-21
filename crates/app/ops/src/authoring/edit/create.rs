@@ -17,6 +17,31 @@ use std::collections::BTreeSet;
 /// `Create`'s file is not a project source.
 pub const NOT_A_SOURCE: &str = "not_a_source";
 
+/// The header line of a new `kind` block, its braces on the lines it opens (ADR 0175 D7).
+pub(super) fn header(kind: &str, id: &str, title: &str) -> String {
+    format!("{kind} {id} {} {{\n}}", spell::quoted(title))
+}
+
+/// `text` with `fields` set on `site`'s block and `verify` added, as a create writes them: one `set` per field, one
+/// add-verify per obligation (ADR 0175 D7). A `field.entry` path is refused (`path::whole_field`).
+pub(super) fn fill(
+    site: &Site<'_>,
+    mut text: String,
+    fields: &std::collections::BTreeMap<String, Input>,
+    verify: &[Obligation],
+) -> Result<String, Refusal<EditField>> {
+    for (name, input) in fields {
+        if let FieldPath::Entry { field, entry } = path::resolve(site, name, None)? {
+            return Err(path::whole_field("create", field, entry));
+        }
+        text = block::set(site, &text, name, input, None)?;
+    }
+    for o in verify {
+        text = block::verify(site, &text, o.kind.as_deref(), &o.text, true)?;
+    }
+    Ok(text)
+}
+
 impl Planner<'_> {
     pub(super) fn create(
         &mut self,
@@ -68,17 +93,13 @@ impl Planner<'_> {
             kind,
             config: self.config_of(file),
         };
-        let header = format!("{kind} {id} {} {{\n}}", spell::quoted(title));
-        let mut text = block::canonical(&site, &place(&existing, &parsed, kind, &header))?;
-        for (name, input) in fields {
-            if let FieldPath::Entry { field, entry } = path::resolve(&site, name, None)? {
-                return Err(path::whole_field("create", field, entry));
-            }
-            text = block::set(&site, &text, name, input, None)?;
-        }
-        for o in verify {
-            text = block::verify(&site, &text, o.kind.as_deref(), &o.text, true)?;
-        }
+        let header = header(kind, id, title);
+        let text = fill(
+            &site,
+            block::canonical(&site, &place(&existing, &parsed, kind, &header))?,
+            fields,
+            verify,
+        )?;
         self.texts.insert(file.to_string(), text);
         self.created
             .insert(id.to_string(), (kind.to_string(), file.to_string()));

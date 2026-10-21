@@ -351,12 +351,7 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
     // builtin ever defaults a required field.
     edit::fields_of(view, kind)
         .into_iter()
-        .filter(|field| {
-            view.registries()
-                .fields()
-                .get(kind, &field.name)
-                .is_some_and(|entry| entry.declared().required)
-        })
+        .filter(|field| field.required)
         .map(|field| (field.name, Input::One(PLACEHOLDER.to_string())))
         .collect()
 }
