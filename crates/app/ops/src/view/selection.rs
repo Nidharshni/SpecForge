@@ -1,8 +1,9 @@
 //! A read's selection (CONTEXT.md "Read selection", ADR 0177): the entity a request names, the hops
-//! counted from it and the kinds it keeps, checked once by the project view for every read view.
+//! counted from it and the kinds it keeps, checked once by the project view for every read view, and the entities
+//! it covers (ADR 0190).
 
 use specforge_common::Diagnostic;
-use specforge_graph::{Graph, Node, Reached};
+use specforge_graph::{Graph, Node, Selected};
 use specforge_registry::{EntityRecord, Standing};
 
 use super::{KindFilter, ProjectView, not_found};
@@ -42,31 +43,23 @@ pub struct Selection<'v, 'r> {
 }
 
 impl<'r> Selection<'_, 'r> {
-    /// The depth the request gave (only ever with an entity).
-    pub fn depth(&self) -> Option<usize> {
-        self.depth
-    }
-
-    /// An entity of `kind` is kept: every kind without a filter ([`KindFilter::keeps`]).
-    pub fn keeps(&self, kind: &str) -> bool {
-        self.kinds.keeps(kind)
-    }
-
     /// The filter as the request gave it, unknown kinds included: what the emitter's
     /// `kind_filter` takes.
     pub fn kinds(&self) -> &'r [&'r str] {
         self.kinds.kinds()
     }
 
-    /// What the entity reaches within the depth, `default` when the request gave none (`None`:
-    /// unbounded): the entity first, nearest first ([`Graph::reach`]). `None` without an entity.
-    pub fn reach(&self, default: Option<usize>) -> Option<Vec<Reached>> {
-        let entity = self.entity?;
-        Some(
-            self.graph
-                .reach(entity.node.id.raw.as_str(), self.depth.or(default))
-                .expect("a selected entity is a node of the view's graph"),
-        )
+    /// The entities the selection covers ([`Graph::select`], ADR 0190): what its entity reaches within the depth the
+    /// request gave, else `default` (`None`: unbounded), or every entity without one; of its kinds. Coverage reads it
+    /// at `Some(0)` (the entity alone), the review at `Some(DEFAULT_DEPTH)`, explore and export at `None`.
+    pub fn selected(&self, default: Option<usize>) -> Selected {
+        self.graph
+            .select(
+                self.entity.map(|entity| entity.node.id.raw.as_str()),
+                self.depth.or(default),
+                self.kinds.kinds(),
+            )
+            .expect("a selected entity is a node of the view's graph")
     }
 
     /// I020 for each kind the project lacks, once each, in the filter's order.

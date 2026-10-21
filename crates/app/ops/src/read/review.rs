@@ -2,8 +2,6 @@
 //! project view (ADR 0015, "Prompt read views"). The review prompt and
 //! `specforge review` render it.
 
-use std::collections::BTreeSet;
-
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
@@ -134,19 +132,13 @@ pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Ref
     let depth = request
         .entity_id
         .map(|_| request.depth.unwrap_or(DEFAULT_DEPTH));
-    let neighbourhood: Option<BTreeSet<&'static str>> = selection
-        .reach(Some(DEFAULT_DEPTH))
-        .map(|reached| reached.iter().map(|r| r.id.as_str()).collect());
+    let neighbourhood = selection.selected(Some(DEFAULT_DEPTH));
     let rows: Vec<CoverageRow> = coverage(view, &CoverageQuery::default())?
         .into_value_and_notices()
         .0
         .rows
         .into_iter()
-        .filter(|row| {
-            neighbourhood
-                .as_ref()
-                .is_none_or(|ids| ids.contains(row.entity_id.as_str()))
-        })
+        .filter(|row| neighbourhood.contains(&row.entity_id))
         .collect();
 
     let connectivity = view.connectivity();

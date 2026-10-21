@@ -193,44 +193,57 @@ fn a_selection_refuses_a_depth_before_the_entity() {
     assert!(select(None, None).unwrap().entity.is_none());
 }
 
-#[test]
-fn a_selection_reaches_from_its_entity_within_its_depth() {
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "a read selection selects what its entity reaches within its depth, of its kinds; the entity is selected only when its kind is kept, and an export draws it always"
+)]
+fn a_selection_selects_what_its_entity_reaches_of_its_kinds() {
     let project = linked();
     let view = project.view();
-    let select = |entity, depth| {
+    let select = |entity, depth, kinds| {
         view.select(&Select {
             entity,
             named_by: EntityField::EntityId,
             depth,
-            kinds: &[],
+            kinds,
         })
         .unwrap()
     };
-    let ids = |reached: Vec<specforge_graph::Reached>| -> Vec<String> {
-        reached.iter().map(|r| r.id.to_string()).collect()
+    let ids = |selected: &specforge_graph::Selected| -> Vec<String> {
+        selected.ids().map(|id| id.to_string()).collect()
     };
 
-    let given = select(Some("login"), Some(0)).reach(None).unwrap();
-    assert_eq!(ids(given), ["login"]);
-    let defaulted = select(Some("login"), None).reach(Some(1)).unwrap();
+    let given = select(Some("login"), Some(0), &[]).selected(None);
+    assert_eq!(ids(&given), ["login"]);
+    let defaulted = select(Some("login"), None, &[]).selected(Some(1));
+    let mut reached: Vec<String> = view
+        .graph()
+        .reach("login", Some(1))
+        .unwrap()
+        .iter()
+        .map(|r| r.id.to_string())
+        .collect();
+    reached.sort();
+    assert_eq!(ids(&defaulted), reached);
+    let kept = select(Some("login"), None, &["feature"]).selected(None);
+    assert_eq!(ids(&kept), ["auth"]);
+    assert!(!kept.contains("login"));
+    assert!(kept.drawn().any(|id| id.as_str() == "login"));
     assert_eq!(
-        ids(defaulted),
-        ids(view.graph().reach("login", Some(1)).unwrap())
+        ids(&select(None, None, &[]).selected(None)),
+        ["auth", "login"]
     );
-    assert_eq!(select(Some("login"), Some(0)).depth(), Some(0));
-    assert!(select(None, None).reach(Some(1)).is_none());
 }
 
 #[test]
-fn a_kind_filter_keeps_every_kind_without_kinds_and_reports_each_unknown_one() {
+fn a_kind_filter_keeps_the_kinds_given_and_reports_each_unknown_one() {
     let project = linked();
     let view = project.view();
 
     let all = view.kind_filter(&[]);
-    assert!(all.keeps("behavior") && all.keeps("anything"));
-    assert!(all.notices().is_empty());
+    assert!(all.kinds().is_empty() && all.notices().is_empty());
 
     let some = view.kind_filter(&["behaviour", "behaviour", "feature"]);
-    assert!(some.keeps("feature") && !some.keeps("behavior"));
+    assert_eq!(some.kinds(), ["behaviour", "behaviour", "feature"]);
     assert_i020_for_behaviour(some.notices());
 }

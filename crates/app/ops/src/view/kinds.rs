@@ -43,19 +43,14 @@ impl<'a> ProjectView<'a> {
     }
 }
 
-/// A filter over entities by kind and what it noticed (ADR 0015 Q3): the kinds the project lacks,
-/// as I020.
+/// The kinds a read keeps, as given, and what they noticed (ADR 0015 Q3): the kinds the project
+/// lacks, as I020. Which entities they keep is the graph's ([`specforge_graph::Graph::select`]).
 pub struct KindFilter<'r> {
     kinds: &'r [&'r str],
     notices: Vec<Diagnostic>,
 }
 
 impl<'r> KindFilter<'r> {
-    /// An entity of `kind` is kept: every kind without a filter.
-    pub fn keeps(&self, kind: &str) -> bool {
-        self.kinds.is_empty() || self.kinds.contains(&kind)
-    }
-
     /// The filter as given, unknown kinds included.
     pub fn kinds(&self) -> &'r [&'r str] {
         self.kinds

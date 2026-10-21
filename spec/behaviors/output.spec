@@ -273,7 +273,10 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     provide_infer_plan_scope) MUST each be one operation over the project
     view, shared by the surfaces that show them (the CLI, MCP's tools and
     prompts, and the LSP hover and keyword completion); a surface maps its
-    arguments and renders the outcome. A kind the project knows is one a
+    arguments and renders the outcome. A read selection selects what its
+    entity reaches within its depth (every entity without one), of the kinds
+    it keeps; the entity itself is selected only when its kind is kept, and
+    an export or a query draws it always (ADR 0190). A kind the project knows is one a
     loaded extension declares or an entity is written with; names are
     exact. A kind filter that names another kind matches nothing and is
     reported as I020; an argument that needs a kind's declaration refuses
@@ -333,6 +336,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "the entities of each kind are counted once, for every kind an entity is written with"
   verify unit "a coverage row is one JSON document on every surface"
   verify unit "a kind filter reports each kind the project does not know with I020, naming the closest"
+  verify unit "a read selection selects what its entity reaches within its depth, of its kinds; the entity is selected only when its kind is kept, and an export draws it always"
   verify unit "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
   verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
