@@ -62,7 +62,14 @@ impl LocalRegistry {
         let data = TempDir::new().expect("a temporary data directory");
         let state =
             Arc::new(AppState::open(data.path(), limits, read_access).expect("an empty registry"));
-        let token = auth::create_token(&state.database, None, "publisher", Some(1), false);
+        let token = auth::create_token(
+            &state.database,
+            "publisher",
+            None,
+            "publisher",
+            Some(1),
+            false,
+        );
         let requests = Arc::new(Mutex::new(Vec::new()));
         let app = handlers::router(Arc::clone(&state)).layer(axum::middleware::from_fn_with_state(
             Arc::clone(&requests),
@@ -107,6 +114,12 @@ impl LocalRegistry {
     /// A bearer token it accepts for publishing (no scope, a day's expiry).
     pub fn token(&self) -> &str {
         &self.token
+    }
+
+    /// A bearer token it accepts for publishing, issued to `account` (no scope, a day's expiry): a second
+    /// token of the publisher's account, or another account's.
+    pub fn issue(&self, account: &str) -> String {
+        auth::create_token(&self.state.database, account, None, account, Some(1), false)
     }
 
     /// The `registries` value naming this registry as the default, alias `local`.

@@ -19,14 +19,29 @@ pub(super) async fn admin_create_token(
     State(state): State<Arc<AppState>>,
     _admin: AdminToken,
     body: Option<Json<TokenRequest>>,
-) -> (StatusCode, Json<TokenIssued>) {
+) -> Result<(StatusCode, Json<TokenIssued>), ApiError> {
     let Json(req) = body.unwrap_or_default();
+    let account = req
+        .account
+        .as_deref()
+        .ok_or_else(|| {
+            ApiError::bad_request(
+                ErrorCode::BadRequest,
+                "a token is issued to an account: name one (`account`)",
+            )
+        })
+        .and_then(|name| {
+            crate::ownership::account_name(name)
+                .map(str::to_string)
+                .map_err(|why| ApiError::bad_request(ErrorCode::BadRequest, why))
+        })?;
     let expires_in_days = req.expires_in_days.unwrap_or(90);
     let created = {
         let st = state.clone();
         tokio::task::spawn_blocking(move || {
             let raw = auth::create_token(
                 &st.database,
+                &account,
                 req.scope.as_deref(),
                 req.label.as_deref().unwrap_or("default"),
                 Some(expires_in_days),
@@ -42,14 +57,14 @@ pub(super) async fn admin_create_token(
         .expect("token creation panicked")
     };
     let (token, prefix) = created;
-    (
+    Ok((
         StatusCode::CREATED,
         Json(TokenIssued {
             token,
             prefix,
             expires_in_days,
         }),
-    )
+    ))
 }
 
 pub(super) async fn admin_list_tokens(
@@ -65,6 +80,7 @@ pub(super) async fn admin_list_tokens(
             .into_iter()
             .map(|t| TokenSummary {
                 prefix: t.token_hash[..8.min(t.token_hash.len())].to_string(),
+                account: t.account,
                 scope: t.scope,
                 label: t.label,
                 created_at: t.created_at,

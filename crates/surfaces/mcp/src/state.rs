@@ -224,7 +224,7 @@ impl McpState {
     /// Where a session MCP opens gets its extension runtime: the host's
     /// when it gave one, else the project's own, built for each environment
     /// load (ADR 0030 D3).
-    fn source(&self) -> RuntimeSource {
+    pub(crate) fn source(&self) -> RuntimeSource {
         match &self.extension_runtime {
             Some(runtime) => RuntimeSource::Fixed(Some(Arc::clone(runtime))),
             None => RuntimeSource::project(),

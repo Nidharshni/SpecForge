@@ -19,6 +19,7 @@ use super::lock_plan::{Ask, Asked, Checked, LockPlan};
 use super::{Claimed, Claims, Install};
 use crate::{Containment, OpError};
 use specforge_package::{PackageName, PackageRef, Version};
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
@@ -49,12 +50,12 @@ pub(crate) enum Answer<R> {
     /// A builtin, enabled under its `Ask` (its position), and what the plan answered.
     Builtin { name: &'static str, asked: Asked },
     /// A local file or a registry package installed under its `Ask`: what `record` kept of the
-    /// install, what the plan answered, and, for a local file, the starter template it declares
-    /// (`None` for a package).
+    /// install, what the plan answered, and, for a local file, the declaration it read (`None` for a
+    /// package).
     Installed {
         recorded: R,
         asked: Asked,
-        starter: Option<String>,
+        declaration: Option<Box<ExtensionDeclaration>>,
     },
 }
 
@@ -64,10 +65,10 @@ enum Named<'a> {
     Duplicate { name: String, first: String },
     /// A builtin, claimed first.
     Builtin(&'static str),
-    /// A local file, read once and claimed first; `starter` is the starter template it declares.
+    /// A local file, read once and claimed first; `declaration` is the declaration it was read as.
     Local {
         install: Box<Install<'a>>,
-        starter: Option<String>,
+        declaration: Box<ExtensionDeclaration>,
     },
     /// A registry package at the version the caller's step resolved, claimed first.
     Package { name: PackageName, version: Version },
@@ -151,13 +152,16 @@ impl<'r> Names<'r> {
                     name,
                     asked: plan.enable(ask, name),
                 },
-                Named::Local { install, starter } => {
+                Named::Local {
+                    install,
+                    declaration,
+                } => {
                     let recorded = record(&install);
                     let asked = plan.install(ask, *install);
                     Answer::Installed {
                         recorded,
                         asked,
-                        starter,
+                        declaration: Some(declaration),
                     }
                 }
                 Named::Package { name, version } => {
@@ -169,7 +173,7 @@ impl<'r> Names<'r> {
                     Answer::Installed {
                         recorded,
                         asked,
-                        starter: None,
+                        declaration: None,
                     }
                 }
             });
@@ -206,17 +210,12 @@ impl<'r> Names<'r> {
                 Source::Local(path) => {
                     let local = LocalFile::read(runtime, path, self.place.containment)
                         .map_err(|error| self.named(at, error))?;
-                    let starter = local
-                        .binary
-                        .declaration()
-                        .handshake
-                        .starter_template
-                        .clone();
+                    let declaration = Box::new(local.binary.declaration().clone());
                     let install = Install::local(self.place.root, local)
                         .map_err(|error| self.named(at, error))?;
                     claims.local(wanted, &install)?.into_named(|| Named::Local {
                         install: Box::new(install),
-                        starter,
+                        declaration,
                     })
                 }
                 Source::Registry(package) => {

@@ -1,10 +1,10 @@
-//! One document formatted with the configuration of where it belongs (ADR 0021 D2): the LSP's
-//! formatting requests, `format --stdin`, and each file of a run.
+//! One document formatted with the configuration and the field forms of the project it belongs to (ADR 0021 D2): the
+//! LSP's formatting requests, `format --stdin`, and each file of a run.
 
 use specforge_common::{Diagnostic, ProjectRoot, Sym, codes};
 use specforge_formatter::{FormatConfig, config, format_range, format_source};
 use specforge_graph::FieldForms;
-use specforge_project::{Environment, SharedRuntime};
+use specforge_project::{Environment, RuntimeSource};
 use specforge_registry::{Disk, PlainDisk};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -114,31 +114,65 @@ impl FormattedDocument<'_> {
     }
 }
 
-/// The field forms of the project at `root`: its extensions loaded into
-/// `runtime` (none without one), their declarations read (ADR 0147).
-/// A project whose extensions do not load has the forms of those that do.
-pub fn forms(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> FieldForms {
-    Environment::load(root, runtime)
-        .registries()
-        .field_forms()
-        .clone()
+/// Where a format finds the field forms each document is written in (ADR 0147 D6): the forms of the
+/// document's own project, found from its place as its configuration is ([`Place`]); none outside a project.
+/// A caller lends the project it already holds, so a document of that project is written in the forms the caller
+/// has; any other project's extensions load through `extensions`, once per run or document. Beside the
+/// [`Caller`](crate::Caller), not in it (CONTEXT "Caller": the runtime is passed beside it).
+#[derive(Clone)]
+pub struct Forms<'a> {
+    /// The project the caller holds and its forms: lent only when its environment was loaded at a project root.
+    held: Option<(&'a ProjectRoot, &'a FieldForms)>,
+    /// Where another project's extensions load to read its forms; `Fixed(None)` writes its values as they are.
+    extensions: RuntimeSource,
+}
+
+impl<'a> Forms<'a> {
+    /// No forms: every value is written as it is (a typed edit's and init's layout, which read only the configuration).
+    pub fn none() -> Self {
+        Forms {
+            held: None,
+            extensions: RuntimeSource::Fixed(None),
+        }
+    }
+
+    /// Each project's forms loaded through `extensions` (the CLI, which holds no project).
+    pub fn loading(extensions: RuntimeSource) -> Self {
+        Forms {
+            held: None,
+            extensions,
+        }
+    }
+
+    /// `held`'s forms for the documents of its project, any other project's loaded through `extensions` (the LSP,
+    /// MCP). An environment with no project root (empty, assembled in memory) lends nothing.
+    pub fn lending(held: &'a Environment, extensions: RuntimeSource) -> Self {
+        Forms {
+            held: held
+                .project_root()
+                .map(|root| (root, held.registries().field_forms())),
+            extensions,
+        }
+    }
 }
 
 /// Format `text`, which belongs at `place`: the whole document, or the
 /// blocks `lines` touch. Inside a project its `.specforgefmt.toml` (else the
 /// defaults) decides, never `editor`; outside one, `editor` (else the
-/// defaults). Values are written in the form `forms` gives their fields
-/// (ADR 0147).
+/// defaults). Values are written in the forms of the document's own project,
+/// found from `place` as its configuration is; `forms` says which project the
+/// caller lends and where another project's extensions load (ADR 0147 D6).
 pub fn document<'a>(
     place: Place<'_>,
     text: &'a str,
     lines: Option<Lines>,
     editor: Option<EditorOptions>,
-    forms: &FieldForms,
+    forms: &Forms<'_>,
 ) -> FormattedDocument<'a> {
     // The LSP and `format --stdin` are unbounded (ADR 0092 D6): they read the file system as the user sees it.
-    let (file, resolved) = Configs::new(None, &PlainDisk).place(place, editor);
-    format_text(resolved, text, lines, file, forms)
+    let mut configs = Configs::new(forms.clone(), &PlainDisk);
+    let (file, resolved) = configs.place(place, editor);
+    format_text(resolved, text, lines, file, configs.forms(place))
 }
 
 /// The directory `file` is in (`.` for a bare file name).
@@ -174,10 +208,10 @@ impl Resolved {
 /// cannot be read.
 pub(crate) struct Configs<'d> {
     disk: &'d dyn Disk,
-    /// Where each project's extensions load, to read its field forms; none
-    /// formats layout only.
-    runtime: Option<SharedRuntime>,
-    forms: HashMap<PathBuf, FieldForms>,
+    /// Where the field forms of each project come from.
+    forms: Forms<'d>,
+    /// The forms of the projects loaded so far, by canonical root.
+    loaded: HashMap<PathBuf, FieldForms>,
     none: FieldForms,
     projects: HashMap<PathBuf, Option<ProjectRoot>>,
     found: HashMap<(PathBuf, PathBuf), Option<PathBuf>>,
@@ -185,11 +219,11 @@ pub(crate) struct Configs<'d> {
 }
 
 impl<'d> Configs<'d> {
-    pub(crate) fn new(runtime: Option<SharedRuntime>, disk: &'d dyn Disk) -> Self {
+    pub(crate) fn new(forms: Forms<'d>, disk: &'d dyn Disk) -> Self {
         Configs {
             disk,
-            runtime,
-            forms: HashMap::new(),
+            forms,
+            loaded: HashMap::new(),
             none: FieldForms::default(),
             projects: HashMap::new(),
             found: HashMap::new(),
@@ -215,19 +249,39 @@ impl<'d> Configs<'d> {
         }
     }
 
-    /// The field forms of `file`'s project, loaded once per run; none
-    /// outside a project or without a runtime.
-    pub(super) fn forms_for_file(&mut self, file: &Path) -> &FieldForms {
-        let dir = directory_of(file);
-        let Some(runtime) = self.runtime.clone() else {
-            return &self.none;
+    /// The field forms of the project `place` is in, as its configuration is found: the caller's when it holds that
+    /// project, else loaded once per run; none outside a project.
+    pub(super) fn forms(&mut self, place: Place<'_>) -> &FieldForms {
+        let root = match place {
+            Place::File(path) => self.project_of(&directory_of(path)),
+            Place::InProject { root, .. } => self.project_of(root),
+            Place::Detached => None,
         };
-        let Some(root) = self.project_of(&dir) else {
+        match root {
+            Some(root) => self.forms_of(&root),
+            None => &self.none,
+        }
+    }
+
+    /// The field forms of the project at `root`.
+    fn forms_of(&mut self, root: &ProjectRoot) -> &FieldForms {
+        if let Some((held, forms)) = self.forms.held
+            && held.canonical() == root.canonical()
+        {
+            return forms;
+        }
+        if matches!(self.forms.extensions, RuntimeSource::Fixed(None)) {
             return &self.none;
-        };
-        self.forms
-            .entry(root.dir().to_path_buf())
-            .or_insert_with(|| forms(&root, Some(runtime)))
+        }
+        let extensions = &self.forms.extensions;
+        self.loaded
+            .entry(root.canonical().to_path_buf())
+            .or_insert_with(|| {
+                Environment::load_from(root, extensions)
+                    .registries()
+                    .field_forms()
+                    .clone()
+            })
     }
 
     /// The configuration of `file`: its own project's (discovery from its

@@ -211,7 +211,7 @@ fn context_contract_includes_contracts_and_verify_omits_prose() {
     let json = crate::export(
         &graph,
         specforge_emitter::EmitFormat::Context,
-        Some(&crate::support::headline_registry(&["behavior", "feature"])),
+        Some(&crate::support::headline_build(&["behavior", "feature"])),
     );
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
@@ -244,22 +244,11 @@ fn context_contract_includes_contracts_and_verify_omits_prose() {
     assert_eq!(node_ids(&scoped), vec!["a", "b", "c"]);
     assert_eq!(scoped["edges"].as_array().unwrap().len(), 2);
 
-    // invalid_scope_diagnosed: E003 naming the entity — through
-    // the call `specforge export --format context --scope` makes.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            format: specforge_emitter::EmitFormat::Context,
-            scope: Some("ghost"),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'ghost' — not found in graph"
+    // invalid_scope_diagnosed: a scope the graph lacks selects nothing.
+    assert!(
+        graph.select(Some("ghost"), None, &[]).is_none(),
+        "a scope the graph lacks selects nothing: the operation refuses it (E003), CT/export.rs:168"
     );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
 }
 
 // === export_agent_graph_format contract ===
@@ -313,21 +302,11 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
     assert_eq!(node_ids(&scoped), vec!["a", "b", "c"]);
     assert_eq!(scoped["edges"].as_array().unwrap().len(), 2);
 
-    // invalid_scope_diagnosed: E003 naming the entity — through
-    // the call `specforge export --format graph --scope` makes.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            scope: Some("ghost"),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'ghost' — not found in graph"
+    // invalid_scope_diagnosed: a scope the graph lacks selects nothing.
+    assert!(
+        graph.select(Some("ghost"), None, &[]).is_none(),
+        "a scope the graph lacks selects nothing: the operation refuses it (E003), CT/export.rs:168"
     );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
 }
 
 // === enforce_token_budget contract ===
@@ -717,30 +696,19 @@ fn dot_node_shapes() {
     verify = "node shapes use extension-defined dot_shape"
 )]
 fn dot_emits_registry_declared_styles() {
-    use specforge_registry::{KindRegistry, KindRegistryEntry};
-
     let graph = build_graph();
 
-    let mut registry = KindRegistry::new();
-    registry.register(KindRegistryEntry {
-        kind_name: "feature".to_string(),
-        source_extension: "@test/x".to_string(),
-        testable: false,
-        supports_verify: false,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        declared: specforge_registry::EntityKindDescriptor {
-            dot_shape: Some("hexagon".to_string()),
-            dot_color: Some("firebrick".to_string()),
-            dot_fillcolor: Some("#ffeeee".to_string()),
-            ..Default::default()
-        },
-    });
+    let registries = crate::support::build_of(vec![specforge_registry::EntityKindDescriptor {
+        dot_shape: Some("hexagon".to_string()),
+        dot_color: Some("firebrick".to_string()),
+        dot_fillcolor: Some("#ffeeee".to_string()),
+        ..crate::support::kind("feature", vec![])
+    }]);
 
     let dot = specforge_emitter::dot::emit_dot(
         &graph,
         &specforge_emitter::DotOptions {
-            kind_registry: Some(&registry),
+            registries: &registries,
             ..Default::default()
         },
     );
@@ -757,7 +725,7 @@ fn dot_emits_registry_declared_styles() {
         "registry fillcolor emitted"
     );
 
-    // No registry: default emission (no per-node shape overrides).
+    // No extension: default emission (no per-node shape overrides).
     let plain = specforge_emitter::dot::emit_dot(&graph, &specforge_emitter::DotOptions::default());
     assert!(
         !plain.contains("shape=\"hexagon\""),

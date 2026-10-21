@@ -5,7 +5,7 @@
 
 mod fields;
 mod identifiers;
-pub use identifiers::ID_LENGTH;
+pub use identifiers::{ID_LENGTH, IdRefusal, refused_id};
 mod kinds;
 mod obligations;
 mod refs;

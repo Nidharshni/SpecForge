@@ -77,7 +77,7 @@ fn a_nested_projects_file_uses_its_own_projects_config() {
         two,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(doc.config_source, ConfigSource::Defaults);
     assert!(!doc.changed());
@@ -112,7 +112,7 @@ fn a_misformatted_document_gets_edits() {
         MISINDENTED,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     assert!(doc.changed());
@@ -173,7 +173,7 @@ fn edits_rebuild_the_formatted_text() {
             text,
             None,
             None,
-            &specforge_graph::FieldForms::default(),
+            &crate::authoring::format::Forms::none(),
         );
         assert_eq!(doc.edits(), edits, "{text:?}");
         assert_eq!(
@@ -190,7 +190,7 @@ fn edits_rebuild_the_formatted_text() {
         between,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(edits::tests::apply(between, &doc.edits()), doc.formatted);
     // A multibyte line: offsets count bytes, on char boundaries.
@@ -201,7 +201,7 @@ fn edits_rebuild_the_formatted_text() {
             text,
             None,
             None,
-            &specforge_graph::FieldForms::default()
+            &crate::authoring::format::Forms::none()
         )
         .edits(),
         [blank(23..27)]
@@ -219,7 +219,7 @@ fn edits_do_not_overlap() {
         text,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     )
     .edits();
 
@@ -240,7 +240,7 @@ fn a_parse_error_is_reported_and_kept() {
         BROKEN,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     let kept = kept_regions(&doc);
@@ -270,7 +270,7 @@ fn formats_a_document_within_50ms() {
         &source,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     )
     .edits();
     let elapsed = start.elapsed();
@@ -288,7 +288,7 @@ fn formats_a_document_within_50ms() {
         &crlf,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     )
     .edits();
     let elapsed = start.elapsed();
@@ -313,7 +313,7 @@ fn document_contract() {
         MISINDENTED,
         None,
         Some(EDITOR_4),
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     // format_config_loaded: the project's (no file: the defaults), not
@@ -349,7 +349,7 @@ fn the_range_widens_to_whole_blocks() {
         TWO_BLOCKS,
         Some(lines),
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     )
     .edits();
 
@@ -367,7 +367,7 @@ fn the_range_widens_to_whole_blocks() {
         TWO_BLOCKS,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     )
     .edits();
     assert!(full.iter().any(|e| e.range.start < line(5)), "{full:?}");
@@ -383,14 +383,14 @@ fn a_range_formats_its_blocks_as_the_whole_document_does() {
         TWO_BLOCKS,
         Some(Lines { first: 4, last: 6 }),
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     let full = document(
         Place::Detached,
         TWO_BLOCKS,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     let block = |text: &str| text.lines().skip(4).take(4).collect::<Vec<_>>().join("\n");
@@ -409,7 +409,7 @@ fn a_parse_error_in_a_range_is_kept() {
         text,
         Some(Lines { first: 8, last: 12 }),
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     assert_eq!(doc.formatted.lines().nth(12), Some("}}}"));
@@ -440,7 +440,7 @@ fn formats_a_range_within_20ms() {
             last: 20,
         }),
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     let elapsed = start.elapsed();
 
@@ -470,14 +470,14 @@ fn range_contract() {
         TWO_BLOCKS,
         Some(lines),
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     let full = document(
         Place::File(&file),
         TWO_BLOCKS,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     assert_eq!(range.config.indent_width, 4);
@@ -501,7 +501,7 @@ fn editor_settings_apply_outside_a_project() {
         FOUR,
         None,
         Some(EDITOR_4),
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(doc.config.indent_width, 4);
     assert_eq!(doc.config_source, ConfigSource::Editor);
@@ -516,7 +516,7 @@ fn editor_settings_apply_outside_a_project() {
         FOUR,
         None,
         Some(EDITOR_4),
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(doc.config_source, ConfigSource::Editor);
     assert_eq!(doc.config.indent_width, 4);
@@ -543,7 +543,7 @@ fn config_file_takes_precedence_over_editor() {
         FOUR,
         None,
         Some(editor),
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     let ConfigSource::File(config_file) = &doc.config_source else {
@@ -567,7 +567,7 @@ fn a_project_without_a_config_file_uses_the_defaults() {
         FOUR,
         None,
         Some(EDITOR_4),
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     assert_eq!(doc.config_source, ConfigSource::Defaults);
@@ -588,7 +588,7 @@ fn editor_config_contract() {
         FOUR,
         None,
         editor,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(detached.config_source, ConfigSource::Editor);
     assert_eq!(detached.config.indent_width, 4);
@@ -605,7 +605,7 @@ fn editor_config_contract() {
         FOUR,
         None,
         editor,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(with_file.config.indent_width, 3);
     // … else the defaults, never the editor's settings.
@@ -614,7 +614,7 @@ fn editor_config_contract() {
         FOUR,
         None,
         editor,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     assert_eq!(without.config_source, ConfigSource::Defaults);
     assert_eq!(without.config.indent_width, 2);
@@ -636,7 +636,7 @@ fn stdin_text_uses_the_config_of_its_directory() {
         MISINDENTED,
         None,
         None,
-        &specforge_graph::FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
 
     assert_eq!(doc.config.indent_width, 4);

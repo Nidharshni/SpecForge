@@ -40,7 +40,7 @@ fn minimal_manifest() -> ExtensionDeclaration {
 const TOKEN: &str = "publisher-token";
 
 fn accepted() -> RegistryCredential {
-    RegistryCredential::new("default", TOKEN)
+    RegistryCredential::new(default_registry().url, TOKEN)
 }
 
 /// The publisher's signing key.

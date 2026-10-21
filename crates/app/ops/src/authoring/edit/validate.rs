@@ -21,7 +21,10 @@ fn key(d: &Diagnostic) -> Key {
 }
 
 /// The diagnostics of `after` that `before` does not have, one by one: (errors, warnings and infos).
-fn added(before: &[Diagnostic], after: Vec<Diagnostic>) -> (Vec<Diagnostic>, Vec<Diagnostic>) {
+pub(crate) fn added(
+    before: &[Diagnostic],
+    after: Vec<Diagnostic>,
+) -> (Vec<Diagnostic>, Vec<Diagnostic>) {
     let mut had: HashMap<Key, usize> = HashMap::new();
     for d in before {
         *had.entry(key(d)).or_default() += 1;

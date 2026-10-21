@@ -16,12 +16,16 @@ behavior create_entity "Create an Entity" {
     A create edit names a kind, an id, a title and a file relative to the spec
     root. The block is written in the canonical form, after the last block of
     its kind in the file, or at the end of the file; a file that does not exist
-    is created. The id MUST be an identifier of 2 to 60 characters that is not a
+    is created, unless the later edits of the list leave it empty: a file that does not
+    exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
     the command acts on. A create takes whole fields; a `field.entry` path is refused.
+    The skeleton of a new block of a kind is what a create of it writes with no values, with a slot where each value
+    goes: the id, the title, each required field and the final cursor; a member's skeleton is its field written in its
+    form (ADR 0191).
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
@@ -33,6 +37,10 @@ behavior create_entity "Create an Entity" {
   verify unit "new refuses a field.entry path"
   verify unit "new writes each field as set writes it"
   verify unit "new writes an equal verify obligation once"
+  verify unit "a create's skeleton filled in is the block new writes"
+  verify unit "every kind's skeleton formats to itself"
+  verify unit "a member's skeleton is written in its field's form"
+  verify unit "a file new creates is not written when the later edits leave it empty"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
@@ -60,7 +68,8 @@ behavior edit_entity_field "Edit an Entity Field" {
     writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
     included; a block field left with no entry over a default is written `{}`. An unset of an
     entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
-    replaces the header title. A field the kind does not declare is refused. A field that is the other
+    replaces the header title; a spec block's title is its name, and a retitle of it is
+    refused not_editable. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """
   verify unit "set writes the value in the form its field declares"
@@ -78,6 +87,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set of an entry into a block field written as none writes it inside"
   verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
+  verify unit "retitle of a spec block is refused: its title is its name"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {
@@ -158,7 +168,10 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     is refused with E080 and writes nothing. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project
     change: a file changed since the compile refuses the whole plan, and a
-    failed write puts every file already written back.
+    failed write puts every file already written back. The report names the net
+    change: the entities whose blocks the list, taken together, creates, changes or deletes, and the
+    files whose text it changes; an entity a later edit puts back as it was is not named, and a
+    block that only moves within its file is not either.
   """
   verify unit "an edit that adds an error is E080 and writes nothing"
   verify unit "an edit that adds a warning is written and reports it"
@@ -166,4 +179,5 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "every block an edit touches is format-clean"
   verify unit "a failed write puts every file back"
   verify unit "an edit planned while the checks are skipped is compared with the checked report"
+  verify unit "the report names what the edits change taken together"
 }

@@ -7,12 +7,11 @@ use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Node, SpecFile, WrittenToken, written_tokens};
 
-use super::text::SourceText;
 use super::{Navigator, contains};
 use crate::Refusal;
 use crate::options::{Choice, OptionTable};
 use crate::view::EntityField;
-use specforge_parser::lex::Lexeme;
+use specforge_parser::Entity;
 
 /// Where an entity is declared: its whole block, and its name token.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,8 +19,9 @@ pub struct Definition {
     pub id: Sym,
     pub kind: Sym,
     pub block: SourceSpan,
-    /// The ID as written in the declaration; the block when it could not
-    /// be found there ([`Precision::Entity`]).
+    /// The name where the parse read it, on whichever line of the header it is written; the block when the compile
+    /// holds no parse or text of the file, the parse read no name, or the text does not spell the ID there (a stale
+    /// text, a spec block's quoted name): [`Precision::Entity`].
     pub name: SourceSpan,
     pub precision: Precision,
 }
@@ -89,9 +89,9 @@ pub enum Role {
     Reference,
 }
 
-/// `Token` when the span is the identifier as written; `Entity` when the
-/// text was unreadable or did not spell the ID there (a stale graph), and
-/// the span falls back to the holder's block.
+/// `Token` when the span is the identifier as written; `Entity` when the compile holds no parse or text of the
+/// file, the parse read no name, or the text does not spell the ID there (a stale text, a spec block's quoted
+/// name), and the span falls back to the holder's block.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Shape)]
 #[serde(rename_all = "lowercase")]
 pub enum Precision {
@@ -146,9 +146,11 @@ impl Navigator<'_> {
 
     pub(crate) fn definition_of(&self, node: &Node) -> Definition {
         let block = node.source_span.clone();
+        let id = node.id.raw.as_str();
         let name = self
-            .text(block.file)
-            .and_then(|text| declaration_name(&text, &block, node.id.raw.as_str()));
+            .parsed_block(node)
+            .and_then(|entity| entity.name_span.clone())
+            .filter(|name| self.spelled(name, id));
         let (name, precision) = match name {
             Some(name) => (name, Precision::Token),
             None => (block.clone(), Precision::Entity),
@@ -160,6 +162,23 @@ impl Navigator<'_> {
             name,
             precision,
         }
+    }
+
+    /// The block `node` was built from: in the compile's parse of its file, the entity whose block is the node's (a
+    /// duplicate declaration's loser is another block). `None` for a node no parse holds (a graph built by hand).
+    ///
+    /// shortcut: linear in the compile's files and in the file's blocks per question; index the parses by
+    /// (file, block) if an outline of a file of ~2k blocks is slow.
+    fn parsed_block(&self, node: &Node) -> Option<&Entity> {
+        let file = node.source_span.file.as_str();
+        let (_, parse) = self.view.project().parsed().find(|(key, _)| *key == file)?;
+        parse.entities.iter().find(|e| e.span == node.source_span)
+    }
+
+    /// Whether the compiled text of `span`'s file spells `word` exactly there (ADR 0116 D1).
+    pub(super) fn spelled(&self, span: &SourceSpan, word: &str) -> bool {
+        self.text(span.file)
+            .is_some_and(|text| text.spells(span, word))
     }
 
     /// The occurrences of `id`, sorted by (file, line, column): each token the graph's finder reads, once per block
@@ -259,9 +278,7 @@ impl Navigator<'_> {
 
     /// `token`'s span as a [`Token`]: [`Precision::Entity`] when the compiled text does not spell its target there.
     fn token(&self, token: &WrittenToken) -> Token {
-        let spelled = self
-            .text(token.span.file)
-            .is_some_and(|text| text.spells(&token.span, token.target.as_str()));
+        let spelled = self.spelled(&token.span, token.target.as_str());
         Token {
             target: token.target,
             span: token.span.clone(),
@@ -325,18 +342,4 @@ impl Navigator<'_> {
             .chain(references)
             .find(|t| t.precision == Precision::Token && contains(&t.span, &at))
     }
-}
-
-/// The entity's name in its declaration: the first token spelling `id` on
-/// the block's first line after the kind keyword.
-fn declaration_name(text: &SourceText, block: &SourceSpan, id: &str) -> Option<SourceSpan> {
-    let tokens: Vec<Lexeme> = text.tokens(block);
-    let first_line = block.start_line;
-    tokens
-        .iter()
-        .filter(|t| t.is_name())
-        .skip(1)
-        .take_while(|t| text.position(t.start).0 == first_line)
-        .find(|t| text.token_text(t) == id)
-        .map(|t| text.span(block.file, t.start, t.end))
 }

@@ -11,7 +11,7 @@ Options:
           Registry alias (defaults to the default registry)
 
       --token <TOKEN>
-          Authentication token, kept as a secret (OS keyring, else a 0600 file). Exactly one of --token, --token-env, --token-file
+          Authentication token, kept as a secret (a 0600 file under ~/.specforge/secrets). Exactly one of --token, --token-env, --token-file
 
       --token-env <TOKEN_ENV>
           Environment variable that holds the token; the variable's name is kept, not the token

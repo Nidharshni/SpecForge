@@ -1,16 +1,16 @@
 {
   "file-size": {
     "crates/adapters/ops-registry/tests/fetch.rs": 845,
-    "crates/app/ops/tests/operations/migrate.rs": 1151,
+    "crates/app/ops/tests/operations/migrate.rs": 1081,
     "crates/app/ops/tests/operations/navigate.rs": 989,
     "crates/app/ops/tests/operations/query.rs": 896,
     "crates/app/ops/tests/operations/schema.rs": 1149,
     "crates/kernel/common/tests/present.rs": 1082,
     "crates/kernel/parser/tests/parse_test.rs": 2456,
-    "crates/pipeline/emitter/tests/contracts.rs": 874,
+    "crates/pipeline/emitter/tests/contracts.rs": 842,
     "crates/pipeline/emitter/tests/model.rs": 1518,
     "crates/pipeline/emitter/tests/outline.rs": 1159,
-    "crates/pipeline/emitter/tests/schema.rs": 1664,
+    "crates/pipeline/emitter/tests/schema.rs": 1614,
     "crates/pipeline/graph/tests/graph.rs": 1648,
     "crates/runtime/wasm/tests/calls.rs": 839,
     "crates/session/project/tests/changes.rs": 855,
@@ -29,10 +29,10 @@
     "crates/surfaces/cli/tests/navigation_parity.rs": 1289,
     "crates/surfaces/cli/tests/parity.rs": 1231,
     "crates/surfaces/cli/tests/read_views.rs": 1288,
-    "crates/surfaces/cli/tests/registry.rs": 1624,
+    "crates/surfaces/cli/tests/registry.rs": 1623,
     "crates/surfaces/cli/tests/surface_parity.rs": 821,
     "crates/surfaces/cli/tests/watch.rs": 957,
-    "crates/surfaces/lsp/tests/contracts.rs": 1001,
+    "crates/surfaces/lsp/tests/contracts.rs": 996,
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 817,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,
@@ -40,7 +40,7 @@
     "crates/surfaces/mcp/tests/lifecycle.rs": 859,
     "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
     "crates/surfaces/mcp/tests/operations_mgmt.rs": 833,
-    "crates/surfaces/mcp/tests/operations_mutation.rs": 2390,
+    "crates/surfaces/mcp/tests/operations_mutation.rs": 2389,
     "crates/surfaces/mcp/tests/prompts.rs": 983,
     "crates/surfaces/mcp/tests/subscriptions.rs": 1044,
     "crates/surfaces/mcp/tests/surface_call.rs": 995,
@@ -49,7 +49,7 @@
     "crates/surfaces/mcp/tests/tools_core.rs": 2152,
     "crates/surfaces/mcp/tests/tools_inference.rs": 822,
     "crates/surfaces/mcp/tests/tools_navigation.rs": 820,
-    "crates/surfaces/registry-server/tests/server_contracts.rs": 1345
+    "crates/surfaces/registry-server/tests/server_contracts.rs": 1144
   },
   "specs": {
     ".": {

@@ -338,6 +338,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
+  verify unit "the entity-ID rule answers for an ID exactly what E013 and E014 report of it"
   verify unit "the checks read only through their disk: the paths file_exists rules read, E016's among them, and the directory a missing path's suggestion lists"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }

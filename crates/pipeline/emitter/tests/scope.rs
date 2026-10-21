@@ -87,44 +87,6 @@ fn scoped_context_returns_only_reachable_subgraph() {
     assert!(!ids.contains(&"d"));
 }
 
-#[test]
-fn scoped_export_on_nonexistent_entity_returns_error() {
-    let graph = build_chain_graph();
-    let result = crate::support::scoped_json(&graph, "nonexistent");
-    assert!(result.is_err());
-
-    let err = result.unwrap_err();
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-}
-
-// B:export_agent_graph_format — verify unit "non-existent scope entity produces E003 and exit code 1"
-#[specforge_test(
-    behavior = "export_agent_graph_format",
-    verify = "non-existent scope entity produces E003 and exit code 1"
-)]
-fn graph_scoped_export_on_nonexistent_entity_returns_e001() {
-    let graph = build_chain_graph();
-    // Scoped at an ID that is not an entity (though "a" is a prefix of it).
-    for scope in ["nonexistent", "ab"] {
-        let err = specforge_emitter::emit(
-            &graph,
-            &specforge_emitter::EmitOptions {
-                scope: Some(scope),
-                ..Default::default()
-            },
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            format!("unresolved entity '{scope}' — not found in graph")
-        );
-        // The failure is the catalogued E003; its message carries no code.
-        assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-    }
-    // An existing scope is not an error.
-    assert!(crate::support::scoped_json(&graph, "a").is_ok());
-}
-
 // B:export_agent_graph_format — verify unit "scoped export returns only reachable subgraph"
 // (validates edges are also scoped correctly)
 #[specforge_test(behavior = "export_agent_graph_format")]

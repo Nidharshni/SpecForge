@@ -60,7 +60,7 @@ impl<'t> Notes<'t> {
     }
 
     /// A line for a person: a `note: …`, an announcement, or the human rendering of a fact the document carries
-    /// (analyze's W097 lines and failed gate, migrate's hook failures and restore): on stderr under human output,
+    /// (analyze's W097 lines and failed gate, migrate's failure): on stderr under human output,
     /// nothing under JSON.
     pub(crate) fn person(&self, line: fmt::Arguments<'_>) {
         if self.format == OutputFormat::Human {

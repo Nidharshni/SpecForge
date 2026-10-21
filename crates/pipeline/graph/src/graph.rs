@@ -5,8 +5,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod degree;
 mod link;
 mod reach;
+mod select;
 pub use degree::Degree;
 pub use reach::Direction;
+pub use select::Selected;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -241,10 +243,10 @@ impl Graph {
         labels
     }
 
-    /// The subgraph `reached` induces: its nodes, and every edge between
-    /// two of them, in edge order.
-    fn induced(&self, reached: &[Reached]) -> Graph {
-        let ids: HashSet<Sym> = reached.iter().map(|r| r.id).collect();
+    /// The subgraph `ids` induces: those of them that are nodes, and every
+    /// edge between two of them, in edge order.
+    pub fn induced(&self, ids: impl IntoIterator<Item = Sym>) -> Graph {
+        let ids: HashSet<Sym> = ids.into_iter().collect();
         let mut sub = Graph::new();
         for id in &ids {
             if let Some(node) = self.nodes.get(id) {
@@ -263,14 +265,14 @@ impl Graph {
     /// Returns None if `root_id` is not in the graph.
     pub fn subgraph(&self, root_id: &str) -> Option<Graph> {
         self.reach(root_id, None)
-            .map(|reached| self.induced(&reached))
+            .map(|reached| self.induced(reached.iter().map(|r| r.id)))
     }
 
     /// Extract the subgraph reachable from `root_id` within `max_depth` hops (both directions).
     /// Depth 0 returns only the root. Returns None if `root_id` is not in the graph.
     pub fn subgraph_depth(&self, root_id: &str, max_depth: usize) -> Option<Graph> {
         self.reach(root_id, Some(max_depth))
-            .map(|reached| self.induced(&reached))
+            .map(|reached| self.induced(reached.iter().map(|r| r.id)))
     }
 }
 

@@ -87,7 +87,14 @@ fn options() -> FormattingOptions {
 /// Format the open document `uri` and give the store what formatting found; what it answers
 /// should be sent now.
 fn format(served: &mut Served, uri: &Url) -> Option<Publish> {
-    let formatted = answers::formatting(&served.state(), uri, &options(), None).expect("open");
+    let formatted = answers::formatting(
+        &served.state(),
+        &specforge_project::RuntimeSource::Fixed(None),
+        uri,
+        &options(),
+        None,
+    )
+    .expect("open");
     served.publish_formatting(formatted.findings)
 }
 
@@ -103,7 +110,14 @@ fn a_formatting_publish_carries_one_version() {
 
     // The editor typed a line above, and the compile has not run: it is at version 1.
     served.change_to(&uri, 2, &format!("// typed\n{KEPT}"));
-    let formatted = answers::formatting(&served.state(), &uri, &options(), None).unwrap();
+    let formatted = answers::formatting(
+        &served.state(),
+        &specforge_project::RuntimeSource::Fixed(None),
+        &uri,
+        &options(),
+        None,
+    )
+    .unwrap();
     assert_eq!(formatted.findings.version, Some(2));
     let at: Vec<u32> = formatted
         .findings

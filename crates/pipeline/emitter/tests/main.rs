@@ -3,6 +3,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod budget_scope;
 mod contracts;
 mod determinism;
 mod emit_brief;
@@ -22,19 +23,18 @@ mod stress;
 mod support;
 mod token_budget;
 
-/// `graph` exported as `format`, unscoped and unbudgeted, with the field
-/// registry that declares the context format's headline and normative
-/// fields when given: what `emit` answers for it.
+/// `graph` exported as `format`, unscoped and unbudgeted, read with `registries` (the empty build
+/// when `None`): what `emit` answers for it.
 pub(crate) fn export(
     graph: &specforge_graph::Graph,
     format: specforge_emitter::EmitFormat,
-    fields: Option<&specforge_registry::FieldRegistry>,
+    registries: Option<&specforge_registry::RegistryBuild>,
 ) -> String {
     specforge_emitter::emit(
         graph,
         &specforge_emitter::EmitOptions {
             format,
-            field_registry: fields,
+            registries: registries.unwrap_or(specforge_emitter::EmitOptions::default().registries),
             ..specforge_emitter::EmitOptions::default()
         },
     )

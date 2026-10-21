@@ -41,7 +41,6 @@ specforge-mcp = { workspace = true }
 specforge-ops = { workspace = true }
 specforge-ops-registry = { path = "../../adapters/ops-registry" }
 specforge-project = { workspace = true }
-specforge-registry-client = { path = "../../adapters/registry-client" }
 
 [dev-dependencies]
 specforge-repo-root = { path = "../../leaf/repo-root" }

@@ -82,11 +82,15 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     unformatted (W142) MUST be returned among the diagnostics, with its file
     and line. Diagnostics from loading the format configuration
     (.specforgefmt.toml) MUST be returned in the result.
+    The served project's field forms are the session's: a call loads no
+    extension the served project holds.
     A specforge.json that does not say which files are the project's
     sources MUST fail the call as config_invalid (schema_mismatch) before
     any file is read, writing nothing.
   """
   verify unit "specforge.format formats spec files"
+  verify unit "a format call loads no extension the served project holds"
+  verify unit "a format call writes the served project's values in its forms"
   verify unit "the format document names each file from the project root"
   verify unit "check mode reports without modifying files"
   verify unit "diff mode returns FormatDiff entries"
@@ -138,7 +142,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     disk, the tool MUST fail the rename as conflict before any file is
     written. The tool MUST rename the entity and update all
     references across all spec files. The edits are exactly every token that
-    names the entity: its declaration's name and each reference, a reference
+    names the entity: its declaration's name (where the parse read it, on any
+    line of the header) and each reference, a reference
     written in a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
@@ -179,6 +184,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename never edits a nested project's files"
   verify unit "a rename is refused while a source that spells the ID does not parse"
   verify unit "renaming a spec block is refused: its name is a string, not an entity ID"
+  verify unit "a rename edits a declaration whose name is written below its kind"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
   verify integration "a rename that cannot put a file back names it in files_written"
 }
@@ -215,11 +221,12 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
     compiling the edited project, and written as one project change. An edit
     list that leaves an error the project did not have MUST be refused as
     E080 and nothing written. The response MUST list the entities and files
-    changed, a unified diff and the warnings and infos the edit adds. When
+    the list changes, taken together (none for a list that cancels out), a unified diff and the warnings and infos the edit adds. When
     dry_run is true, the tool MUST return the same document and write nothing.
   """
   verify unit "specforge.edit applies a list of edits all or nothing"
   verify unit "specforge.edit with dry_run writes nothing and returns the diff"
+  verify unit "specforge.edit of a list that cancels out writes nothing and names no entity"
 }
 
 // MCP init creates a project at a specified path, not the current project.
@@ -363,6 +370,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify unit "wasm module downloaded for remote extensions"
   verify unit "invalid manifest returns error"
   verify unit "dry_run returns preview without modifying files"
+  verify integration "an add_extension dry run sends no credential kept for another registry root"
   verify unit "add, init and publish read a candidate's declaration in the runtime their surface passes"
   verify contract "Provide MCP Add Extension Tool: MCP add extension tool holds — filesystem_available, extension_installed, wasm_downloaded, extension_added_emitted, dry_run_safe, tool_invoked_emitted"
   verify unit "invalid specifier format returns error"
@@ -454,17 +462,17 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     prints (McpMigrateResult); a project with nothing pending answers it
     with pending false and nothing migrated.
     The tool MUST run the same migration as specforge migrate: extension
-    migration hooks run after the files are migrated, and a migration whose
-    hooks fail or whose graph changes structure is rolled back. The result
-    MUST report the hooks run, the structural differences found, and
-    whether the migration was rolled back. The result (and a failed call's
+    migration hooks run before the files are written, and a migration whose
+    hooks fail or whose graph changes structure is refused and nothing is
+    written. The result MUST report the hooks run and the structural
+    differences found. The result (and a failed call's
     data) MUST carry ok, the verdict specforge migrate exits by: false when
-    a file failed to migrate, the migration was rolled back, or
+    a file failed to migrate, the migration was refused, or
     specforge.json has a problem the run went around (E069, in
     diagnostics). A failed
     migration's error names its cause: a migration hook that failed
     (internal_error), a migrated project whose graph changed (W054) or that
-    does not compile (compilation_failed), or files that could not be
+    would add errors (compilation_failed), or files that could not be
     migrated (schema_mismatch); its data is the migration document. A
     problem in specforge.json the run went around fails ok and not the
     call: the call succeeds with the migration document, its E069 among
@@ -482,11 +490,12 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "post-migration validation reports errors"
   verify unit "target_version selects the format version to migrate to"
   verify unit "a malformed or unsupported target_version is refused without modifying files"
-  verify unit "the result reports the hooks run, the structural differences and whether the migration was rolled back"
+  verify unit "the result reports the hooks run and the structural differences"
   verify unit "ok is the verdict specforge migrate exits by, and a failed migration's kind is the operation's"
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
   verify unit "a problem in specforge.json the migration goes around makes ok false and does not fail the call, dry run included"
+  verify unit "a dry run the run would refuse is a failed call, its document the data"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
 }

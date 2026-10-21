@@ -32,14 +32,8 @@ pub(crate) struct ContextNode {
 const NODE_KEYS: [&str; 6] = ["id", "kind", "title", "verify", "fields", "coverage_status"];
 
 /// The fields of `node` its extension declares `headline`, as text, for the
-/// context node's top level. Empty without a registry.
-pub(crate) fn headline_fields(
-    node: &Node,
-    registry: Option<&FieldRegistry>,
-) -> BTreeMap<String, String> {
-    let Some(registry) = registry else {
-        return BTreeMap::new();
-    };
+/// context node's top level.
+pub(crate) fn headline_fields(node: &Node, registry: &FieldRegistry) -> BTreeMap<String, String> {
     node.fields
         .entries()
         .iter()
@@ -78,15 +72,11 @@ fn is_headline(node: &Node, field: &str, registry: &FieldRegistry) -> bool {
 
 /// The fields of `node` its extension declares normative (the text that
 /// states what the entity promises), except those a context node already
-/// carries at its top level (its headline fields and obligations). Empty
-/// without a registry.
+/// carries at its top level (its headline fields and obligations).
 pub(crate) fn normative_fields(
     node: &Node,
-    registry: Option<&FieldRegistry>,
+    registry: &FieldRegistry,
 ) -> BTreeMap<String, FieldJson> {
-    let Some(registry) = registry else {
-        return BTreeMap::new();
-    };
     node.fields
         .entries()
         .iter()
@@ -104,7 +94,7 @@ pub(crate) fn normative_fields(
 /// headline and normative fields `registry` declares.
 pub(crate) fn context_node(
     n: &Node,
-    registry: Option<&FieldRegistry>,
+    registry: &FieldRegistry,
     coverage_status: Option<Status>,
 ) -> ContextNode {
     ContextNode {

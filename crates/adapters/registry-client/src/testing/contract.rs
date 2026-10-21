@@ -11,10 +11,14 @@ use crate::{SigningKey, TrustCheck};
 
 /// The declaration the contract publishes: `@contract/tool` at `version`, described "Contract tool".
 fn contract_declaration(version: &str) -> ExtensionDeclaration {
+    declaration_of("@contract/tool", version)
+}
+
+fn declaration_of(name: &str, version: &str) -> ExtensionDeclaration {
     serde_json::from_value(serde_json::json!({
         "handshake": {
             "protocol_version": "1.0.0",
-            "name": "@contract/tool",
+            "name": name,
             "version": version,
             "description": "Contract tool",
             "keywords": ["contract"],
@@ -174,7 +178,7 @@ pub fn assert_client_contract(
     client
         .authenticate(registry, credential)
         .expect("K9: the credential authenticates");
-    let wrong = RegistryCredential::new(credential.alias.clone(), "not-a-token");
+    let wrong = RegistryCredential::new(credential.root.clone(), "not-a-token");
     let error = client.authenticate(registry, &wrong).unwrap_err();
     assert!(
         matches!(error, RegistryError::Unauthorized { .. }),
@@ -321,6 +325,48 @@ pub fn assert_client_contract(
     }
 }
 
+/// The scope clause of the client contract (K13): a scope belongs to the account of the first publish
+/// that stored a package in it. `owner` and `same_account` hold credentials of one account, `other_account`
+/// of another; all three are accepted for publishing by `registry`.
+pub fn assert_scope_contract(
+    client: &dyn RegistryClient,
+    registry: &RegistryConfig,
+    owner: &RegistryCredential,
+    same_account: &RegistryCredential,
+    other_account: &RegistryCredential,
+) {
+    let key = SigningKey::generate();
+    let publish = |name: &str, credential: &RegistryCredential| {
+        let declaration = declaration_of(name, "1.0.0");
+        crate::publish_to_registry(
+            &DeclaredPackage::of(&declaration).unwrap(),
+            b"\0asm scope contract",
+            registry,
+            Some(credential),
+            client,
+            &key,
+        )
+    };
+
+    // K13
+    publish("@owned/tool", owner).expect("K13: the first publish into a scope claims it");
+    let refused = publish("@owned/other", other_account);
+    assert!(
+        refused.is_err(),
+        "K13: another account's publish into an owned scope is refused"
+    );
+    let other = PackageName::parse("@owned/other").unwrap();
+    let error = client
+        .metadata(&other, &Version::new(1, 0, 0), registry, None)
+        .unwrap_err();
+    assert!(
+        matches!(error, RegistryError::NotFound { .. }),
+        "K13: a refused publish stores nothing, not {error:?}"
+    );
+    publish("@owned/other", same_account)
+        .expect("K13: another token of the owning account publishes into its scope");
+}
+
 /// The private client contract (plan 16): what every `RegistryClient` adapter does against a registry that
 /// requires a token to read and holds nothing yet. `credential` must be one `registry` accepts.
 pub fn assert_private_client_contract(
@@ -419,7 +465,7 @@ pub fn assert_private_client_contract(
     client
         .authenticate(registry, credential)
         .expect("K-P4: the credential authenticates");
-    let wrong = RegistryCredential::new(credential.alias.clone(), "not-a-token");
+    let wrong = RegistryCredential::new(credential.root.clone(), "not-a-token");
     assert!(
         matches!(
             client.authenticate(registry, &wrong),

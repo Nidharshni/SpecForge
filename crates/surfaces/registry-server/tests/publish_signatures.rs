@@ -53,7 +53,7 @@ fn client_of(server: &LocalRegistry) -> (RegistryConfig, RegistryCredential) {
             scope_filter: None,
             default_registry: true,
         },
-        RegistryCredential::new("test", server.token()),
+        RegistryCredential::new(server.root().clone(), server.token()),
     )
 }
 

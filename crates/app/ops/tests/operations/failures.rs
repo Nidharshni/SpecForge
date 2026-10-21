@@ -286,6 +286,7 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
             Some(runtime.clone()),
         )
         .unwrap()
+        .verdict
         .hooks_invoked
     };
 
@@ -311,7 +312,7 @@ fn format_verdict_inputs() {
         paths: &[],
         mode: Mode::Check,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     assert!(checked.succeeded() && checked.complete() && !checked.clean());
@@ -323,7 +324,7 @@ fn format_verdict_inputs() {
         paths: &[],
         mode: Mode::Write,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     assert!(written.succeeded() && written.complete() && !written.clean());

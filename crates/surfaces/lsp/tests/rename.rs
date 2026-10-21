@@ -6,7 +6,7 @@ use specforge_test_macros::test as spec;
 
 use crate::served::{buffers, uri_of_path};
 use specforge_lsp::{LspState, answers};
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Position, PrepareRenameResponse};
 
 /// The edits of the rename of the entity declared at `line`:`character` of
 /// the open buffer `path` to `new`, as `"file line:start-end"` (0-based
@@ -45,6 +45,7 @@ fn renamed_edits(
 }
 
 const TYPES: &str = "type auth_token \"Token\" {\n}\n";
+const TYPES_BELOW: &str = "type\n  auth_token \"Token\" {\n}\n";
 const AUTH: &str = "behavior user_login \"Login\" {\n  types [auth_token]\n}\n";
 
 // -- rename_entity_id ---------------------------------------------------------
@@ -270,4 +271,36 @@ fn a_rename_without_a_files_text_is_refused_whole() {
         refused.unwrap_err().error.code,
         specforge_ops::FILE_UNREADABLE
     );
+}
+
+// -- a name written below its kind keyword -----------------------------------
+
+#[spec(
+    behavior = "prepare_rename",
+    verify = "prepare rename answers on a name written below its kind"
+)]
+fn prepare_rename_on_a_name_written_below_its_kind_has_a_rename_range() {
+    let state = buffers(&[("/p/types.spec", TYPES_BELOW), ("/p/auth.spec", AUTH)]);
+    let prepared =
+        answers::prepare_rename(&state, &uri_of_path("/p/types.spec"), Position::new(1, 4));
+    let Some(PrepareRenameResponse::Range(r)) = prepared.unwrap() else {
+        panic!("no rename range");
+    };
+    assert_eq!(
+        (r.start, r.end),
+        (Position::new(1, 2), Position::new(1, 12))
+    );
+}
+
+#[spec(
+    behavior = "rename_entity_id",
+    verify = "rename edits a name written below its kind and its references"
+)]
+fn rename_of_a_name_written_below_its_kind_edits_it_and_its_references() {
+    let state = buffers(&[("/p/types.spec", TYPES_BELOW), ("/p/auth.spec", AUTH)]);
+    let want = ["/p/auth.spec 1:9-19", "/p/types.spec 1:2-12"];
+    let from_reference = renamed_edits(&state, "/p/auth.spec", (1, 12), "session_token");
+    assert_eq!(from_reference.unwrap(), want);
+    let from_declaration = renamed_edits(&state, "/p/types.spec", (1, 4), "session_token");
+    assert_eq!(from_declaration.unwrap(), want);
 }

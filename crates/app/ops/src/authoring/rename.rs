@@ -7,14 +7,14 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
+use crate::authoring::entity_id::validate_id;
 use crate::authoring::planned::PlannedChange;
 use crate::read::navigate::{Navigator, Precision, TextEdit, apply_edits};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_parser::lex::{is_identifier, lex};
-use specforge_registry::ID_LENGTH;
+use specforge_parser::lex::lex;
 use std::collections::BTreeSet;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
@@ -26,41 +26,12 @@ pub enum RenameField {
     NewId,
 }
 
-/// The new ID is not a legal entity ID.
-pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
 /// The entity's name is not an entity ID token (a spec block's name is a string): nothing to rename.
 pub const NOT_RENAMEABLE: &str = "not_renameable";
 /// A source that does not parse spells the ID: the rename cannot see its references.
 pub const UNPARSED: &str = "source_unparsed";
-/// Whether `id` is a legal entity ID: the grammar's identifier
-/// ([`is_identifier`]) within E014's length ([`ID_LENGTH`]), and no word
-/// `kinds` reserves (E013).
-pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result<(), OpError> {
-    if !(is_identifier(id) && ID_LENGTH.contains(&id.len())) {
-        return Err(OpError::new(
-            OpErrorKind::InvalidInput,
-            INVALID_ID,
-            format!(
-                "invalid entity ID '{id}': it must be 2-60 characters, letters, digits and \
-                 underscores, starting with a letter or underscore"
-            ),
-        ));
-    }
-    if kinds.reserves(id) {
-        return Err(OpError::new(
-            OpErrorKind::InvalidInput,
-            INVALID_ID,
-            format!(
-                "invalid entity ID '{id}': it is a reserved word (E013), a structural keyword or the keyword \
-                 of a declared kind"
-            ),
-        ));
-    }
-    Ok(())
-}
-
 /// The edits that rename one entity: its declaration and every reference, and the change they make.
 #[derive(Debug, Clone)]
 pub struct RenamePlan {
@@ -277,32 +248,8 @@ impl Renamed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authoring::entity_id::INVALID_ID;
     use specforge_test_macros::test as specforge_test;
-
-    #[test]
-    fn an_entity_id_follows_the_grammar_and_e014() {
-        let none = specforge_registry::KindRegistry::new();
-        for ok in ["ab", "_x", "auth_token", "A1", &"a".repeat(60)] {
-            assert!(validate_id(ok, &none).is_ok(), "{ok}");
-        }
-        for bad in [
-            "",
-            "a",
-            "1abc",
-            "has-dash",
-            "has space",
-            "émile",
-            "defaults",
-            "spec",
-            &"a".repeat(61),
-        ] {
-            assert_eq!(
-                validate_id(bad, &none).unwrap_err().code,
-                INVALID_ID,
-                "{bad}"
-            );
-        }
-    }
 
     fn project(files: &[(&str, &str)]) -> (tempfile::TempDir, specforge_project::CompiledProject) {
         project_with_config(

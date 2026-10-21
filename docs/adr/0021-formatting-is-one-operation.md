@@ -140,3 +140,5 @@ even those their own `exclude` left out. The sources now end at every nested pro
 **Amended by [ADR 0155](0155-a-project-change-words-its-own-failures.md) (2026-10-19):** D7: `file_unreadable` and `file_unwritable` are every project change's codes (`specforge_ops::FILE_UNREADABLE`, `FILE_UNWRITABLE`).
 
 **Amended by [ADR 0169](0169-the-format-configuration-is-read-through-the-callers-disk.md) (2026-10-19):** D2: the configuration is looked up by ops' `Configs`, through the disk the caller hands it; the formatter only parses it.
+
+**Amended by [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md)'s round-20 amendment (2026-10-21):** The operation: `document(place, text, lines, editor, forms)`, `forms` the project the caller lends (`format::Forms`); the forms, like the configuration, are the place's.

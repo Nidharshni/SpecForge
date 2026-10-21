@@ -367,7 +367,7 @@ pub(super) mod tests {
                     &input.text,
                     None,
                     editor,
-                    &specforge_graph::FieldForms::default(),
+                    &crate::authoring::format::Forms::none(),
                 );
                 let edits = doc.edits();
                 checked += 1;
@@ -415,7 +415,7 @@ pub(super) mod tests {
                     &input.text,
                     Some(lines),
                     None,
-                    &specforge_graph::FieldForms::default(),
+                    &crate::authoring::format::Forms::none(),
                 );
                 let edits = doc.edits();
                 checked += 1;

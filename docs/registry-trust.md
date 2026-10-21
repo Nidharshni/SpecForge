@@ -103,16 +103,18 @@ new teammate, CI) holds the package to it.
 ## Namespace ownership
 
 - **First claim wins**: the first publish into a scope (`@acme/...`) registers
-  that scope to the publishing token's publisher identity.
-- **Only the owner publishes** into a claimed scope; anyone else gets
-  `SCOPE_OWNED`. Tokens scoped by the registry admin (`@web`-style) are
-  additionally limited to their own scope and cannot claim others.
-- **Publisher identity**: the registry assigns an account id
-  (`acct_...`) at first claim; `publisher` metadata is that id — never a
-  self-chosen label. There are no Verified/Community badges; the signature
-  key id is the trust signal.
-- Scope reassignment (recovery after losing a token) is a registry-admin
-  operation in v1.
+  that scope to the publishing token's account.
+- **Only the owner publishes or yanks** in a claimed scope; a token issued to
+  another account gets `SCOPE_OWNED`. Tokens scoped by the registry admin
+  (`@web`-style) are additionally limited to their own scope and cannot claim
+  others.
+- **Accounts**: every token is issued to an account (`specforge-registry token
+  create --account`), so a rotated or expired token's replacement keeps the
+  scope. `publisher` metadata is the account name the operator chose — never a
+  label the publisher sends. There are no Verified/Community badges; the
+  signature key id is the trust signal.
+- Scope reassignment (a hand-over, a takedown) is `specforge-registry scope
+  assign`, run by the operator against the data directory.
 
 ## Residual risks (stated plainly)
 

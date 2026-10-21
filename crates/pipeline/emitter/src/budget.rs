@@ -1,8 +1,8 @@
 use serde::Serialize;
+use specforge_common::Sym;
 use specforge_common::shape::Shape;
 
 use specforge_graph::{Graph, Node};
-use std::collections::HashSet;
 
 use crate::error::EmitterError;
 
@@ -46,25 +46,12 @@ pub fn estimate_tokens(s: &str) -> usize {
 }
 
 /// The graph's nodes in truncation order: least connected first (`Graph::degree`), ties by ID.
-fn nodes_by_priority(graph: &Graph) -> Vec<&Node> {
+/// The `root` is left out: it is never cut.
+fn nodes_by_priority(graph: &Graph, root: Option<Sym>) -> Vec<&Node> {
     let mut nodes = graph.nodes();
+    nodes.retain(|node| Some(node.id.raw) != root);
     nodes.sort_by_cached_key(|node| (graph.degree(node.id.raw.as_str()).total(), node.id.raw));
     nodes
-}
-
-/// `graph` reduced to `kept`: those nodes and the edges between them.
-fn keeping(graph: &Graph, kept: &[&Node]) -> Graph {
-    let ids: HashSet<&str> = kept.iter().map(|n| n.id.raw.as_str()).collect();
-    let mut reduced = Graph::new();
-    for node in kept {
-        reduced.add_node((*node).clone());
-    }
-    for edge in graph.edges() {
-        if ids.contains(edge.source.as_str()) && ids.contains(edge.target.as_str()) {
-            reduced.add_edge(*edge);
-        }
-    }
-    reduced
 }
 
 /// `render`'s export of `graph` fitted to `max_tokens` by the `prioritize`
@@ -76,11 +63,13 @@ fn keeping(graph: &Graph, kept: &[&Node]) -> Graph {
 /// envelope always counts and is never cut: an embedded schema costing
 /// `schema_cost` tokens that is over the budget fails with E062 rather than
 /// shipping part of it, and so does a budget that cannot hold the export with
-/// no entities.
+/// no entities. A `root` (the scope's entity) is never dropped: the floor is the
+/// export of the root alone.
 pub(crate) fn fit(
     graph: &Graph,
     max_tokens: usize,
     schema_cost: Option<usize>,
+    root: Option<Sym>,
     render: impl Fn(&Graph, Option<&TokenBudget>) -> Result<String, EmitterError>,
 ) -> Result<String, EmitterError> {
     // Everything, in graph order, when it fits.
@@ -101,9 +90,9 @@ pub(crate) fn fit(
     }
 
     // The export with the `cut` least central entities dropped, and its cost.
-    let priority = nodes_by_priority(graph);
+    let priority = nodes_by_priority(graph, root);
     let with_cut = |cut: usize| -> Result<(String, usize), EmitterError> {
-        let kept = keeping(graph, &priority[cut..]);
+        let kept = graph.induced(priority[cut..].iter().map(|n| n.id.raw).chain(root));
         let marker = |estimated_tokens| TokenBudget {
             strategy: "prioritize",
             budget_tokens: max_tokens,
@@ -126,11 +115,19 @@ pub(crate) fn fit(
     let n = priority.len();
     let (_, empty_cost) = with_cut(n)?;
     if empty_cost > max_tokens {
+        let floor = match root {
+            Some(root) => format!("the scope entity `{root}` alone"),
+            None => "an export with no entities".to_string(),
+        };
+        let holds = if root.is_some() {
+            "the envelope, that entity and the truncated entity IDs"
+        } else {
+            "the envelope and the truncated entity IDs"
+        };
         return Err(EmitterError::BudgetTooSmall {
             reason: format!(
-                "the token budget of {max_tokens} cannot hold even an export \
-                 with no entities ({empty_cost} tokens: the envelope and the truncated entity IDs); \
-                 raise the budget"
+                "the token budget of {max_tokens} cannot hold even {floor} \
+                 ({empty_cost} tokens: {holds}); raise the budget"
             ),
         });
     }

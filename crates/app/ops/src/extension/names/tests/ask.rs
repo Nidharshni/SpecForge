@@ -54,7 +54,7 @@ fn each_specifier_is_asked_under_its_position() {
             Answer::Installed {
                 recorded: "@sdk/greet".to_string(),
                 asked: Asked::Changes,
-                starter: None
+                declaration: Some(Box::new(crate::testing::greet().declaration()))
             },
             Answer::Duplicate {
                 name: "@specforge/product".to_string(),

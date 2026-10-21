@@ -219,7 +219,7 @@ catalog! {
         "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one; the closed vocabularies the builtins declare, a feature's `status`, a failure mode's `severity`, a property's `property_type`, and the like, are enum fields); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a list is stored as written, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
     E062: Error core,
         "Token budget too small for the export",
-        "`specforge export --max-tokens` (or the MCP `export` tool's `max_tokens`) keeps the most central entities that fit the budget, but some of the export never shrinks: the envelope (`format_version`, `schema_version`), the `token_budget` block listing the dropped entity IDs, and, with `--with-schema`, the embedded schema, which is never cut short. The budget is below that fixed part, so no export fits. Raise the budget, or drop `--with-schema` when the schema alone is over it.";
+        "`specforge export --max-tokens` (or the MCP `export` tool's `max_tokens`) keeps the most central entities that fit the budget, but some of the export never shrinks: the envelope (`format_version`, `schema_version`), the `token_budget` block listing the dropped entity IDs, and, with `--with-schema`, the embedded schema, which is never cut short, and, in a scoped export (`--scope`), the scope's own entity. The budget is below that fixed part, so no export fits. Raise the budget, or drop `--with-schema` when the schema alone is over it.";
     E063: Error core,
         "No registry configured",
         "`specforge add @scope/name@version`, `update`, `search`, `publish` and `login` (and the MCP `add_extension` tool) talk to an extension registry, and SpecForge has no built-in one: the only registries are those the project's `specforge.json` lists. None is listed, so the command stopped before making any network call. Add a `registries` array, for example `\"registries\": [{\"alias\": \"main\", \"url\": \"<registry URL>\", \"default_registry\": true}]`; an entry with `\"scope_filter\": \"@acme\"` serves only that scope, and the entry marked `default_registry` serves the rest. For `login`, `--registry <alias>` must name one of the entries, or one must be the default. Builtin extensions (`specforge add @specforge/product`) and local `.wasm` files need no registry.";
@@ -414,13 +414,13 @@ catalog! {
         "The token `specforge login` stored for this registry expired at the reported time. Log in again with a new token: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
     R_AUTH_021 = "R-AUTH-021": Error core,
         "Stored registry token unreadable",
-        "The OS keyring entry that holds this registry's token is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
+        "The secret `specforge login --token` kept for this registry (a file under `~/.specforge/secrets/`) is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
     R_LOGIN_001 = "R-LOGIN-001": Error core,
         "No single login token source",
         "`specforge login` needs exactly one of `--token <TOKEN>`, `--token-env <VAR>` or `--token-file <PATH>`; none or several were given.";
     R_LOGIN_002 = "R-LOGIN-002": Error core,
         "Login token not stored",
-        "`specforge login` couldn't store the token in the OS keyring or in the fallback file `~/.specforge/credentials.json`. Check that the keyring service is available and that `~/.specforge` is writable.";
+        "`specforge login` couldn't write the token's secret file under `~/.specforge/secrets/`. Check that `~/.specforge` is writable.";
     R_OPS_001 = "R-OPS-001": Error core,
         "No registry for the package",
         "No configured registry serves this package: none has a scope that matches it, and none is marked as the default (or no registries are configured at all). Add a `registries` entry to `specforge.json` with a matching scope, or mark one `\"default_registry\": true`. `specforge add`, `update` and `publish` (and MCP `add_extension`) choose the registry by this one rule and ask no other registry; a refused name sends no request.";

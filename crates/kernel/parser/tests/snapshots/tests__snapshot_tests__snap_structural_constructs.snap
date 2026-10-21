@@ -40,6 +40,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_line: 5,
             end_col: 2,
         },
+        name_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 2,
+                start_col: 6,
+                end_line: 2,
+                end_col: 17,
+            },
+        ),
         methods: [],
         obligations: [
             VerifyStatement {
@@ -93,6 +102,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_line: 7,
             end_col: 42,
         },
+        name_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 7,
+                start_col: 5,
+                end_line: 7,
+                end_col: 16,
+            },
+        ),
         methods: [],
         obligations: [],
     },
@@ -157,6 +175,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_line: 11,
             end_col: 2,
         },
+        name_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 9,
+                start_col: 5,
+                end_line: 9,
+                end_col: 16,
+            },
+        ),
         methods: [],
         obligations: [],
     },
@@ -211,6 +238,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_line: 17,
             end_col: 2,
         },
+        name_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 13,
+                start_col: 8,
+                end_line: 13,
+                end_col: 22,
+            },
+        ),
         methods: [],
         obligations: [
             VerifyStatement {

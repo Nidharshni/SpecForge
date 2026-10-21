@@ -9,7 +9,8 @@ mod escape;
 
 use std::collections::BTreeSet;
 
-use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Node, Written};
+use specforge_common::Sym;
+use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Node, Selected, Written};
 use specforge_registry::snapshot::field_text;
 
 use crate::emit::EmitOptions;
@@ -30,18 +31,18 @@ struct Row<'g> {
 /// `selected` as a document. `graph` names what the sections link to.
 pub(crate) fn render(graph: &Graph, selected: &Graph, options: &EmitOptions<'_>) -> String {
     let mut blocks = vec!["# Specification".to_string(), selection(selected, options)];
-    for node in order(selected, options.scope) {
+    for node in order(selected, options.selected.and_then(Selected::root)) {
         blocks.push(section(graph, node, options));
     }
     blocks.join("\n\n")
 }
 
 /// Every entity of `selected`, the scoped one first, then by kind and id.
-fn order<'g>(selected: &'g Graph, scope: Option<&str>) -> Vec<&'g Node> {
+fn order(selected: &Graph, scope: Option<Sym>) -> Vec<&Node> {
     let mut nodes = selected.nodes();
     nodes.sort_by_key(|n| {
         (
-            Some(n.id.raw.as_str()) != scope,
+            Some(n.id.raw) != scope,
             n.kind.raw.as_str(),
             n.id.raw.as_str(),
         )
@@ -53,13 +54,20 @@ fn order<'g>(selected: &'g Graph, scope: Option<&str>) -> Vec<&'g Node> {
 fn selection(selected: &Graph, options: &EmitOptions<'_>) -> String {
     let count = selected.node_count();
     let mut line = format!("{count} {}", if count == 1 { "entity" } else { "entities" });
-    if let Some(scope) = options.scope {
-        line.push_str(&format!(" around `{scope}`"));
-        if let Some(depth) = options.depth {
+    if let Some(chosen) = options.selected
+        && let Some(root) = chosen.root()
+    {
+        line.push_str(&format!(" around `{root}`"));
+        if let Some(depth) = chosen.depth() {
             line.push_str(&format!(" (depth {depth})"));
         }
     }
-    let kinds: BTreeSet<&str> = options.kind_filter.iter().copied().collect();
+    let kinds: BTreeSet<&str> = options
+        .selected
+        .into_iter()
+        .flat_map(|chosen| chosen.kinds())
+        .map(|kind| kind.as_str())
+        .collect();
     if !kinds.is_empty() {
         let names: Vec<String> = kinds.iter().map(|k| inline(k).into_owned()).collect();
         let noun = if names.len() == 1 { "kind" } else { "kinds" };
@@ -80,15 +88,16 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
     let span = &node.source_span;
     let mut blocks = vec![heading, format!("`{}:{}`", span.file, span.start_line)];
 
-    let links = links(graph, node, options.field_forms);
+    let links = links(graph, node, options.registries.field_forms());
     let linked: BTreeSet<&str> = links.iter().map(|r| r.field).collect();
     let mut fields = Vec::new();
     let mut prose = Vec::new();
     for entry in node.fields.entries() {
         let key = entry.key.as_str();
         let normative = options
-            .field_registry
-            .and_then(|r| r.get(kind, key))
+            .registries
+            .fields()
+            .get(kind, key)
             .is_some_and(|f| f.declared().normative);
         if normative {
             let text = field_text(&entry.value);
@@ -143,8 +152,8 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
 
 /// `node`'s references: each written reference in field and written order
 /// (linked, or unresolved), then each edge from it not listed yet (derived
-/// ones; all of them without `forms`), in edge order.
-fn links<'g>(graph: &'g Graph, node: &'g Node, forms: Option<&FieldForms>) -> Vec<Row<'g>> {
+/// ones), in edge order.
+fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g>> {
     let edges = graph.edges_from(node.id.raw.as_str());
     let linked = |field: &str, target: &str| {
         edges
@@ -152,22 +161,20 @@ fn links<'g>(graph: &'g Graph, node: &'g Node, forms: Option<&FieldForms>) -> Ve
             .any(|e| e.label.as_str() == field && e.target.as_str() == target)
     };
     let mut rows = Vec::new();
-    if let Some(forms) = forms {
-        for entry in node.fields.entries() {
-            let field = entry.key.as_str();
-            for reference in forms
-                .reading(node.kind.raw.as_str(), field)
-                .references(entry)
-            {
-                let entity = linked(field, reference.id)
-                    .then(|| graph.node(reference.id))
-                    .flatten();
-                rows.push(Row {
-                    field,
-                    id: reference.id,
-                    entity,
-                });
-            }
+    for entry in node.fields.entries() {
+        let field = entry.key.as_str();
+        for reference in forms
+            .reading(node.kind.raw.as_str(), field)
+            .references(entry)
+        {
+            let entity = linked(field, reference.id)
+                .then(|| graph.node(reference.id))
+                .flatten();
+            rows.push(Row {
+                field,
+                id: reference.id,
+                entity,
+            });
         }
     }
     for edge in &edges {

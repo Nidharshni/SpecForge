@@ -8,5 +8,5 @@
 mod contract;
 mod memory;
 
-pub use contract::{assert_client_contract, assert_private_client_contract};
+pub use contract::{assert_client_contract, assert_private_client_contract, assert_scope_contract};
 pub use memory::{Call, CallKind, MemoryClient, package};

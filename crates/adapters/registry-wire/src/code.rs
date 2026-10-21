@@ -15,7 +15,7 @@ pub enum ErrorCode {
     Forbidden,
     /// The endpoint needs an admin token.
     AdminRequired,
-    /// The scope was claimed by another publisher.
+    /// The scope is owned by another account.
     ScopeOwned,
     /// Too many publishes inside the window; the answer carries `Retry-After`.
     RateLimited,

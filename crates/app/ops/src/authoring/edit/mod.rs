@@ -8,12 +8,14 @@ mod create;
 mod defaults;
 mod outcome;
 mod path;
-mod validate;
+mod skeleton;
+pub(crate) mod validate;
 pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
+pub use skeleton::{Skeleton, Skeletons, Slot, SlotOf};
 
-use crate::authoring::format::{Configs, Place};
+use crate::authoring::format::{Configs, Forms, Place};
 use crate::authoring::planned::PlannedChange;
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
@@ -151,6 +153,8 @@ pub struct FieldInfo {
     pub name: String,
     pub field_type: specforge_protocol_types::FieldType,
     pub description: String,
+    /// Whether the kind requires the field.
+    pub required: bool,
 }
 
 /// The fields `kind` declares, in the order a new block writes them (the kind's own, then its enhancements');
@@ -163,6 +167,7 @@ pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
             Some(FieldInfo {
                 field_type: entry.field_type(),
                 description: entry.declared().description.clone().unwrap_or_default(),
+                required: entry.declared().required,
                 name,
             })
         })
@@ -172,7 +177,8 @@ pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
 /// What a plan will write.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct EditReport {
-    /// The entities the edits created, changed or deleted, sorted.
+    /// The entities whose block the edits, taken together, create, change or delete, sorted
+    /// (`PlannedChange::entities`).
     pub entities: Vec<String>,
     /// The files the edits change, relative to the spec root, sorted.
     pub affected_files: Vec<String>,
@@ -206,7 +212,6 @@ struct Planner<'v> {
     /// The plan's one configuration lookup, through the view's disk (ADR 0169).
     configs: Configs<'v>,
     texts: BTreeMap<String, String>,
-    entities: BTreeSet<String>,
     created: BTreeMap<String, (String, String)>,
     deleted: BTreeSet<String>,
 }
@@ -272,7 +277,6 @@ impl<'v> Planner<'v> {
         let new = change(&site, &text)?;
         if new != text {
             self.texts.insert(located.key, new);
-            self.entities.insert(id.to_string());
         }
         Ok(())
     }
@@ -352,7 +356,7 @@ impl<'v> Planner<'v> {
             validate::check(self.view, &change.after())?
         };
         let report = EditReport {
-            entities: self.entities.into_iter().collect(),
+            entities: change.entities(),
             affected_files: change.affected_files().map(String::from).collect(),
             diff: change.diff(),
             added: DiagnosticList(added),
@@ -392,9 +396,8 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
     let disk = view.containment().disk();
     let mut planner = Planner {
         view,
-        configs: Configs::new(None, &disk),
+        configs: Configs::new(Forms::none(), &disk),
         texts: BTreeMap::new(),
-        entities: BTreeSet::new(),
         created: BTreeMap::new(),
         deleted: BTreeSet::new(),
     };

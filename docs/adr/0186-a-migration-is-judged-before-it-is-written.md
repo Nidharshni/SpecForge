@@ -1,0 +1,54 @@
+# A migration is judged before it is written
+
+**Status:** accepted (2026-10-21, architecture round 20, plan 03). Amends [ADR 0171](0171-a-migration-writes-through-the-project-change.md) D1 (the hooks and the graph comparison are no longer the project change's last step) and D4 (an undone run is replaced by a refused run that writes nothing), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D4 (there is no post compile: the edited compile replaces it, and it reads no source) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F1 ("a change it undid" becomes "a migration it refused"). Cites [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) P1 and [ADR 0037](0037-the-sandbox-is-limits-the-host-enforces.md).
+
+## Context
+
+- `migrate::run` wrote the migrated texts first and judged them afterwards: the extensions' migration hooks and the graph
+  comparison were the last step of the project change's commit, and a refused run was put back. A dry run returned before
+  any of that, so it reported `ok: true` (exit 0) for a migration the real run refused (exit 1, W054), and a refused run
+  replaced the user's file twice (new inode, new mtime) and created and unlinked its backup.
+- A hook gets no file system (ADR 0037, ADR 0171 D5), so writing first bought it nothing; ADR 0171's reopen trigger (a hook
+  with a file-system capability) has not fired. Typed edits already judge in memory (`CompiledProject::edited`, ADR 0151).
+- Three smaller defects sat in the same path: the CLI's line for a refused run said "files restored from backups" under
+  `--no-backup` and named a cause the run's `Failure` did not, and `Failure::DoesNotCompile` counted every error of the
+  migrated project, the ones it already had included.
+
+## Decision
+
+- **D1. A migration is judged before anything is written.** `migrate::judge(pre, planned, input)` runs the hooks in load
+  order and, when none fails, compiles the planned texts over `pre` (`CompiledProject::edited`) and takes the graph delta
+  less the steps' own changes. `Verdict::refusal` is the run's cause.
+- **D2. A dry run is judged as the run is.** Its `ok`, `structural_differences`, `post_migration_errors`,
+  `hooks_invoked` and failure are the run's. A dry run the run would refuse is a failed run (ADR 0170).
+- **D3. Only a kept migration is staged and committed.** A refused one writes nothing: no source, backup or record,
+  `--no-backup` included. There is no automatic rollback: `put_back_summary`, `Outcome.rollback` and the document's
+  `rolled_back` and `rollback` are gone. The change's put-back stays for a write that fails (ADR 0128).
+- **D4. The hooks are called with the planned files' names before they are written.** A hook gets no file system, so the
+  order is invisible to it.
+- **D5. Order:** plan; nothing pending or a file failed: return, nothing compiled; `pre`; judge; dry run or refused:
+  return; stage; commit. Each source is read twice (the plan and `pre`), the environment loaded once.
+- **D6. A refusal for errors counts the errors the planned project has that the project has not**
+  (`edit::validate::added`).
+
+## Rejected
+
+- Compile first and plan over `pre`'s texts: one read, but a compile on every run with nothing pending or a failed file
+  (reversing ADR 0171 D2), and `pre`'s E025 in place of the bound's message.
+- Judging the dry run in memory and the run after writing: two judges that can disagree, which is the defect.
+- A dry run without hooks: a preview whose verdict leaves out a cause the run has.
+- Migrate on `PlannedChange` (ADR 0184): it stages no owned name and no record.
+
+## Consequences
+
+- CLI: `migrate --dry-run` exits 1 when the run would be refused; a pending dry run reports
+  `post_migration_validated: true`; the human report of a failed run is the W054s and the failure's message.
+- MCP: a refused dry run is `isError`, its document the data.
+- Both: the document loses `rolled_back` and `rollback`; the failure messages end "nothing was written".
+- Rust API: `Outcome.verdict`, `migrate::{judge, Verdict}`; `Outcome.rollback` and the flat verdict fields are gone.
+- A pending dry run costs a compile and an edited compile; a run costs one environment load fewer than before.
+
+## What would reopen it
+
+A hook gains a file-system capability (then the hooks see files and judging must follow writing, as ADR 0171 had it); a
+check that reads the sources from disk (the edited compile would then judge stale files).

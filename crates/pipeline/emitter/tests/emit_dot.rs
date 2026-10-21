@@ -171,25 +171,15 @@ fn dot_kind_filter_drops_nodes_and_edges() {
     verify = "clusters group by declaring extension"
 )]
 fn dot_cluster_by_extension_groups_nodes() {
-    let mut registry = specforge_registry::KindRegistry::new();
-    registry.register(specforge_registry::KindRegistryEntry {
-        kind_name: "behavior".to_string(),
-        source_extension: "@specforge/software".to_string(),
-        testable: false,
-        supports_verify: false,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        ..Default::default()
-    });
-    registry.register(specforge_registry::KindRegistryEntry {
-        kind_name: "term".to_string(),
-        source_extension: "@specforge/product".to_string(),
-        testable: false,
-        supports_verify: false,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        ..Default::default()
-    });
+    use crate::support::{declaration, kind};
+    let registries = specforge_registry::build_registries(vec![
+        declaration(
+            "@specforge/software",
+            vec![kind("behavior", vec![])],
+            vec![],
+        ),
+        declaration("@specforge/product", vec![kind("term", vec![])], vec![]),
+    ]);
     let mut graph = Graph::new();
     graph.add_node(node("beh_b", "behavior", None));
     graph.add_node(node("term_t", "term", None));
@@ -197,7 +187,7 @@ fn dot_cluster_by_extension_groups_nodes() {
     let dot = specforge_emitter::dot::emit_dot(
         &graph,
         &specforge_emitter::DotOptions {
-            kind_registry: Some(&registry),
+            registries: &registries,
             cluster_by_extension: true,
             ..Default::default()
         },
@@ -221,4 +211,104 @@ fn dot_cluster_by_extension_groups_nodes() {
         "term_t inside the product cluster: {dot}"
     );
     assert!(software < beh, "beh_b inside the software cluster: {dot}");
+}
+
+/// `behavior b` writing `consumes` and `uses` towards `event e`, through the edge types
+/// `BehaviorConsumesEvent` (declared with `style`, `color`, `arrowhead`) and `BehaviorUsesEvent`
+/// (declaring none), and the DOT of the graph it builds.
+fn styled_dot(style: Option<&str>, color: Option<&str>, arrowhead: Option<&str>) -> String {
+    use crate::support::{declaration, kind};
+    use specforge_protocol_types::{EdgeTypeDescriptor, FieldDescriptor};
+
+    let writer = |name: &str, edge: &str| FieldDescriptor {
+        name: name.to_string(),
+        field_type: "reference_list".to_string(),
+        edge: Some(edge.to_string()),
+        target_kind: Some("event".to_string()),
+        ..Default::default()
+    };
+    let edge_type = |label: &str| EdgeTypeDescriptor {
+        label: label.to_string(),
+        source_kind: Some("behavior".to_string()),
+        target_kind: Some("event".to_string()),
+        ..Default::default()
+    };
+    let registries = specforge_registry::build_registries(vec![declaration(
+        "@test/ext",
+        vec![
+            kind(
+                "behavior",
+                vec![
+                    writer("consumes", "BehaviorConsumesEvent"),
+                    writer("uses", "BehaviorUsesEvent"),
+                ],
+            ),
+            kind("event", vec![]),
+        ],
+        vec![
+            EdgeTypeDescriptor {
+                edge_style: style.map(str::to_string),
+                edge_color: color.map(str::to_string),
+                edge_arrowhead: arrowhead.map(str::to_string),
+                ..edge_type("BehaviorConsumesEvent")
+            },
+            edge_type("BehaviorUsesEvent"),
+        ],
+    )]);
+    let mut graph = Graph::new();
+    graph.add_node(node("b", "behavior", None));
+    graph.add_node(node("e", "event", None));
+    for label in ["consumes", "uses", "unwritten"] {
+        graph.add_edge(Edge {
+            source: Sym::new("b"),
+            target: Sym::new("e"),
+            label: Sym::new(label),
+        });
+    }
+    specforge_emitter::dot::emit_dot(
+        &graph,
+        &specforge_emitter::DotOptions {
+            registries: &registries,
+            ..Default::default()
+        },
+    )
+}
+
+#[specforge_test(
+    behavior = "render_extension_defined_edge_styles",
+    verify = "edge_style appears in DOT edge attributes"
+)]
+fn an_edge_is_drawn_in_its_declared_style() {
+    let dot = styled_dot(Some("dashed"), None, None);
+    assert!(
+        dot.contains("\"b\" -> \"e\" [label=\"consumes\" style=\"dashed\"];"),
+        "{dot}"
+    );
+}
+
+#[specforge_test(
+    behavior = "render_extension_defined_edge_styles",
+    verify = "edge_color sets DOT edge color attribute"
+)]
+fn declared_edge_color_and_arrowhead_are_written() {
+    let dot = styled_dot(Some("dashed"), Some("#E65100"), Some("vee"));
+    assert!(
+        dot.contains("[label=\"consumes\" style=\"dashed\" color=\"#E65100\" arrowhead=\"vee\"];"),
+        "{dot}"
+    );
+    let hostile = styled_dot(None, Some("\"]; x"), None);
+    assert!(hostile.contains("color=\"\\\"]; x\""), "{hostile}");
+}
+
+#[specforge_test(
+    behavior = "render_extension_defined_edge_styles",
+    verify = "default style is solid when edge_style not specified"
+)]
+fn an_edge_type_without_a_style_is_drawn_by_default() {
+    let dot = styled_dot(Some("dashed"), None, None);
+    assert!(dot.contains("\"b\" -> \"e\" [label=\"uses\"];"), "{dot}");
+    assert!(
+        dot.contains("\"b\" -> \"e\" [label=\"unwritten\"];"),
+        "{dot}"
+    );
 }

@@ -71,7 +71,7 @@ impl CoreTool for Tool {
                 .map_err(Self::failed)?;
 
         let runtime = project.runtime;
-        // The migration `specforge migrate` runs, hooks and rollback included.
+        // The migration `specforge migrate` runs, hooks and judgement included.
         let request = specforge_ops::authoring::migrate::Request {
             root: path,
             target,
@@ -80,7 +80,7 @@ impl CoreTool for Tool {
             caller: project.caller(),
         };
         let outcome = specforge_ops::authoring::migrate::run(&request, Some(runtime.clone()))?;
-        // A file it could not migrate, or a migration it rolled back, fails the call: its error is
+        // A file it could not migrate, or a migration it refused (a dry run too), fails the call: its error is
         // the run's, the document its data and what it left written reported (ADR 0170).
         if let Some(failed) = outcome.failed() {
             return Err(failed.into());

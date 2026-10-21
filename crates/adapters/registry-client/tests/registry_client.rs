@@ -33,7 +33,7 @@ fn auth_403_produces_permission_error() {
         },
     );
 
-    let cred = RegistryCredential::new("test", "some-token");
+    let cred = RegistryCredential::new(test_registry().url, "some-token");
     let err = client
         .authenticate(&test_registry(), &cred)
         .unwrap_err()

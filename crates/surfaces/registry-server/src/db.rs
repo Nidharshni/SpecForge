@@ -1,10 +1,12 @@
+use crate::ownership::{self, Claim, WriteRefused};
 use rusqlite::{Connection, params};
+use specforge_package::PackageName;
 use specforge_registry_wire::PackageSignature;
 use std::path::Path;
 
 /// The schema this registry reads and writes (`PRAGMA user_version`). A data directory written before the
-/// signature was typed (ADR 0061) has none and is refused.
-const SCHEMA: i64 = 1;
+/// signature was typed (ADR 0061), or before a token was issued to an account (ADR 0185), is refused.
+const SCHEMA: i64 = 2;
 use std::sync::Mutex;
 
 pub struct Database {
@@ -39,12 +41,21 @@ pub enum RevokeRefused {
 /// Why a publish was not recorded ([`Database::publish`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublishRefused {
-    /// The scope is owned by another publisher (its account).
-    ScopeOwned { account: String },
+    /// The token may not write into the scope (its filter, or another owner).
+    Write(WriteRefused),
     /// The version is already stored (the message says so).
     DuplicateVersion(String),
     /// The database failed.
     Storage(String),
+}
+
+impl From<WriteRefused> for PublishRefused {
+    fn from(refused: WriteRefused) -> Self {
+        match refused {
+            WriteRefused::Storage(why) => Self::Storage(why),
+            other => Self::Write(other),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +79,8 @@ pub struct PackageVersion {
 #[derive(Debug, Clone)]
 pub struct TokenRecord {
     pub token_hash: String,
+    /// The account the token was issued to; it, not the token, owns the scopes the token claims.
+    pub account: String,
     pub scope: Option<String>,
     pub label: String,
     pub created_at: String,
@@ -133,9 +146,15 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_packages_name ON packages(name);
             CREATE INDEX IF NOT EXISTS idx_packages_keywords ON packages(keywords);
 
+            CREATE TABLE IF NOT EXISTS accounts (
+                name TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             CREATE TABLE IF NOT EXISTS tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 token_hash TEXT NOT NULL UNIQUE,
+                account TEXT NOT NULL REFERENCES accounts(name),
                 scope TEXT,
                 label TEXT NOT NULL DEFAULT 'default',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -148,8 +167,7 @@ impl Database {
 
             CREATE TABLE IF NOT EXISTS scopes (
                 scope TEXT PRIMARY KEY,
-                owner_token_hash TEXT NOT NULL,
-                account_id TEXT NOT NULL,
+                account TEXT NOT NULL REFERENCES accounts(name),
                 claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );",
         )
@@ -322,38 +340,37 @@ impl Database {
         Ok(out)
     }
 
-    /// Record `pkg` as `owner_token_hash` (account `account_id`) publishes it into `scope`, in one
-    /// transaction: claim the scope for the publisher when nobody owns it, refuse when another
-    /// token owns it, insert the version (`UNIQUE(name, version)` refuses a duplicate). A refusal
-    /// leaves the scope as it was. `Ok(true)` when this publish claimed the scope.
+    /// May `writer` write into the scope of `package`? The read-only pre-check of [`Self::publish`].
+    pub fn may_write(
+        &self,
+        writer: &TokenRecord,
+        package: &PackageName,
+    ) -> Result<(), WriteRefused> {
+        ownership::may_write(&self.conn(), writer, package).map(drop)
+    }
+
+    /// Record `pkg` as `writer` publishes it into the scope of `package`, in one transaction: ask
+    /// [`ownership::may_write`], claim the scope for the writer when nobody owns it, insert the
+    /// version (`UNIQUE(name, version)` refuses a duplicate). A refusal leaves the scope as it was.
+    /// `Ok(true)` when this publish claimed the scope.
     pub fn publish(
         &self,
         pkg: &PackageVersion,
-        scope: &str,
-        owner_token_hash: &str,
-        account_id: &str,
+        package: &PackageName,
+        writer: &TokenRecord,
     ) -> Result<bool, PublishRefused> {
         let mut conn = self.conn();
         let storage =
             |e: rusqlite::Error| PublishRefused::Storage(format!("failed to publish: {e}"));
         let tx = conn.transaction().map_err(storage)?;
-        let claimed = tx
-            .execute(
-                "INSERT OR IGNORE INTO scopes (scope, owner_token_hash, account_id) VALUES (?1, ?2, ?3)",
-                params![scope, owner_token_hash, account_id],
-            )
-            .map_err(storage)?
-            > 0;
-        if !claimed {
-            let (owner, account): (String, String) = tx
-                .query_row(
-                    "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
-                    params![scope],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .map_err(storage)?;
-            if owner != owner_token_hash {
-                return Err(PublishRefused::ScopeOwned { account });
+        let mut claimed = false;
+        if ownership::may_write(&tx, writer, package)? == Claim::Unclaimed
+            && let Some(scope) = package.scope()
+        {
+            claimed = ownership::claim(&tx, scope, writer).map_err(storage)?;
+            if !claimed {
+                // Claimed between the read and the insert: ask again.
+                ownership::may_write(&tx, writer, package)?;
             }
         }
         let inserted = tx.execute(
@@ -386,16 +403,18 @@ impl Database {
         Ok(claimed)
     }
 
-    /// The owner (token hash) and registry-assigned account id of a claimed
-    /// scope, if it has been claimed.
-    pub fn get_scope_owner(&self, scope: &str) -> Option<(String, String)> {
-        let conn = self.conn();
-        conn.query_row(
-            "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
-            params![scope],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok()
+    /// Hand `scope` to `account`; the previous owner (an operator's act, never a request's).
+    pub fn assign_scope(
+        &self,
+        scope: &str,
+        account: &str,
+    ) -> Result<Option<String>, ownership::AssignRefused> {
+        ownership::assign(&self.conn(), scope, account)
+    }
+
+    /// The account that owns `scope`, if it has been claimed.
+    pub fn scope_owner(&self, scope: &str) -> Option<String> {
+        ownership::owner(&self.conn(), scope).ok().flatten()
     }
 
     /// Withdraw a version whose blob could not be committed, and the scope claim the same publish
@@ -420,49 +439,82 @@ impl Database {
         removed
     }
 
-    pub fn yank_version(&self, name: &str, version: &str) -> bool {
-        let conn = self.conn();
-        let rows = conn
+    /// Withdraw a version, held to the publish rule: `writer` must be allowed into the package's scope,
+    /// asked in the same transaction as the `UPDATE`. `Ok(false)` when no such version exists. Never
+    /// claims a scope.
+    pub fn yank(
+        &self,
+        package: &PackageName,
+        version: &str,
+        writer: &TokenRecord,
+    ) -> Result<bool, WriteRefused> {
+        let mut conn = self.conn();
+        let storage = |e: rusqlite::Error| WriteRefused::Storage(format!("failed to yank: {e}"));
+        let tx = conn.transaction().map_err(storage)?;
+        ownership::may_write(&tx, writer, package)?;
+        let rows = tx
             .execute(
                 "UPDATE packages SET yanked = 1 WHERE name = ?1 AND version = ?2",
-                params![name, version],
+                params![package.as_str(), version],
             )
-            .unwrap_or(0);
-        rows > 0
+            .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        Ok(rows > 0)
     }
 
     // --- Token management ---
 
+    /// Store a token issued to `account`, creating the account with its first token.
     pub fn insert_token(
         &self,
         token_hash: &str,
+        account: &str,
         scope: Option<&str>,
         label: &str,
         expires_at: Option<&str>,
         admin: bool,
     ) -> Result<(), String> {
-        let conn = self.conn();
-        conn.execute(
-            "INSERT INTO tokens (token_hash, scope, label, expires_at, admin) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![token_hash, scope, label, expires_at, admin as i64],
+        let mut conn = self.conn();
+        let storage = |e: rusqlite::Error| format!("failed to insert token: {e}");
+        let tx = conn.transaction().map_err(storage)?;
+        tx.execute(
+            "INSERT OR IGNORE INTO accounts (name) VALUES (?1)",
+            params![account],
         )
-        .map_err(|e| format!("failed to insert token: {}", e))?;
-        Ok(())
+        .map_err(storage)?;
+        tx.execute(
+            "INSERT INTO tokens (token_hash, account, scope, label, expires_at, admin) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![token_hash, account, scope, label, expires_at, admin as i64],
+        )
+        .map_err(storage)?;
+        tx.commit().map_err(storage)
+    }
+
+    /// Whether any token was ever issued to `account`.
+    pub fn has_account(&self, account: &str) -> bool {
+        self.conn()
+            .query_row(
+                "SELECT 1 FROM accounts WHERE name = ?1",
+                params![account],
+                |_| Ok(()),
+            )
+            .is_ok()
     }
 
     pub fn validate_token(&self, token_hash: &str) -> Option<TokenRecord> {
         let conn = self.conn();
         conn.query_row(
-            "SELECT token_hash, scope, label, created_at, expires_at, admin FROM tokens WHERE token_hash = ?1 AND revoked = 0",
+            "SELECT token_hash, account, scope, label, created_at, expires_at, admin FROM tokens WHERE token_hash = ?1 AND revoked = 0",
             params![token_hash],
             |row| {
                 Ok(TokenRecord {
                     token_hash: row.get(0)?,
-                    scope: row.get(1)?,
-                    label: row.get(2)?,
-                    created_at: row.get(3)?,
-                    expires_at: row.get(4)?,
-                    admin: row.get::<_, i64>(5)? != 0,
+                    account: row.get(1)?,
+                    scope: row.get(2)?,
+                    label: row.get(3)?,
+                    created_at: row.get(4)?,
+                    expires_at: row.get(5)?,
+                    admin: row.get::<_, i64>(6)? != 0,
                 })
             },
         )
@@ -472,17 +524,18 @@ impl Database {
     pub fn list_tokens(&self) -> Result<Vec<TokenRecord>, String> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT token_hash, scope, label, created_at, expires_at, admin FROM tokens WHERE revoked = 0 ORDER BY created_at")
+            .prepare("SELECT token_hash, account, scope, label, created_at, expires_at, admin FROM tokens WHERE revoked = 0 ORDER BY created_at")
             .map_err(|e| format!("token listing failed: {e}"))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(TokenRecord {
                     token_hash: row.get(0)?,
-                    scope: row.get(1)?,
-                    label: row.get(2)?,
-                    created_at: row.get(3)?,
-                    expires_at: row.get(4)?,
-                    admin: row.get::<_, i64>(5)? != 0,
+                    account: row.get(1)?,
+                    scope: row.get(2)?,
+                    label: row.get(3)?,
+                    created_at: row.get(4)?,
+                    expires_at: row.get(5)?,
+                    admin: row.get::<_, i64>(6)? != 0,
                 })
             })
             .map_err(|e| format!("token listing failed: {e}"))?
@@ -543,6 +596,17 @@ mod tests {
             signature: None,
             manifest: String::new(),
         }
+    }
+
+    fn name(text: &str) -> PackageName {
+        PackageName::parse(text).unwrap()
+    }
+
+    /// A token of `account`, which the database must know (the scope table references it).
+    fn writer(db: &Database, account: &str) -> TokenRecord {
+        let hash = format!("hash-{account}");
+        let _ = db.insert_token(&hash, account, None, "t", None, false);
+        db.validate_token(&hash).unwrap()
     }
 
     #[test]
@@ -632,32 +696,46 @@ mod tests {
         let db = Database::open(&dir.path().join("t.db")).unwrap();
         // The lost race: the version is stored between the handler's check and the transaction.
         db.insert_package(&pv("@fresh/x", "1.0.0")).unwrap();
-        let refused = db.publish(&pv("@fresh/x", "1.0.0"), "@fresh", "tok-a", "acct-a");
+        let refused = db.publish(
+            &pv("@fresh/x", "1.0.0"),
+            &name("@fresh/x"),
+            &writer(&db, "tok-a"),
+        );
         assert!(
             matches!(refused, Err(PublishRefused::DuplicateVersion(_))),
             "{refused:?}"
         );
-        assert_eq!(db.get_scope_owner("@fresh"), None);
+        assert_eq!(db.scope_owner("@fresh"), None);
 
         // A publish that stores claims; another token's is refused and the owner stays.
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer(&db, "tok-a")
+            ),
             Ok(true)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/z", "1.0.0"),
+                &name("@fresh/z"),
+                &writer(&db, "tok-a")
+            ),
             Ok(false)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/w", "1.0.0"), "@fresh", "tok-b", "acct-b"),
-            Err(PublishRefused::ScopeOwned {
-                account: "acct-a".to_string()
-            })
+            db.publish(
+                &pv("@fresh/w", "1.0.0"),
+                &name("@fresh/w"),
+                &writer(&db, "tok-b")
+            ),
+            Err(PublishRefused::Write(WriteRefused::Owned {
+                scope: "@fresh".to_string(),
+                owner: "tok-a".to_string()
+            }))
         );
-        assert_eq!(
-            db.get_scope_owner("@fresh"),
-            Some(("tok-a".to_string(), "acct-a".to_string()))
-        );
+        assert_eq!(db.scope_owner("@fresh"), Some("tok-a".to_string()));
     }
 
     #[test]
@@ -665,22 +743,34 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer(&db, "tok-a")
+            ),
             Ok(true)
         );
         assert!(db.withdraw("@fresh/y", "1.0.0", "@fresh", true));
-        assert_eq!(db.get_scope_owner("@fresh"), None);
+        assert_eq!(db.scope_owner("@fresh"), None);
 
         // A scope that holds another package keeps its claim.
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer(&db, "tok-a")
+            ),
             Ok(true)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/z", "1.0.0"),
+                &name("@fresh/z"),
+                &writer(&db, "tok-a")
+            ),
             Ok(false)
         );
         db.withdraw("@fresh/y", "1.0.0", "@fresh", true);
-        assert!(db.get_scope_owner("@fresh").is_some());
+        assert!(db.scope_owner("@fresh").is_some());
     }
 }

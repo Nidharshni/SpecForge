@@ -49,6 +49,9 @@ pub struct Entity {
     pub title: Option<String>,
     pub fields: FieldMap,
     pub span: SourceSpan,
+    /// Where the name is written (an entity's, union's or define's identifier; a scheme ref's ID; a spec block's
+    /// string, its quotes included). `None` when the parse read no name (a block the grammar recovered from).
+    pub name_span: Option<SourceSpan>,
     /// `method name(param: Type) -> Ret` members (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.
     pub methods: Vec<MethodDecl>,
@@ -61,6 +64,9 @@ pub struct Entity {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MethodDecl {
     pub name: String,
+    /// Where `name` is written; never serialized (a written form has no positions).
+    #[serde(skip)]
+    pub name_span: Option<SourceSpan>,
     pub params: Vec<Parameter>,
     pub returns: Option<String>,
     /// Where `returns` is written; never serialized (a written form has no positions).

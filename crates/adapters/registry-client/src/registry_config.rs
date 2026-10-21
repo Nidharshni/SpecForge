@@ -19,17 +19,22 @@ pub struct RegistryConfig {
 /// token.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RegistryCredential {
-    /// The registry it is for (`RegistryConfig::alias`).
-    pub alias: String,
+    /// The registry root it was kept for (`RegistryConfig::url`); a client sends it nowhere else.
+    pub root: RegistryRoot,
     token: String,
 }
 
 impl RegistryCredential {
-    pub fn new(alias: impl Into<String>, token: impl Into<String>) -> Self {
+    pub fn new(root: RegistryRoot, token: impl Into<String>) -> Self {
         Self {
-            alias: alias.into(),
+            root,
             token: token.into(),
         }
+    }
+
+    /// Whether this credential may go with a request to `registry`: only its own root.
+    pub fn is_for(&self, registry: &RegistryConfig) -> bool {
+        self.root == registry.url
     }
 
     /// The raw token, for the `Authorization` header only.
@@ -41,7 +46,7 @@ impl RegistryCredential {
 impl std::fmt::Debug for RegistryCredential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryCredential")
-            .field("alias", &self.alias)
+            .field("root", &self.root)
             .field("token", &"****")
             .finish()
     }

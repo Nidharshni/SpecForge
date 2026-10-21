@@ -81,7 +81,7 @@ fn put_request(token: &str, name: &str, version: &str, body: Body) -> Request<Bo
 async fn unsigned_publish_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
 
     let response = app(state)
         .oneshot(put_request(
@@ -107,7 +107,7 @@ async fn unsigned_publish_is_rejected() {
 async fn name_mismatch_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
 
     // Path says 2.0.0, manifest says 1.0.0.
     let response = app(state)
@@ -134,7 +134,7 @@ async fn name_mismatch_is_rejected() {
 async fn non_wasm_bytes_are_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
 
     let response = app(state)
         .oneshot(put_request(
@@ -164,7 +164,7 @@ async fn non_wasm_bytes_are_rejected() {
 async fn invalid_manifest_schema_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
 
     // Missing required fields entirely.
     let response = app(state)
@@ -195,7 +195,7 @@ async fn invalid_manifest_schema_is_rejected() {
 async fn publish_rate_limit_returns_429() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 2); // 2 publishes per window per token
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let router = app(state);
 
     // Dedup prevents version reuse, so vary versions per attempt.
@@ -241,8 +241,8 @@ async fn admin_api_requires_admin_token_and_manages_lifecycle() {
     let state = app_state(dir.path(), 100);
     let router = app_clone(&state);
 
-    let publisher = auth::create_token(&state.database, None, "publisher", Some(90), false);
-    let admin = auth::create_token(&state.database, None, "admin", Some(90), true);
+    let publisher = auth::create_token(&state.database, "pub", None, "publisher", Some(90), false);
+    let admin = auth::create_token(&state.database, "pub", None, "admin", Some(90), true);
 
     // Publisher token: forbidden on admin endpoints.
     let response = router
@@ -274,7 +274,7 @@ async fn admin_api_requires_admin_token_and_manages_lifecycle() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     // Admin creates a scoped publish token (expires in 90 days by default).
-    let create_body = r#"{"scope":"@acme","label":"ci","expires_in_days":30}"#;
+    let create_body = r#"{"account":"acme","scope":"@acme","label":"ci","expires_in_days":30}"#;
     let response = router
         .clone()
         .oneshot(
@@ -342,207 +342,6 @@ async fn admin_api_requires_admin_token_and_manages_lifecycle() {
     assert_eq!(verify.status(), StatusCode::UNAUTHORIZED);
 }
 
-// ---------------------------------------------------------------------------
-// Namespace ownership (T6)
-// ---------------------------------------------------------------------------
-
-mod ownership {
-    use super::*;
-
-    fn signed_for(name: &str, version: &str) -> axum::body::Body {
-        let manifest = format!(
-            r#"{{"handshake":{{"protocol_version":"1","name":"{name}","version":"{version}","peer_dependencies":[],"sandbox_policy":null}}}}"#
-        );
-        multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM)))
-    }
-
-    /// The hash of the token labelled `label`.
-    fn hash_of(state: &AppState, label: &str) -> String {
-        auth::list_tokens(&state.database)
-            .expect("the tokens list")
-            .into_iter()
-            .find(|t| t.label == label)
-            .expect("a token carries the label")
-            .token_hash
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "publish_to_registry",
-        verify = "a publish the registry refuses claims no scope"
-    )]
-    #[tokio::test]
-    async fn a_refused_upload_claims_no_scope() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = app_state(dir.path(), 10_000);
-        let router = app_clone(&state);
-        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
-        let token_b = auth::create_token(&state.database, None, "pub-b", Some(90), false);
-
-        let manifest = r#"{"handshake":{"protocol_version":"1","name":"@fresh/x","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_a,
-                "@fresh%2Fx",
-                "1.0.0",
-                multipart_body(manifest, WASM, None),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(json_of(response).await["error"]["code"], "UNSIGNED_PACKAGE");
-
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_b,
-                "@fresh%2Fy",
-                "1.0.0",
-                signed_for("@fresh/y", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let (owner, _) = state.database.get_scope_owner("@fresh").unwrap();
-        assert_eq!(owner, hash_of(&state, "pub-b"));
-    }
-
-    // The duplicate check before the claim already refuses this one; the true race (a version stored
-    // between that check and the insert) is covered at the database in `db.rs` (T16).
-    #[tokio::test]
-    async fn a_duplicate_version_claims_no_scope() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = app_state(dir.path(), 10_000);
-        let router = app_clone(&state);
-        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
-
-        // The version is already stored, under no scope.
-        stored(&state, "@fresh/x", false);
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_a,
-                "@fresh%2Fx",
-                "1.0.0",
-                signed_for("@fresh/x", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CONFLICT);
-        assert_eq!(
-            json_of(response).await["error"]["code"],
-            "DUPLICATE_VERSION"
-        );
-        assert_eq!(state.database.get_scope_owner("@fresh"), None);
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "publish_to_registry",
-        verify = "the first publish into a scope claims it, and only its publisher publishes there after"
-    )]
-    #[tokio::test]
-    async fn first_publish_claims_scope_and_blocks_other_tokens() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = app_state(dir.path(), 10_000);
-        let router = app_clone(&state);
-
-        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
-        let token_b = auth::create_token(&state.database, None, "pub-b", Some(90), false);
-
-        // Publisher A claims @acme with @acme/utils.
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_a,
-                "@acme%2Futils",
-                "1.0.0",
-                signed_for("@acme/utils", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        // Publisher B is locked out of @acme — even for a different name.
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_b,
-                "@acme%2Fother",
-                "1.0.0",
-                signed_for("@acme/other", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-        let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(response.into_body(), 1_000_000)
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(body["error"]["code"], "SCOPE_OWNED");
-
-        // Publisher A keeps publishing into @acme.
-        let response = router
-            .clone()
-            .oneshot(put_request(
-                &token_a,
-                "@acme%2Fother",
-                "1.0.0",
-                signed_for("@acme/other", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        // Metadata carries the registry-assigned publisher account id.
-        let response = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("/v1/packages/%40acme%2Futils/1.0.0")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(response.into_body(), 1_000_000)
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        let publisher = body["publisher"].as_str().unwrap();
-        assert!(
-            publisher.starts_with("acct_"),
-            "publisher was {}",
-            publisher
-        );
-    }
-
-    #[tokio::test]
-    async fn scoped_token_cannot_publish_outside_its_scope() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = app_state(dir.path(), 10_000);
-        let router = app_clone(&state);
-
-        // @web-scoped token.
-        let scoped = auth::create_token(&state.database, Some("@web"), "web-pub", Some(90), false);
-
-        let response = router
-            .oneshot(put_request(
-                &scoped,
-                "@other%2Ftool",
-                "1.0.0",
-                signed_for("@other/tool", "1.0.0"),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    }
-}
-
 /// The body of an answer.
 async fn json_of(response: axum::response::Response) -> serde_json::Value {
     serde_json::from_slice(
@@ -561,7 +360,7 @@ async fn json_of(response: axum::response::Response) -> serde_json::Value {
 async fn a_manifest_that_is_not_a_declaration_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     // The camelCase manifest file of before ADR 0012.
     let legacy = r#"{"name":"@test/signed-ext","version":"1.0.0","manifestVersion":2,"wasmPath":"ext.wasm"}"#;
     let response = app(state)
@@ -591,7 +390,7 @@ async fn a_manifest_that_is_not_a_declaration_is_refused() {
 async fn description_and_keywords_come_from_the_declaration() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let router = app_clone(&state);
     let manifest = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null,"description":"Reports over the graph","keywords":["reports","dashboards"]}}"#;
     let response = router
@@ -631,7 +430,7 @@ async fn description_and_keywords_come_from_the_declaration() {
 async fn publish_code(name: &str, version: &str) -> String {
     let dir = tempfile::tempdir().expect("a temp dir");
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let response = app(state)
         .oneshot(put_request(
             &raw,
@@ -746,7 +545,7 @@ async fn get_json(router: &axum::Router, uri: &str) -> (StatusCode, serde_json::
 async fn the_server_answers_in_these_json_shapes() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let router = app_clone(&state);
 
     // publish: 201 and the receipt.
@@ -902,7 +701,7 @@ async fn metadata_status(router: &axum::Router, version: &str) -> StatusCode {
 async fn a_signature_that_is_not_one_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let router = app_clone(&state);
     for (version, signature, reason) in [
         (
@@ -959,7 +758,7 @@ async fn a_signature_that_is_not_one_is_refused() {
 async fn a_signature_over_other_bytes_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let router = app_clone(&state);
     let signature = signed(VALID_MANIFEST, b"\0asm-other");
     let (status, body) =
@@ -986,7 +785,7 @@ async fn a_signature_over_other_bytes_is_refused() {
 async fn a_signature_of_another_version_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
     let signature = signed(VALID_MANIFEST, WASM);
     let (status, body) = publish_signed_ext(
@@ -1010,7 +809,7 @@ async fn a_signature_of_another_version_is_refused() {
 async fn a_signature_over_another_manifest_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
     let described = VALID_MANIFEST.replace(
         "\"sandbox_policy\":null",
         "\"sandbox_policy\":null,\"description\":\"other\"",
@@ -1043,7 +842,7 @@ async fn a_private_registry_refuses_anonymous_reads() {
         )
         .unwrap(),
     );
-    let raw = auth::create_token(&state.database, None, "reader", Some(90), false);
+    let raw = auth::create_token(&state.database, "pub", None, "reader", Some(90), false);
     let reads = [
         "/v1/packages/%40acme%2Fx",
         "/v1/packages/%40acme%2Fx/1.0.0",
@@ -1229,9 +1028,9 @@ async fn revoking_takes_a_token_id() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let router = app_clone(&state);
-    let admin = auth::create_token(&state.database, None, "admin", Some(90), true);
-    let one = auth::create_token(&state.database, None, "one", Some(90), false);
-    let two = auth::create_token(&state.database, None, "two", Some(90), false);
+    let admin = auth::create_token(&state.database, "pub", None, "admin", Some(90), true);
+    let one = auth::create_token(&state.database, "pub", None, "one", Some(90), false);
+    let two = auth::create_token(&state.database, "pub", None, "two", Some(90), false);
     let verify = |token: String| {
         let router = router.clone();
         async move {

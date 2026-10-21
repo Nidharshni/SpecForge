@@ -46,7 +46,7 @@ type ProviderConfig "Provider Config" {
 
 // ── Registry Types ──────────────────────────────────────────
 
-type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per alias in ~/.specforge, never here." {
+type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per registry root in ~/.specforge, never here." {
   alias            string  @readonly @unique
   url              string
   scope_filter     string  @optional
@@ -244,17 +244,15 @@ type RegistryPublished "Registry Published" {
 
 // ── Registry Authentication ───────────────────────────────
 
-// One entry of ~/.specforge/credentials.json, keyed by registry alias:
+// One entry of ~/.specforge/credentials.json, keyed by registry root:
 // where that registry's token comes from. Never in specforge.json. At most
 // one of token_env and token_file is set; with neither, login stored the
-// secret (in the OS keyring when in_keyring, else in a 0600 file under
-// ~/.specforge/secrets/).
+// secret (in a 0600 file under ~/.specforge/secrets/).
 type RegistryCredential "Registry Credential" {
-  alias      string  @readonly @unique
-  token_env  string  @optional
-  token_file string  @optional
-  in_keyring boolean @optional
-  expires_at string  @optional
+  root       string @readonly @unique
+  token_env  string @optional
+  token_file string @optional
+  expires_at string @optional
   verify unit "RegistryCredential schema is valid"
 }
 

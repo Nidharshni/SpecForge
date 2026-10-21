@@ -224,7 +224,7 @@ behavior format_from_stdin "Format from Standard Input" {
     unformatted, the formatted text MUST still be printed and the command
     MUST exit with code 1. Its output is the formatted text, so --stdin
     MUST refuse --format json (invalid_input, the error document on stdout).
-    Values are written in the forms of the project's declarations.
+    Values are written in the forms of the declarations of the project the text belongs to.
   """
   verify unit "stdin content is formatted and written to stdout"
   verify unit "--stdin refuses --format json with the error document"
@@ -330,7 +330,7 @@ behavior apply_format_rules "Apply Format Rules" {
     (ADR 0147): a quoted word (on a reference list, a quoted entity id, scheme
     refs included) on a field whose declared type writes it bare
     loses its quotes, and a bare word on a text field gains them, read from
-    the project's declarations; nothing else in a string literal changes, and
+    the declarations of the document's own project, found from its place; nothing else in a string literal changes, and
     a triple-quoted one is kept byte-for-byte. Statements keep their source
     order; only runs of imports are sorted. An expression block's
     expressions are indented one level inside it, its closing brace at its
@@ -361,6 +361,11 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "multiline string literals are kept byte-for-byte"
   verify unit "a value is written in its field's form, read from the project's declarations"
   verify unit "without the project's declarations no value is rewritten"
+  verify unit "a document of the project the caller holds is written in its lent forms, without loading them again"
+  verify unit "another project's forms load once per run"
+  verify unit "a document outside any project is written as it is"
+  verify unit "an environment loaded at no project root lends no forms"
+  verify unit "text of a project that is no file is written in that project's forms"
   verify unit "an expression block's lines are indented one level inside it, whatever their indentation"
   verify property "two files differing only in whitespace produce identical output after formatting"
   verify unit "the formatted text has LF line endings and exactly one final newline"
@@ -418,8 +423,10 @@ behavior lsp_format_document "LSP Format Document" {
     it MUST format the full document using the formatting engine and
     return a list of TextEdit operations. Applied to the document, the
     edits MUST give exactly the text specforge format writes for the
-    same file, byte for byte, with the field forms of the served project, in one pass: an edit may span line breaks,
-    so blank lines are removed, a missing final newline is added and CRLF
+    same file, byte for byte, each value in the form of its field in the
+    document's own project (the project its file is in, as for its
+    configuration; none outside a project), in one pass: an edit may span line
+    breaks, so blank lines are removed, a missing final newline is added and CRLF
     line endings become LF. An edit replaces only the text formatting
     changes, so text the formatter keeps, and an editor's cursor in it,
     stays where it is.
@@ -444,6 +451,10 @@ behavior lsp_format_document "LSP Format Document" {
   verify unit "a formatting publish carries diagnostics of one document version"
   verify unit "TextEdit coordinates are 0-indexed lines and columns"
   verify unit "TextEdit operations in a response do not overlap"
+  verify integration "a nested project's document is written in its own project's field forms"
+  verify integration "the editor writes a nested project's values as specforge format does"
+  verify integration "a document formatted before its project opens is written in its project's field forms"
+  verify integration "a document of another project is written in that project's field forms, not the served project's"
   verify integration "LSP format produces same result as CLI format"
   verify integration "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
   verify property "applying the formatting edits to the document gives the formatted text byte for byte"
@@ -524,6 +535,7 @@ behavior lsp_respect_editor_config "LSP Respect Editor Config" {
   verify unit "editor settings are used for a document outside any project"
   verify unit "config file takes precedence over editor settings"
   verify unit "a project without a config file formats with the defaults, not the editor's settings"
+  verify integration "a document outside any project is written with no field forms"
   verify integration "the editor formats a project file as specforge format --check expects"
   verify integration "the editor is told once when the project's configuration overrides its settings"
   verify contract "LSP Respect Editor Config: editor config respect holds — lsp_initialized_fired, config_precedence_enforced, editor_fallback_applied"

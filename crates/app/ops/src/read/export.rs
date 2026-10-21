@@ -13,7 +13,7 @@
 use crate::containment::Held;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
-use crate::view::{ProjectView, Select, not_found};
+use crate::view::{ProjectView, Select};
 use crate::{Caller, Noticed, OpError, OpErrorKind, Refusal};
 use specforge_common::ProjectPath;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
@@ -320,20 +320,17 @@ fn export_versioned(
             .about(ExportField::SchemaVersion)
         })?;
     }
+    let selected = selection.selected(None);
     let options = EmitOptions {
         format: request.format().emit_format(),
-        scope: request.scope,
-        depth: request.depth,
-        kind_filter: selection.kinds().to_vec(),
+        selected: Some(&selected),
         schema: versioned.schema(),
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
-        kind_registry: Some(view.registries().kinds()),
-        field_registry: Some(view.registries().fields()),
+        registries: view.registries(),
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
-        field_forms: Some(view.registries().field_forms()),
     };
-    let document = emit(view.graph(), &options).map_err(|error| failure(view, error))?;
+    let document = emit(view.graph(), &options).map_err(failure)?;
     Ok(Noticed::new(document, selection.into_notices()))
 }
 
@@ -387,14 +384,10 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<Recorde
 
 /// The emitter's failure as the operation's: the kind by variant, the code
 /// the variant's ([`EmitterError::code`]); nothing is read from the message.
-/// A missing scope entity is the one not-found refusal, about the scope (the selection refuses it
-/// first; the mapping stays total, ADR 0015 Q4); a budget too small is
-/// about `max_tokens`; a serialization failure is about no field.
-fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
+/// A missing scope entity is refused by the selection (`view::not_found`) before the emitter
+/// runs; a budget too small is about `max_tokens`; a serialization failure is about no field.
+fn failure(error: EmitterError) -> Refusal<ExportField> {
     let (kind, field) = match &error {
-        EmitterError::ScopeNotFound { entity_id } => {
-            return not_found(view.graph(), entity_id).about(ExportField::Scope);
-        }
         EmitterError::BudgetTooSmall { .. } => (OpErrorKind::InvalidInput, ExportField::MaxTokens),
         EmitterError::Serialization(_) => {
             return OpError::new(OpErrorKind::Internal, "export_failed", error.to_string()).into();

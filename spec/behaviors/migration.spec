@@ -95,12 +95,12 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   }
   // Temporal distinction between migration events:
   //   migration_starting — fires before any file I/O begins (intent signal).
-  //   migration_started — fires after the backup is created but before
-  //     transforms run (point of no return). At this point, backups exist
-  //     and the system is committed to attempting the migration.
+  //   migration_started — fires after the verdict keeps the migration,
+  //     when its files are staged for writing (point of no return). Backups
+  //     exist only for a kept migration: a refused one writes nothing.
   contract   """
     When specforge migrate is invoked, the system MUST first capture the
-    compiled graph before any transforms are applied, then emit
+    compiled graph before any file is written, then emit
     migration_starting before beginning transforms.
 
     The system MUST transform .spec files from the detected source version
@@ -115,10 +115,10 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     the migration read it refuses the run (file_changed). Each backup is a
     name the migration owns: whatever is at it (a link, or a file left by an
     earlier run) is unlinked, never its target, and the backup is created
-    new with its source's permissions. Each file MUST be read once per run:
-    its backup, its diff and the text an automatic rollback restores are
-    that one read, so a save made while the migration runs is never split
-    between them. Over MCP, a source, its backup or the migration record
+    new with its source's permissions. Each file MUST be read once for the
+    migration: its backup, its diff and the text its change is staged over
+    are that one read, so a save made while the migration runs is never
+    split between them. Over MCP, a source, its backup or the migration record
     that would land outside the project, by a symlink, refuses the whole
     call before anything is written.
 
@@ -158,6 +158,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify integration "migrate --format json lists each migrated file and its backup in files_written"
   verify integration "the migrate document names each file and backup from the project root"
   verify integration "migrate --format json prints the migration document specforge.migrate answers, with files_written"
+  verify unit "a refused migration made without backups leaves the record as it was"
   verify contract "Migrate Spec Files In Place: in-place migration holds — semantic_preservation"
   verify unit "files migrated from source to target version"
   verify unit "backup created before modification"
@@ -175,7 +176,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "files already at target version are skipped with skippedCount incremented"
   verify unit "only the project's sources are migrated: under spec_root, without excluded files"
   verify unit "a kept migration records its files in .specforge/migration.json"
-  verify unit "each file is read once: its backup, its diff and what a rollback restores are that text"
+  verify unit "each file is read once: its backup, its diff and the text its change is staged over are that text"
   verify unit "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
   verify unit "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
   verify unit "the preview and the migration rewrite the same sources, read once"
@@ -215,7 +216,7 @@ behavior add_missing_titles "Add Missing Titles" {
   verify unit "a migration that adds titles is kept, with no W054"
   verify unit "a dry run shows the titles and writes nothing"
   verify unit "a project already titled has nothing pending"
-  verify unit "a hook that also changes a field rolls the titles back"
+  verify unit "a planned text that also changes a field refuses the titles"
   verify unit "the changes beyond the steps drop only a title the step added"
 }
 
@@ -235,7 +236,7 @@ behavior hoist_file_defaults "Hoist File Defaults" {
     the last import, or before the first form and its leading comments. The
     step MUST leave a text with a syntax error as it is and MUST be
     idempotent. The graph comparison proves the graph is unchanged: a hoist
-    that changes it is rolled back with W054.
+    that changes it is refused with W054 and nothing is written.
   """
   verify unit "a list every block writes alike is hoisted"
   verify unit "the most common list is hoisted and the others keep theirs"
@@ -248,7 +249,7 @@ behavior hoist_file_defaults "Hoist File Defaults" {
   verify unit "hoisting twice changes nothing"
   verify unit "a file with a syntax error is left alone"
   verify unit "a migration that hoists defaults keeps the graph"
-  verify unit "a hoist that changes the graph is rolled back"
+  verify unit "a hoist that changes the graph is refused and nothing is written"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {
@@ -276,7 +277,10 @@ behavior generate_migration_diff "Generate Migration Diff" {
     and display the unified diff of all changes that would be applied without
     modifying any files. The diff MUST use POSIX standard unified diff format
     (IEEE Std 1003.1 unified output format) compatible with patch(1) and
-    git apply. Each file's diff MUST be clearly labeled with the file path
+    git apply. A dry run reports the verdict the run reaches: the hooks run
+    and the planned texts are compiled in memory and compared, so its ok,
+    structural_differences and post_migration_errors are the run's, and it
+    fails exactly when the run would be refused. Each file's diff MUST be clearly labeled with the file path
     using the `--- a/path` and `+++ b/path` header convention. A failure
     to compute the diff for a specific file MUST NOT prevent diff generation
     for other files — the system MUST report per-file outcomes using
@@ -290,6 +294,8 @@ behavior generate_migration_diff "Generate Migration Diff" {
   verify unit "each file diff labeled with file path"
   verify unit "failure in one file does not block diff generation for others"
   verify unit "json format diff produces structured output with file-level entries"
+  verify unit "a dry run reports the verdict the run reaches: its hooks, its W054 and its errors"
+  verify unit "a dry run the run would refuse exits 1"
   verify contract "Generate Migration Diff: migration diff generation holds — spec_files_available, dry_run_flag_set, diff_produced, no_files_modified, migration_diff_generated_emitted"
 }
 
@@ -326,8 +332,9 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     no file system), so no schema is compared.
 
     After all migration transforms and extension hooks have completed,
-    the system MUST compile the migrated project and compute the
-    GraphDelta from the pre-migration graph to the post-migration graph
+    and before any file is written, the system MUST compile the planned
+    texts in memory over the project (the verdict, migrate::judge) and
+    compute the GraphDelta from the pre-migration graph to the post-migration graph
     (compute_graph_delta): entity IDs, and each entity's kind, title,
     field values, methods and outgoing edges. Source positions MUST be
     ignored, since format migration inherently shifts them. The
@@ -337,30 +344,35 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     change the delta names MUST be reported as one W054 warning: an
     entity removed or added, an entity whose content changed (naming
     what changed, in the delta's words), and an edge removed or added.
-    A non-empty delta rolls the migration back
-    (rollback_failed_migration). New diagnostics introduced by
-    migration MUST be reported.
+    A non-empty delta refuses the migration: nothing is written. New
+    diagnostics introduced by migration MUST be reported, and a refusal for
+    errors counts only those. A dry run reports the verdict the run reaches
+    and fails exactly when the run would be refused.
   """
   verify unit "post-migration check runs automatically"
   verify unit "structural equivalence verified between pre and post graphs"
   verify unit "structural differences reported as warnings"
   verify unit "new diagnostics from migration reported"
-  verify unit "a migration that changes an existing title or a kind is reported and rolled back"
+  verify unit "a planned text that changes an existing title or a kind is reported and refused"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
+  verify unit "a refused migration's cause counts only the errors it would add"
+  verify unit "a refused migration writes nothing, not even a backup"
+  verify unit "under --format json a refused migration writes nothing beside its document"
+  verify unit "a failed migration is told on stderr by its failure's message, naming no backup it did not make"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }
 
 behavior rollback_failed_migration "Rollback Failed Migration" {
   invariants [migration_backup_safety, migration_atomicity, zero_domain_knowledge_core]
   category   command
-  types      [MigrationResult, MigrationSummary, MigrationBackup]
+  types      [MigrationResult, MigrationSummary, MigrationBackup, RollbackSummary]
   ports      [FileSystem]
   produces   [migration_rolled_back]
   requires {
-    migration_recorded "For --rollback, .specforge/migration.json records the last kept migration; for an automatic rollback, the run read the files it migrated"
+    migration_recorded "For --rollback, .specforge/migration.json records the last kept migration"
   }
   ensures {
-    files_restored         "Every recorded file still as the migration left it is restored from its backup; an automatic rollback restores exactly the files its run migrated"
+    files_restored         "Every recorded file still as the migration left it is restored from its backup"
     edited_files_kept      "A recorded file changed since the migration is left as it is, with a warning, and stays recorded"
     rollback_event_emitted "migration_rolled_back event is emitted with accurate restored, skipped, and failed counts"
   }
@@ -368,14 +380,11 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     backup_file_preservation ".bak backup files are never deleted by --rollback (preserved for user inspection)"
   }
   contract   """
-    Rollback runs automatically when an extension migration hook fails
-    or post-migration validation detects structural differences, and on
-    demand via the --rollback CLI flag. An automatic rollback MUST
-    restore exactly the files its own run migrated, to the text the run
-    read before migrating them, with or without backups, and MUST NOT
-    touch any other file; it is the project change's put-back: each source
-    gets back the text it held, with its permissions, and the run's
-    backups are removed. --rollback MUST undo the migration recorded in
+    A migration whose extension hook fails, or whose validation detects
+    structural differences, is refused before any file is written, so
+    there is nothing to restore: a refused migration writes no source, no
+    backup and no record, --no-backup included. Rollback is on demand via
+    the --rollback CLI flag. --rollback MUST undo the migration recorded in
     .specforge/migration.json and nothing else: each recorded file whose
     SHA-256 is still the one recorded MUST be restored from its backup;
     a recorded file changed since MUST be left as it is with a warning
@@ -392,24 +401,20 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     The system MUST report the number of files restored, skipped, and
     failed. It MUST report each file it restored as written
     (files_written under --format json). Under --format json the document
-    (rolled_back, hook_failures, structural_differences) is the whole
-    report of an automatic rollback: nothing is written on stderr.
+    (hook_failures, structural_differences) is the whole report of a
+    refused migration: nothing is written on stderr.
+    Under human output, the W054s and then the failure's message are its
+    report on stderr.
   """
   verify unit "restores migrated files from .bak backups"
   verify unit "missing .bak file produces warning and skips"
   verify unit "restore is atomic per file"
   verify unit "a rollback keeps a file's permissions and refuses a read-only one"
-  verify unit "an automatic rollback keeps a file's permissions"
   verify unit "rollback failure for one file does not block others"
   verify unit "summary reports restored, skipped, and failed counts"
-  verify unit "a migration whose graph changes structure is rolled back automatically"
-  verify unit "a migration whose extension hook fails is rolled back automatically"
   verify unit "a rollback reports the files it restored as written"
   verify unit "a file edited since the migration is left as it is, its backup kept"
   verify unit "a rollback with no recorded migration restores nothing"
-  verify unit "an automatic rollback restores only the files its run migrated"
-  verify unit "an automatic rollback restores a run made without backups"
-  verify unit "under --format json a rolled-back migration writes nothing beside its document"
   verify contract "Rollback Failed Migration: migration rollback holds — migration_recorded, files_restored, edited_files_kept, rollback_event_emitted, backup_file_preservation"
 }
 
@@ -449,10 +454,11 @@ behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
     The `migration_hook` field is a string naming the Wasm export; if the
     field is absent or empty, no hook is invoked for that extension.
     Extension hooks are invoked after core format migration completes but
-    before post-migration validation. The hook's input is a JSON object
-    `{"from", "to", "files"}`: the format version the project is migrated
-    from and to, and the paths of the files the core migration rewrote, so
-    the hook knows which data to transform. The hooks are those of the
+    before post-migration validation, and before any file is written. The
+    hook's input is a JSON object `{"from", "to", "files"}`: the format
+    version the project is migrated from and to, and the paths of the files
+    the core migration will rewrite, so the hook knows which data to
+    transform. The hooks are those of the
     project the path is in, so a migration started from a sub-path runs the
     same hooks.
 
@@ -460,7 +466,8 @@ behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
     file syntax), then extension hooks run (transforming extension-specific
     data within those files). Post-migration validation
     (validate_post_migration_integrity) runs exactly once, after BOTH core
-    migration and all extension hooks have completed. This ensures
+    migration and all extension hooks have completed and before any file is
+    written. This ensures
     validation sees the fully-migrated state, not an intermediate state.
 
     If an extension does not declare a `migration_hook` field in its
@@ -491,6 +498,8 @@ behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
     WasmTrapInfo diagnostic, and continue with the next extension.
   """
   verify unit "a migration hook receives the from and to format versions and the migrated files"
+  verify unit "the hooks run before any file is written"
+  verify unit "a migration whose extension hook fails is refused and nothing is written"
   verify unit "extension with migration_hook field has it invoked during migrate"
   verify unit "extension without migration_hook field is skipped silently"
   verify unit "extension with empty migration_hook field is skipped silently"

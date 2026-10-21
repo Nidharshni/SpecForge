@@ -16,6 +16,7 @@ mod obligations;
 mod reach;
 mod reading;
 mod resolution;
+mod select;
 mod spell;
 mod stress;
 mod titles;

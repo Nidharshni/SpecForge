@@ -64,3 +64,28 @@ fn a_temporary_name_linked_outside_is_unlinked_not_followed() {
     assert_eq!(fs::read_to_string(&target).unwrap(), "TMP");
     assert!(fs::symlink_metadata(&link).is_err(), "the link is gone");
 }
+
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a dry run the run would refuse is a failed call, its document the data"
+)]
+fn a_dry_run_the_run_would_refuse_fails_the_call() {
+    // `owner` is no field of the kind: the defaults hoist is E077 and reaches no block, so the graph changes.
+    let block = |id: &str| format!("behavior {id} \"T\" {{\n  owner [x]\n}}\n");
+    let text = ["a", "b", "c", "d", "e"].map(block).join("\n");
+    let project = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .file("old.spec", &text);
+    let mut served = Served::rooted(project);
+
+    let resp = served.call_tool("specforge.migrate", json!({"dry_run": true}));
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "compilation_failed", "{error}");
+    assert_eq!(error["data"]["ok"], false, "{error}");
+    assert_eq!(error["data"]["dry_run"], true, "{error}");
+    assert_eq!(
+        fs::read_to_string(served.root().join("old.spec")).unwrap(),
+        text
+    );
+}

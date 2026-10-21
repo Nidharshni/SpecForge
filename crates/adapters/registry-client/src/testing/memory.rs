@@ -59,7 +59,10 @@ struct State {
     registries: HashMap<String, Vec<Stored>>,
     /// The binary of each stored version, by the URL it downloads from.
     binaries: HashMap<String, Vec<u8>>,
-    tokens: HashSet<String>,
+    /// Accepted tokens and the account each was issued to.
+    tokens: HashMap<String, String>,
+    /// Which account owns a scope, by (registry URL, scope): claimed by the first publish that stores.
+    owners: HashMap<(String, String), String>,
     /// The registries (by URL) whose reads require an accepted token.
     private: HashSet<String>,
     failures: Vec<Failure>,
@@ -93,7 +96,16 @@ impl MemoryClient {
     /// Accept `token` as a bearer credential for publish and authenticate, as a server accepts the
     /// tokens it issued.
     pub fn accepting(self, token: &str) -> Self {
-        self.state.lock().unwrap().tokens.insert(token.to_string());
+        self.accepting_as(token, "publisher")
+    }
+
+    /// [`MemoryClient::accepting`] a token issued to `account`, which owns the scopes its publishes claim.
+    pub fn accepting_as(self, token: &str, account: &str) -> Self {
+        self.state
+            .lock()
+            .unwrap()
+            .tokens
+            .insert(token.to_string(), account.to_string());
         self
     }
 
@@ -215,25 +227,21 @@ impl MemoryClient {
         }
     }
 
-    /// Whether `credential` is a token this registry accepts.
-    fn accepts(&self, credential: Option<&RegistryCredential>) -> Result<(), RegistryError> {
+    /// The account `credential`'s token was issued to, when this registry accepts it.
+    fn accepts(&self, credential: Option<&RegistryCredential>) -> Result<String, RegistryError> {
         let unauthorized = |guidance: &str| RegistryError::Unauthorized {
             guidance: guidance.to_string(),
         };
         let Some(credential) = credential else {
             return Err(unauthorized("missing Authorization header"));
         };
-        if self
-            .state
+        self.state
             .lock()
             .unwrap()
             .tokens
-            .contains(credential.token())
-        {
-            Ok(())
-        } else {
-            Err(unauthorized("invalid or revoked token"))
-        }
+            .get(credential.token())
+            .cloned()
+            .ok_or_else(|| unauthorized("invalid or revoked token"))
     }
 }
 
@@ -382,7 +390,19 @@ impl RegistryClient for MemoryClient {
             },
             Some(registry),
         )?;
-        self.accepts(credential)?;
+        let account = self.accepts(credential)?;
+        // As the registry server does: a scope another account owns is closed to this one.
+        let scope = name.scope().map(|s| (key_of(registry), s.to_string()));
+        if let Some(scope @ (_, scope_name)) = &scope
+            && let Some(owner) = self.state.lock().unwrap().owners.get(scope)
+            && *owner != account
+        {
+            return Err(RegistryError::Forbidden {
+                guidance: format!(
+                    "scope '{scope_name}' is owned by account '{owner}' — only tokens issued to it may publish or yank there"
+                ),
+            });
+        }
         let held = self
             .state
             .lock()
@@ -442,6 +462,9 @@ impl RegistryClient for MemoryClient {
             key_id: signature.key_id(),
         };
         self.store(registry, metadata, wasm.to_vec());
+        if let Some(scope) = scope {
+            self.state.lock().unwrap().owners.insert(scope, account);
+        }
         Ok(receipt)
     }
 

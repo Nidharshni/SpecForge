@@ -202,7 +202,8 @@ behavior go_to_definition "Go-to-Definition" {
     When a user Ctrl+clicks on an entity ID in a .spec file, the LSP
     MUST navigate to the declaration site of that entity. The declaration
     site MUST include the file path, line, and column of the entity's
-    block header. On a use statement, the cursor on a binding's imported
+    block header; its selection is the entity's name where the parse read
+    it, on whichever line of the header it is written. On a use statement, the cursor on a binding's imported
     name that names an entity goes to that entity; anywhere else on the
     statement, to the imported file.
   """
@@ -211,6 +212,7 @@ behavior go_to_definition "Go-to-Definition" {
   verify integration "go-to-def works across files"
   verify unit "source spans convert from 1-based to 0-based for LSP"
   verify unit "the definition's selection is the entity's name token"
+  verify unit "the definition selects a name written below its kind"
   verify unit "a use binding's imported name goes to the entity it names"
   verify unit "a definition is a location link for a client that declares linkSupport, else a location at the name"
   verify unit "the entity after a body being typed is navigated to"
@@ -420,6 +422,7 @@ behavior prepare_rename "Prepare Rename" {
   """
   verify unit "prepare rename on entity ID returns token range"
   verify unit "prepare rename on non-renameable token returns not available"
+  verify unit "prepare rename answers on a name written below its kind"
   verify unit "prepare rename answers on a default no block takes"
   verify unit "prepare rename answers on a reference in a duplicate declaration"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
@@ -476,6 +479,7 @@ behavior rename_entity_id "Rename Entity ID" {
     leave them behind.
   """
   verify unit "rename updates declaration and all references"
+  verify unit "rename edits a name written below its kind and its references"
   verify unit "rename leaves strings, comments and verify texts alone"
   verify unit "rename edits a type named in a method signature and no parameter name"
   verify unit "rename is atomic — all or nothing"
@@ -822,8 +826,9 @@ behavior complete_field_names "Complete Field Names" {
     the FieldRegistry for valid field names for the current entity kind
     and suggest them as completions. Suggestions MUST be filtered to
     fields registered for the entity kind by its extension manifest.
-    Field types from the registry MUST inform the completion snippet
-    (e.g., reference fields offer bracket-list scaffolding). The cursor is
+    A field's snippet MUST be the member a set of it writes, in the form
+    its field's type decides, laid out relative to its line (the client
+    adjusts the lead). The cursor is
     in an entity body when the document's lexemes put it there: brackets,
     braces and quotes inside strings and comments do not count. Inside a
     string, a comment or a nested block nothing is suggested. A field's
@@ -839,6 +844,7 @@ behavior complete_field_names "Complete Field Names" {
   verify unit "an enum field's value suggests its declared values"
   verify unit "a builtin vocabulary's field completes its values"
   verify unit "a boolean field's value suggests true and false"
+  verify unit "a field snippet is the member set writes, laid out with the file's indent"
   verify contract "Complete Field Names: field name completion holds — field_registry_available, cursor_inside_entity, fields_suggested, snippets_informed"
 }
 
@@ -866,9 +872,12 @@ behavior complete_keywords "Complete Keywords" {
     The structural keyword use MUST always be included in addition to
     extension-defined keywords; define MUST NOT be suggested: it is a
     reserved word whose blocks register nothing (W143, ADR 0005). Each
-    suggestion SHOULD include a snippet template for block scaffolding
-    based on the kind's field definitions from the FieldRegistry. The
-    detail string MUST show the source extension name for each keyword.
+    kind's suggestion MUST be a snippet of the block a create of that kind
+    writes in the document's file, its skeleton (ADR 0191): the required
+    fields in the order, indent and alignment `specforge new` writes them
+    with the file's format configuration, each value in its field's form, a
+    tabstop where each value goes in text order, and the final cursor on an
+    empty member line. The detail string MUST show the source extension name for each keyword.
     Each kind's item MUST document the kind with its description and its
     inference guide (compute_inference_guide), as markdown; use has no
     documentation.
@@ -887,6 +896,8 @@ behavior complete_keywords "Complete Keywords" {
   verify unit "keywords are suggested after a top-level form that follows an unclosed body"
   verify unit "no keyword suggestions inside entity blocks"
   verify unit "snippet templates based on kind field definitions"
+  verify unit "a filled keyword snippet is the block new writes"
+  verify unit "a keyword snippet's tabstops follow its text"
   verify contract "Complete Keywords: keyword completion holds — kind_registry_available, cursor_at_top_level, keywords_delegated, structural_keywords_included"
 }
 

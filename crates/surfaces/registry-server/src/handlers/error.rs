@@ -102,3 +102,15 @@ impl IntoResponse for ApiError {
         response
     }
 }
+
+impl From<crate::ownership::WriteRefused> for ApiError {
+    fn from(refused: crate::ownership::WriteRefused) -> Self {
+        use crate::ownership::WriteRefused;
+        let message = refused.message();
+        match refused {
+            WriteRefused::Outside { .. } => Self::forbidden(message),
+            WriteRefused::Owned { .. } => Self::forbidden_code(ErrorCode::ScopeOwned, message),
+            WriteRefused::Storage(_) => Self::internal(ErrorCode::DbError, message),
+        }
+    }
+}

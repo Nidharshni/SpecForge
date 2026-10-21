@@ -8,8 +8,6 @@ use specforge_diagnostics::{Code, codes};
 /// emitter does not know operations, ADR 0007).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EmitterError {
-    /// The scope names no entity of the graph (E003).
-    ScopeNotFound { entity_id: String },
     /// The token budget cannot hold the export (E062): `reason` says what
     /// does not fit.
     BudgetTooSmall { reason: String },
@@ -18,11 +16,10 @@ pub enum EmitterError {
 }
 
 impl EmitterError {
-    /// The catalogued diagnostic this failure is: E003, E062; none for a
+    /// The catalogued diagnostic this failure is: E062; none for a
     /// serialization failure.
     pub fn code(&self) -> Option<Code> {
         match self {
-            Self::ScopeNotFound { .. } => Some(codes::E003),
             Self::BudgetTooSmall { .. } => Some(codes::E062),
             Self::Serialization(_) => None,
         }
@@ -32,9 +29,6 @@ impl EmitterError {
 impl std::fmt::Display for EmitterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ScopeNotFound { entity_id } => {
-                write!(f, "unresolved entity '{entity_id}' — not found in graph")
-            }
             Self::BudgetTooSmall { reason } => f.write_str(reason),
             Self::Serialization(message) => f.write_str(message),
         }

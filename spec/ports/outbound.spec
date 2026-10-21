@@ -77,7 +77,9 @@ port RegistryClient "Registry Client" {
   // name and version of the package it uploads; a registry refuses a
   // manifest that is no declaration (INVALID_MANIFEST) or names another
   // package or version (NAME_MISMATCH), and the in-memory client refuses
-  // them the same way.
+  // them the same way. A registry refuses a publish into a scope another
+  // account owns (Forbidden), and the in-memory client refuses it the same
+  // way.
   method versions(name: PackageName, registry: RegistryConfig, credential: RegistryCredential) -> Result<string[], RegistryError>
   method metadata(name: PackageName, version: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<PackageMetadata, RegistryError>
   method download(wasmUrl: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<u8[], RegistryError>
@@ -98,7 +100,10 @@ port Registry "Registry" {
   // name. A fetch decides its publisher and writes nothing; the lock plan
   // pins what it accepted as the last step of its change. Its adapters are
   // the configured registry (production) and the in-memory registry
-  // (tests); both keep one contract suite.
+  // (tests); both keep one contract suite. It opens (the refusal of the
+  // whole project: no registry, an unreadable entry, an unreadable
+  // credential store), once.
+  method open() -> Result<void, ExtensionError>
   method versions(name: PackageName) -> Result<string[], ExtensionError>
   method published(name: PackageName, version: string) -> Result<RegistryManifest, ExtensionError>
   method fetch(name: PackageName, version: string, policy: TrustPolicy) -> Result<RegistryPackage, ExtensionError>

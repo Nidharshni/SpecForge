@@ -70,8 +70,8 @@ pub struct MigrationSummary {
     pub backups: Vec<MigrationBackup>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub diffs: Vec<MigrationDiff>,
-    /// Every file the plan rewrites, with the text it read and the text it becomes: what the caller writes, and
-    /// what it puts back.
+    /// Every file the plan rewrites, with the text it read and the text it becomes: what the caller judges and
+    /// writes.
     #[serde(skip)]
     pub rewrites: Vec<Rewrite>,
 }

@@ -1,8 +1,7 @@
 //! Registry credential health, which `specforge doctor` reports: the
 //! user's, not the project's.
 
-use crate::credentials::{CredentialEntry, CredentialStore, credentials_path, read_credentials};
-use crate::signing::signing_key_path;
+use crate::credentials::{CredentialEntry, CredentialStore};
 use serde::Serialize;
 use specforge_common::codes;
 use std::path::Path;
@@ -24,11 +23,11 @@ pub struct CredentialLine {
 }
 
 /// The health of the user's registry credentials: expired tokens and
-/// unreadable keyring entries break add and publish, so they are worth
+/// lost secrets break add and publish, so they are worth
 /// surfacing before they bite.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CredentialHealth {
-    /// One line per stored credential worth mentioning, by registry alias.
+    /// One line per stored credential worth mentioning, by registry root.
     pub lines: Vec<CredentialLine>,
     /// How many credentials are unusable (doctor then exits 1).
     pub failures: usize,
@@ -36,40 +35,35 @@ pub struct CredentialHealth {
     pub signing_key_present: bool,
 }
 
-/// The user's credential health: the credential store and signing key
-/// under `~/.specforge`.
-pub fn user_credential_health() -> CredentialHealth {
-    credential_health(&credentials_path(), &signing_key_path(), chrono::Utc::now())
+/// [`credential_health`] of `dir` as of now.
+pub fn credential_health_now(dir: &Path) -> CredentialHealth {
+    credential_health(dir, chrono::Utc::now())
 }
 
-/// The credential health of the store at `credentials` and the signing
-/// key at `signing_key`, as of `now`.
-pub fn credential_health(
-    credentials: &Path,
-    signing_key: &Path,
-    now: chrono::DateTime<chrono::Utc>,
-) -> CredentialHealth {
+/// The credential health of the credential store and the signing key in the user's directory `dir`,
+/// as of `now`.
+pub fn credential_health(dir: &Path, now: chrono::DateTime<chrono::Utc>) -> CredentialHealth {
     let mut lines = Vec::new();
     let mut failures = 0usize;
     // An unreadable store is one unusable credential: every reader refuses it (R012).
-    let store = read_credentials(credentials).unwrap_or_else(|diag| {
+    let store = CredentialStore::read(dir).unwrap_or_else(|diag| {
         failures += 1;
         lines.push(CredentialLine {
             level: CredentialLevel::Error,
             text: format!("{} — {}", diag.message, diag.suggestion.unwrap_or_default()),
         });
-        CredentialStore::default()
+        CredentialStore::empty(dir)
     });
-    let mut aliases: Vec<String> = store.registries.keys().cloned().collect();
-    aliases.sort();
-    for alias in aliases {
-        match store.credential(&alias) {
+    let mut roots: Vec<_> = store.registries.keys().cloned().collect();
+    roots.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    for root in roots {
+        match store.credential(&root) {
             // A reference resolves in the shell that runs a command, which need not be
             // doctor's: a variable not set here, or a file not readable here, is a warning.
             Err(diag) if diag.is(codes::R010) || diag.is(codes::R011) => {
                 lines.push(CredentialLine {
                     level: CredentialLevel::Warning,
-                    text: format!("registry '{alias}': {}", diag.message),
+                    text: format!("registry '{root}': {}", diag.message),
                 });
             }
             Err(diag) => {
@@ -84,7 +78,7 @@ pub fn credential_health(
                 let Some(CredentialEntry::Token {
                     expires_at: Some(expires_at),
                     ..
-                }) = store.registries.get(&alias)
+                }) = store.registries.get(&root)
                 else {
                     continue;
                 };
@@ -92,17 +86,17 @@ pub fn credential_health(
                     Some(TokenExpiry::ExpiringSoon(days)) => CredentialLine {
                         level: CredentialLevel::Warning,
                         text: format!(
-                            "registry '{alias}': token expires in {days} day(s) — re-login soon"
+                            "registry '{root}': token expires in {days} day(s) — re-login soon"
                         ),
                     },
                     // An expired token already failed `credential`.
                     Some(TokenExpiry::Valid) | Some(TokenExpiry::Expired) => CredentialLine {
                         level: CredentialLevel::Ok,
-                        text: format!("registry '{alias}': token ok"),
+                        text: format!("registry '{root}': token ok"),
                     },
                     None => CredentialLine {
                         level: CredentialLevel::Ok,
-                        text: format!("registry '{alias}': token ok (expires {expires_at})"),
+                        text: format!("registry '{root}': token ok (expires {expires_at})"),
                     },
                 };
                 lines.push(line);
@@ -113,7 +107,7 @@ pub fn credential_health(
     CredentialHealth {
         lines,
         failures,
-        signing_key_present: signing_key.exists(),
+        signing_key_present: dir.join("signing-key.json").exists(),
     }
 }
 
@@ -177,14 +171,13 @@ mod tests {
     #[test]
     fn an_unset_token_variable_is_a_warning_in_doctor() {
         let dir = tempfile::TempDir::new().unwrap();
-        let store = dir.path().join("credentials.json");
         std::fs::write(
-            &store,
-            r#"{"registries":{"ci":{"token_env":"P16_DOCTOR_UNSET_VARIABLE"}}}"#,
+            dir.path().join("credentials.json"),
+            r#"{"registries":{"https://ci.invalid":{"token_env":"P16_DOCTOR_UNSET_VARIABLE"}}}"#,
         )
         .unwrap();
 
-        let health = credential_health(&store, &dir.path().join("no-key"), chrono::Utc::now());
+        let health = credential_health(dir.path(), chrono::Utc::now());
 
         assert_eq!(health.failures, 0, "{health:?}");
         assert_eq!(health.lines.len(), 1);
@@ -198,24 +191,24 @@ mod tests {
     #[test]
     fn credential_health_reads_the_store_it_is_given() {
         let dir = tempfile::TempDir::new().unwrap();
-        let store = dir.path().join("credentials.json");
         let token =
             |days: i64| serde_json::json!({"token": "t", "expires_at": at(days).to_rfc3339()});
         std::fs::write(
-            &store,
+            dir.path().join("credentials.json"),
             serde_json::json!({"registries": {
-                "soon": token(3), "gone": token(-2), "fine": token(30),
+                "https://soon.invalid": token(3), "https://gone.invalid": token(-2),
+                "https://fine.invalid": token(30),
             }})
             .to_string(),
         )
         .unwrap();
 
-        let health = credential_health(&store, &dir.path().join("no-key"), chrono::Utc::now());
+        let health = credential_health(dir.path(), chrono::Utc::now());
 
         assert_eq!(health.failures, 1, "{health:?}");
         assert!(!health.signing_key_present);
         let levels: Vec<CredentialLevel> = health.lines.iter().map(|l| l.level).collect();
-        // By alias: fine, gone, soon.
+        // By root: fine, gone, soon.
         assert_eq!(
             levels,
             [
@@ -224,12 +217,36 @@ mod tests {
                 CredentialLevel::Warning
             ]
         );
-        assert_eq!(health.lines[0].text, "registry 'fine': token ok");
+        assert_eq!(
+            health.lines[0].text,
+            "registry 'https://fine.invalid': token ok"
+        );
         assert!(health.lines[2].text.contains("re-login soon"), "{health:?}");
 
-        let empty = credential_health(&dir.path().join("none.json"), &store, chrono::Utc::now());
+        let other = tempfile::TempDir::new().unwrap();
+        std::fs::write(other.path().join("signing-key.json"), "{}").unwrap();
+        let empty = credential_health(other.path(), chrono::Utc::now());
         assert!(empty.lines.is_empty() && empty.failures == 0);
         assert!(empty.signing_key_present);
+    }
+
+    #[test]
+    fn a_kept_token_whose_secret_is_gone_is_a_credential_failure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("credentials.json"),
+            r#"{"registries":{"https://gone.invalid":{}}}"#,
+        )
+        .unwrap();
+
+        let health = credential_health(dir.path(), chrono::Utc::now());
+
+        assert_eq!(health.failures, 1, "{health:?}");
+        assert_eq!(health.lines[0].level, CredentialLevel::Error);
+        assert!(
+            health.lines[0].text.contains("https://gone.invalid"),
+            "{health:?}"
+        );
     }
 
     #[specforge_test_macros::test(
@@ -238,10 +255,13 @@ mod tests {
     )]
     fn an_unreadable_store_is_a_credential_failure() {
         let dir = tempfile::TempDir::new().unwrap();
-        let store = dir.path().join("credentials.json");
-        std::fs::write(&store, r#"{"registries": {"a": {"token": "t"},}}"#).unwrap();
+        std::fs::write(
+            dir.path().join("credentials.json"),
+            r#"{"registries": {"a": {"token": "t"},}}"#,
+        )
+        .unwrap();
 
-        let health = credential_health(&store, &dir.path().join("no-key"), chrono::Utc::now());
+        let health = credential_health(dir.path(), chrono::Utc::now());
 
         assert_eq!(health.failures, 1, "{health:?}");
         assert_eq!(health.lines.len(), 1, "{health:?}");

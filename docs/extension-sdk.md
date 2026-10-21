@@ -504,10 +504,11 @@ at its `scan_export` (`scan__<language>`). Its `classify__`/`map__` exports
 are declared too but the host does not call them; a guest that serves them
 anyway answers them from its `handler`, decoding with `answer_export`.
 
-The hook `specforge migrate` calls after it migrates the project's files is
+The hook `specforge migrate` calls before it writes the migrated files is
 declared with its handler, `c.migration_hook_handler(export, |input:
-&MigrationInput| ...)`: it receives the format versions and the migrated
-files; its `Err` fails the migration, which is rolled back.
+&MigrationInput| ...)`: it receives the format versions and the names of the
+files the migration will rewrite; its `Err` refuses the migration and nothing
+is written.
 
 ### Feature flags
 

@@ -10,7 +10,7 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
-use crate::authoring::format::{Configs, Place as FormatPlace};
+use crate::authoring::format::{Configs, Forms, Place as FormatPlace};
 use crate::change;
 use crate::extension::{self, Also, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
@@ -18,7 +18,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
+use specforge_graph::FieldForms;
 use specforge_installed::Installed;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::Disk;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
@@ -127,7 +129,8 @@ pub struct InitDocument {
 /// installed modules, `specforge.lock`, `specforge.json`, the `.gitignore` entries and the
 /// starter. Init only adds: the starter is created, never overwritten, and a failed init puts
 /// back what was there before it ran and removes what it created. Its error reports nothing
-/// written.
+/// written. A name whose starter spec ID `check` would refuse (E014, or E013 over the kinds of the
+/// extensions it enables) is refused once those are read.
 pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal<InitField>> {
     if ProjectRoot::is_root(req.dir) {
         return Err(OpError::new(
@@ -155,16 +158,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             .to_string(),
     };
     validate_project_name(&name).map_err(|why| invalid_name(&name, why).about(InitField::Name))?;
-    // The starter declares `spec "<id>"`: an ID outside the identifier
-    // contract would fail its first check (E014).
     let spec_id = sanitize_entity_id(&name);
-    if !specforge_registry::ID_LENGTH.contains(&spec_id.chars().count()) {
-        return Err(invalid_name(
-            &name,
-            "it must be 2-60 characters, as the starter's spec ID must",
-        )
-        .about(InitField::Name));
-    }
     let version = req.version.to_string();
 
     // The extensions it names, as `add` reads them: a relative local path is read from the
@@ -206,19 +200,54 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             &mut |install| install.name().to_string(),
         )
         .map_err(about)?;
-    // What each local file contributes to the starter, by the name it declares.
-    let templates: Vec<(String, Option<String>)> = answers
+    // What each local file declares, by the name it declares.
+    let locals: Vec<(String, Box<ExtensionDeclaration>)> = answers
         .into_iter()
         .filter_map(|answer| match answer {
             extension::Answer::Installed {
-                recorded, starter, ..
-            } => Some((recorded, starter)),
-            extension::Answer::Duplicate { .. } | extension::Answer::Builtin { .. } => None,
+                recorded,
+                declaration: Some(declaration),
+                ..
+            } => Some((recorded, declaration)),
+            extension::Answer::Installed { .. }
+            | extension::Answer::Duplicate { .. }
+            | extension::Answer::Builtin { .. } => None,
         })
         .collect();
     let extensions = checked.entries();
 
-    let starter = match starter_template(&extensions, &templates, runtime)? {
+    // The registry build its first `check` loads, made before the project exists: it decides whether the
+    // starter's spec ID is one `check` refuses (E014, E013), whatever is enabled (ADR 0189).
+    let declared = declarations(&extensions, locals, runtime)?;
+    let template = declared
+        .iter()
+        .find_map(|declaration| declaration.handshake.starter_template.clone());
+    let build = specforge_registry::build_registries(declared);
+    match specforge_registry::refused_id(&spec_id, build.kinds()) {
+        None => {}
+        Some(specforge_registry::IdRefusal::Length) => {
+            return Err(invalid_name(
+                &name,
+                "it must be 2-60 characters, as the starter's spec ID must",
+            )
+            .about(InitField::Name));
+        }
+        Some(specforge_registry::IdRefusal::Reserved) => {
+            return Err(invalid_name(
+                &name,
+                &format!(
+                    "the starter's spec ID '{spec_id}' is a reserved word (E013): a structural keyword or the \
+                     keyword of a kind an extension it enables declares"
+                ),
+            )
+            .with_suggestion(format!(
+                "name the project otherwise, e.g. `{spec_id}_spec`"
+            ))
+            .about(InitField::Name));
+        }
+    }
+
+    let starter = match template {
         Some(template) => template
             .replace("{project}", &spec_id)
             .replace("{version}", &version),
@@ -226,11 +255,12 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     };
     // Whatever the extensions contribute, the file is written as the
     // formatter writes it, so `specforge format --check` accepts it, with the
-    // configuration init's bound reads (ADR 0169).
+    // configuration init's bound reads (ADR 0169) and the field forms of the build above.
     let starter = canonical(
         &starter,
         req.dir,
         &req.caller.containment().narrowed(req.dir).disk(),
+        build.field_forms(),
     );
     let dir = req.dir;
     let files = vec![
@@ -301,35 +331,22 @@ fn invalid_name(name: &str, why: &str) -> OpError {
     )
 }
 
-/// The starter template the extensions contribute: the one listed first
-/// wins. A local file contributes under the name it declares, read when
-/// the specifier was; a builtin is read from the binary, through `runtime`,
-/// only until a template is found, and one that does not load refuses the
-/// init.
-fn starter_template(
+/// The declarations of the extensions init enables, in `specforge.json` order: a local install's as `names`
+/// read it, a builtin's from this binary through `runtime` (E028 when one does not load).
+fn declarations(
     extensions: &[String],
-    templates: &[(String, Option<String>)],
+    mut locals: Vec<(String, Box<ExtensionDeclaration>)>,
     runtime: &dyn WasmRuntime,
-) -> Result<Option<String>, OpError> {
+) -> Result<Vec<ExtensionDeclaration>, OpError> {
+    let mut declared = Vec::with_capacity(extensions.len());
     for name in extensions {
-        let template = match templates.iter().find(|(declared, _)| declared == name) {
-            Some((_, template)) => template.clone(),
-            // A builtin that does not load refuses the init (E028).
-            None => match extension::builtin_name(name) {
-                Some(builtin) => {
-                    extension::builtin_declaration(runtime, builtin)?
-                        .declaration
-                        .handshake
-                        .starter_template
-                }
-                None => None,
-            },
-        };
-        if template.is_some() {
-            return Ok(template);
+        if let Some(at) = locals.iter().position(|(declared, _)| declared == name) {
+            declared.push(*locals.swap_remove(at).1);
+        } else if let Some(builtin) = extension::builtin_name(name) {
+            declared.push(extension::builtin_declaration(runtime, builtin)?.declaration);
         }
     }
-    Ok(None)
+    Ok(declared)
 }
 
 fn sanitize_entity_id(name: &str) -> String {
@@ -344,11 +361,12 @@ fn sanitize_entity_id(name: &str) -> String {
         .collect()
 }
 
-/// `starter`, formatted as the project at `dir` formats its files.
-fn canonical(starter: &str, dir: &Path, disk: &dyn Disk) -> String {
-    let config = Configs::new(None, disk).layout(FormatPlace::InProject { root: dir, dir });
-    specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
-        .formatted
+/// `starter`, formatted as the project at `dir` formats its files, its values in the field `forms` of the
+/// extensions it enables. The forms are handed over, not looked up by place: `dir` is no project yet (ADR 0189).
+fn canonical(starter: &str, dir: &Path, disk: &dyn Disk, forms: &FieldForms) -> String {
+    let config =
+        Configs::new(Forms::none(), disk).layout(FormatPlace::InProject { root: dir, dir });
+    specforge_formatter::format_source(starter, &config, forms).formatted
 }
 
 fn structural_starter(project_name: &str, version: &str) -> String {

@@ -65,7 +65,6 @@ expression: snapshot
           }
         }
       ],
-      "rolled_back": false,
       "structural_differences": [],
       "to_version": "1.0"
     },

@@ -118,6 +118,8 @@ pub struct MemoryRegistry {
     refusing_pins: bool,
     /// A file `pin` makes read-only before it refuses: a failed change that cannot put it back.
     locking_on_refusal: Option<std::path::PathBuf>,
+    /// `open`, and then every call, refuses with this error.
+    refusing_open: Option<OpError>,
 }
 
 /// The publisher key id a [`MemoryRegistry`] signs what it accepts with.
@@ -181,6 +183,18 @@ impl MemoryRegistry {
         self.refusing_pins = true;
         self.locking_on_refusal = Some(file.to_path_buf());
         self
+    }
+
+    /// Refuse to open with `error`, as a configured registry whose configuration or the user's
+    /// credential store can't be read refuses (E063, E067, R012): `open` and every other call answer
+    /// it, and nothing is recorded as asked. What the operations' tests of a whole-project refusal use.
+    pub fn refusing_open(mut self, error: OpError) -> Self {
+        self.refusing_open = Some(error);
+        self
+    }
+
+    fn opened(&self) -> Result<(), OpError> {
+        self.refusing_open.clone().map_or(Ok(()), Err)
     }
 
     /// The publisher of a package signed by `key_id`: held to the user's pin for `name`, else to the
@@ -254,8 +268,14 @@ impl MemoryRegistry {
 }
 
 impl Registry for MemoryRegistry {
+    /// Ok, or the error of [`MemoryRegistry::refusing_open`]. Makes no request: nothing is recorded.
+    fn open(&self) -> Result<(), OpError> {
+        self.opened()
+    }
+
     /// Its published versions of `name`, in publish order; R-RES-001 when none (as production).
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError> {
+        self.opened()?;
         self.asked
             .lock()
             .unwrap()
@@ -283,6 +303,7 @@ impl Registry for MemoryRegistry {
     /// not hold; else the declaration it was published with and `hex_sha256` of its bytes. Asks no
     /// question and decides no publisher: an unsigned package is answered too.
     fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
+        self.opened()?;
         self.asked
             .lock()
             .unwrap()
@@ -315,6 +336,7 @@ impl Registry for MemoryRegistry {
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
+        self.opened()?;
         self.asked
             .lock()
             .unwrap()
@@ -351,6 +373,7 @@ impl Registry for MemoryRegistry {
     /// Record each pin for the user, all or none; R-TRUST-006 (and nothing recorded) when told to
     /// refuse them.
     fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
+        self.opened()?;
         if self.refusing_pins {
             if let Some(file) = &self.locking_on_refusal {
                 let mut permissions = std::fs::metadata(file)
@@ -378,6 +401,7 @@ impl Registry for MemoryRegistry {
     /// before publishing."). The receipt names registry and key `"in-memory"` and the url
     /// `memory://{name}/{version}`; no key is created.
     fn publish(&self, package: &DeclaredPackage<'_>, wasm: &[u8]) -> Result<Receipt, OpError> {
+        self.opened()?;
         let mut held = self.held.lock().unwrap();
         if held
             .iter()
@@ -415,6 +439,7 @@ impl Registry for MemoryRegistry {
         query: &str,
         contributes: Option<DeclaredCategory>,
     ) -> Result<Searched, OpError> {
+        self.opened()?;
         let matches_term = |published: &Published| {
             let handshake = &published.declaration.handshake;
             let keywords: Vec<&str> = handshake.keywords.iter().map(String::as_str).collect();

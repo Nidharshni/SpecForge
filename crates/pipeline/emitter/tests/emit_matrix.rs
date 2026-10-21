@@ -10,7 +10,7 @@ use specforge_protocol_types::{
 };
 use specforge_registry::build_registries;
 
-use crate::support::headline_registry;
+use crate::support::headline_build;
 
 const SRC: &str = r#"
 behavior a "Alpha" {
@@ -85,7 +85,7 @@ fn schema() -> GraphProtocolSchema {
 #[test]
 fn every_format_schema_scope_and_budget_renders_as_today() {
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(SRC, "main.spec")]);
-    let fields = headline_registry(&["behavior"]);
+    let registries = headline_build(&["behavior"]);
     let schema = schema();
 
     let formats = [
@@ -98,12 +98,13 @@ fn every_format_schema_scope_and_budget_renders_as_today() {
         for with_schema in [false, true] {
             for scope in [None, Some("hub")] {
                 // The unbudgeted cost of this cell, to build a budget one under.
+                let selected = scope.map(|scope| graph.select(Some(scope), None, &[]).unwrap());
                 let unbudgeted = EmitOptions {
                     format,
-                    scope,
+                    selected: selected.as_ref(),
                     schema: &schema,
                     attach_schema: with_schema,
-                    field_registry: Some(&fields),
+                    registries: &registries,
                     ..Default::default()
                 };
                 let whole = specforge_emitter::emit(&graph, &unbudgeted).unwrap();

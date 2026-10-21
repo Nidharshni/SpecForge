@@ -139,11 +139,13 @@ pub struct ListRequest<'a> {
 /// kind the project does not know.
 pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
     let filter = view.kind_filter(request.kind.as_slice());
-    let entities = view
-        .graph()
-        .nodes()
-        .into_iter()
-        .filter(|node| filter.keeps(node.kind.raw.as_str()))
+    let graph = view.graph();
+    let selected = graph
+        .select(None, None, filter.kinds())
+        .expect("a selection without a root always selects");
+    let entities = selected
+        .ids()
+        .filter_map(|id| graph.node(id.as_str()))
         .filter(|node| request.fields.is_none_or(|wanted| holds(node, wanted)))
         .skip(request.offset)
         .take(request.limit.unwrap_or(usize::MAX))

@@ -18,6 +18,8 @@ type Entity "Entity" {
   fields      FieldMap
   obligations VerifyStatement[]
   source_span SourceSpan @readonly
+  // name_span is where the parse read the name (a spec block's string, quotes included)
+  name_span   SourceSpan @readonly
   verify unit "Entity schema is valid"
 }
 

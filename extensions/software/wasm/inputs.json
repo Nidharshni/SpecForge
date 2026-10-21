@@ -5,7 +5,7 @@
   "inputs": {
     "Cargo.toml#workspace-inherited": "52364f99354a8a7632b04447fb28097422e9be69bf8730e400b1d3cf5f87c7cc",
     "crates/leaf/protocol-types/Cargo.toml": "c49e26358223169c357b4157ada37addc7bc97ae7b10e07198748faf5b3f94aa",
-    "crates/leaf/protocol-types/src/calls.rs": "bf63066d7cfb673d31faa450e25d87e669636980ef9dcea1096f34f8c1991631",
+    "crates/leaf/protocol-types/src/calls.rs": "bee0f7622e29fc78028f550360b25525900191151a9597133c10bb6636baa0f7",
     "crates/leaf/protocol-types/src/command_args.rs": "dfb15939e9da35bf8e321a7bb23c95e8bd3602ded60b392d3a1ac2f043c041a9",
     "crates/leaf/protocol-types/src/declaration.rs": "efbb1fe12cb0a26b393113206ecc96daefa0abf8869e58ea72d06fe5a0d8455c",
     "crates/leaf/protocol-types/src/lib.rs": "cb15d33130a5da2c8dedade2df5fa5bf165c684c5fcd27d31641c1e99452220e",
@@ -16,7 +16,7 @@
     "crates/runtime/extension-sdk/src/builders.rs": "43caee3ff5e23ca7dd3f7b621099e7b7d0b84fa6e6c26260e2c9c166fa01690c",
     "crates/runtime/extension-sdk/src/command_graph.rs": "e88d26d3134c7591aa1afeee1f432ecdf0437a191c23b5d2eb50a50a0b7e5562",
     "crates/runtime/extension-sdk/src/guest.rs": "d1805a20fb3cb635e1765026c31cfa7e9d14716573bcb39f8519f91d7a0d3466",
-    "crates/runtime/extension-sdk/src/lib.rs": "f87cde02f04b735849f649759fcdc9f1b8ec02a9e8a51622b2a0d6c69a2b5690",
+    "crates/runtime/extension-sdk/src/lib.rs": "f0004331e6e5c5ce8933db0f64589894074ccfb0d2db35b6e4422523b2e53ac9",
     "crates/runtime/extension-sdk/src/operations.rs": "5abc571e460dd645044eb5b5c40e505bec76f4ca12600ae1e23a1eb77895c2f4",
     "crates/runtime/extension-sdk/src/surface.rs": "04753671ca050f7a48b7f2b7bdcbb024e89da6585081e1aae87dde14653b946e",
     "crates/runtime/extension-sdk/src/vocabulary.rs": "93f85b5300e870259d78823b33cc19639aac0c30d966e934d9125e693fc94281",

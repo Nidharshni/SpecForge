@@ -667,11 +667,11 @@ fn a_download_that_misses_is_refused_and_pins_nothing() {
     assert_eq!(project.pinned(), None, "nothing is pinned for it");
 }
 
-/// `home` with `credentials.json` holding `json`.
 fn store_credentials(project: &Project, json: &str) {
     let home = project.dir.home();
     std::fs::create_dir_all(home).expect("the home directory is created");
-    std::fs::write(home.join("credentials.json"), json).expect("the credentials file is writable");
+    let store = format!(r#"{{"registries":{{"{REGISTRY_URL}":{json}}}}}"#);
+    std::fs::write(home.join("credentials.json"), store).expect("the credentials file is writable");
 }
 
 /// Every read the client answered: versions, metadata and download calls.
@@ -696,7 +696,7 @@ fn reads(project: &Project) -> Vec<specforge_registry_client::testing::Call> {
 )]
 fn a_read_carries_the_stored_credential() {
     let project = Project::on(Reply::unsigned());
-    store_credentials(&project, r#"{"registries":{"local":{"token":"t"}}}"#);
+    store_credentials(&project, r#"{"token":"t"}"#);
     let registry = project.registry();
     let name = PackageName::parse(NAME).unwrap();
 
@@ -727,7 +727,7 @@ fn an_expired_stored_credential_refuses_a_read() {
     let project = Project::on(Reply::unsigned());
     store_credentials(
         &project,
-        r#"{"registries":{"local":{"token":"t","expires_at":"2000-01-01T00:00:00Z"}}}"#,
+        r#"{"token":"t","expires_at":"2000-01-01T00:00:00Z"}"#,
     );
 
     let error = project

@@ -29,7 +29,7 @@ fn request(root: &ProjectRoot, mode: Mode) -> Request<'_> {
         paths: &[],
         mode,
         caller: crate::testing::caller(),
-        runtime: None,
+        forms: crate::authoring::format::Forms::none(),
     }
 }
 
@@ -74,7 +74,7 @@ fn check_paths(root: &Path, paths: &[&str]) -> Outcome {
         paths: &paths,
         mode: Mode::Check,
         caller: crate::testing::caller(),
-        runtime: None,
+        forms: crate::authoring::format::Forms::none(),
     })
 }
 
@@ -110,5 +110,6 @@ fn on_disk(files: &[(&str, &str)]) -> tempfile::TempDir {
 
 mod configs;
 mod document;
+mod forms;
 mod run;
 mod targets;

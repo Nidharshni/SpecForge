@@ -58,7 +58,8 @@ pub struct OutlineEntry {
     pub kind: Sym,
     pub title: Option<String>,
     pub block: SourceSpan,
-    /// The entity's name as written (its block when unreadable).
+    /// The entity's name where the parse read it (its block when the compile holds no parse or text of the file,
+    /// or the text does not spell it there).
     pub name: SourceSpan,
     /// Its `method` members, in line order.
     pub children: Vec<OutlineMethod>,
@@ -71,7 +72,7 @@ pub struct OutlineMethod {
     /// `name(param: Type, opt?: Type) -> Ret`, as declared.
     pub signature: String,
     pub block: SourceSpan,
-    /// The method's name as written (its block when unreadable).
+    /// The method's name where the parse read it (its method's block when the text does not spell it there).
     pub name_span: SourceSpan,
 }
 
@@ -129,7 +130,11 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Option<Vec<OutlineEntry>> {
                         name: method.name.clone(),
                         signature: format!("{}({}){returns}", method.name, params.join(", ")),
                         block: method.span.clone(),
-                        name_span: nav.method_name(&method.span, &method.name),
+                        name_span: method
+                            .name_span
+                            .clone()
+                            .filter(|s| nav.spelled(s, &method.name))
+                            .unwrap_or_else(|| method.span.clone()),
                     }
                 })
                 .collect();
@@ -145,22 +150,4 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Option<Vec<OutlineEntry>> {
         })
         .collect();
     Some(entries)
-}
-
-impl Navigator<'_> {
-    /// A method's name in its declaration (`method <name>(…)`): the first
-    /// identifier after the keyword, when the text spells the name there;
-    /// else the method's whole span.
-    fn method_name(&self, span: &SourceSpan, name: &str) -> SourceSpan {
-        self.text(span.file)
-            .and_then(|text| {
-                text.tokens(span)
-                    .into_iter()
-                    .filter(|t| t.is_name())
-                    .nth(1)
-                    .filter(|t| text.token_text(t) == name)
-                    .map(|t| text.span(span.file, t.start, t.end))
-            })
-            .unwrap_or_else(|| span.clone())
-    }
 }

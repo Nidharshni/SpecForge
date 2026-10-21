@@ -12,7 +12,9 @@ use specforge_ops::authoring::migrate::{
 };
 use specforge_ops::{OpError, OpErrorKind};
 
+use crate::migrate_judged::{judge_planned, migrated};
 pub(crate) use crate::writes::files_under;
+use specforge_migrate::structural_differences;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
@@ -132,45 +134,38 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
         Some(runtime),
     );
 
-    assert!(outcome.validated && outcome.migrated(), "{outcome:?}");
+    assert!(
+        outcome.verdict.compared && outcome.migrated(),
+        "{outcome:?}"
+    );
     assert_eq!(outcome.summary.migrated_count, files);
     assert!(
         outcome.structural_differences().is_empty(),
         "{:?}",
         outcome.structural_differences()
     );
-    assert!(outcome.rollback.is_none());
     assert!(
-        outcome.post_errors().next().is_none(),
+        outcome.verdict.post_errors().next().is_none(),
         "{:?}",
-        outcome.post_errors().collect::<Vec<_>>()
+        outcome.verdict.post_errors().collect::<Vec<_>>()
     );
 }
 
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
-    verify = "a migration that changes an existing title or a kind is reported and rolled back"
+    verify = "a planned text that changes an existing title or a kind is reported and refused"
 )]
-fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
+fn a_planned_title_or_kind_change_is_refused() {
     for (from, to, aspect) in [
         ("\"Alpha\"", "\"Renamed\"", "title"),
         ("behavior alpha", "feature alpha", "kind"),
     ] {
         let dir = project_with_extension();
-        let file = dir.path().join("old.spec");
-        let runtime = Arc::new(hooked(move |input| {
-            let path = &input.files[0];
-            let migrated = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-            std::fs::write(path, migrated.replace(from, to)).map_err(|e| e.to_string())
-        }));
 
-        let outcome = run(
-            &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-            Some(runtime),
-        );
+        let verdict = judge_planned(dir.path(), None, migrated().replace(from, to));
 
-        assert!(outcome.validated, "{aspect}: {outcome:?}");
-        let differences = outcome.structural_differences();
+        assert!(verdict.compared, "{aspect}: {verdict:?}");
+        let differences = structural_differences(&verdict.graph_delta);
         let messages: Vec<&str> = differences.iter().map(|d| d.message.as_str()).collect();
         assert_eq!(
             messages,
@@ -178,53 +173,20 @@ fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
             "{aspect}"
         );
         assert!(
-            outcome.rollback.is_some() && !outcome.ok(),
-            "{aspect}: {outcome:?}"
+            matches!(
+                verdict.refusal(),
+                Some(Failure::ChangedGraph { differences: 1 })
+            ),
+            "{aspect}: {verdict:?}"
         );
-        assert_eq!(std::fs::read_to_string(&file).unwrap(), OLD, "{aspect}");
     }
 }
 
 #[specforge_test(
-    behavior = "rollback_failed_migration",
-    verify = "a migration whose graph changes structure is rolled back automatically"
+    behavior = "invoke_extension_migration_hooks",
+    verify = "a migration whose extension hook fails is refused and nothing is written"
 )]
-fn a_migration_that_changes_the_graph_is_rolled_back() {
-    let dir = project_with_extension();
-    let file = dir.path().join("old.spec");
-
-    // A hook that renames the entity: the graph loses `alpha`.
-    let runtime = Arc::new(hooked(|input| {
-        let file = &input.files[0];
-        let migrated = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
-        std::fs::write(file, migrated.replace("alpha", "beta")).map_err(|e| e.to_string())
-    }));
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
-    );
-
-    assert_eq!(outcome.hooks_invoked, ["@acme/x:migrate_acme"]);
-    assert!(outcome.validated);
-    assert!(
-        outcome
-            .structural_differences()
-            .iter()
-            .any(|d| d.code == "W054" && d.message.contains("alpha")),
-        "{:?}",
-        outcome.structural_differences()
-    );
-    let rollback = outcome.rollback.as_ref().expect("rolled back");
-    assert_eq!(rollback.restored_count, 1, "{rollback:?}");
-    assert!(!outcome.ok() && !outcome.migrated());
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), OLD);
-}
-
-#[specforge_test(
-    behavior = "rollback_failed_migration",
-    verify = "a migration whose extension hook fails is rolled back automatically"
-)]
-fn a_migration_whose_hook_fails_is_rolled_back() {
+fn a_migration_whose_hook_fails_is_refused() {
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("the data cannot be migrated".into())));
 
@@ -233,20 +195,27 @@ fn a_migration_whose_hook_fails_is_rolled_back() {
         Some(runtime.clone()),
     );
 
-    assert!(!outcome.validated, "no validation after a failed hook");
+    assert!(
+        !outcome.verdict.compared,
+        "no validation after a failed hook"
+    );
     assert_eq!(
-        outcome.hook_failures.len(),
+        outcome.verdict.hook_failures.len(),
         1,
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(
-        outcome.hook_failures[0].contains("migrate_acme() of '@acme/x' trapped")
-            && outcome.hook_failures[0].contains("the data cannot be migrated"),
+        outcome.verdict.hook_failures[0].contains("migrate_acme() of '@acme/x' trapped")
+            && outcome.verdict.hook_failures[0].contains("the data cannot be migrated"),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
-    assert_eq!(outcome.rollback.as_ref().unwrap().restored_count, 1);
+    assert!(
+        matches!(outcome.failure(), Some(Failure::HookFailed { .. })),
+        "{outcome:?}"
+    );
+    assert!(outcome.writes.is_empty(), "{:?}", outcome.writes);
     assert_eq!(
         std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),
         OLD
@@ -294,12 +263,12 @@ fn a_failed_migration_names_its_cause() {
         error.message
     );
 
-    // A hook that fails: rolled back.
+    // A hook that fails: refused.
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("trapped".into())));
     let outcome = run(&request(&root(&dir)), Some(runtime));
-    assert!(outcome.rollback.is_some() && !outcome.ok());
-    let failure = outcome.failure().expect("rolled back");
+    assert!(!outcome.ok());
+    let failure = outcome.failure().expect("refused");
     assert!(matches!(failure, Failure::HookFailed { .. }), "{failure:?}");
     let error = OpError::from(failure);
     assert_eq!(
@@ -308,16 +277,11 @@ fn a_failed_migration_names_its_cause() {
     );
     assert!(error.message.contains("trapped"), "{}", error.message);
 
-    // A hook that leaves the project not compiling: rolled back with the
-    // errors the migrated project reported.
+    // A planned text that leaves the project not compiling: refused with the errors the migrated project reported.
     let dir = project_with_extension();
-    let runtime = Arc::new(hooked(|input| {
-        std::fs::write(&input.files[0], "behavior {\n").map_err(|e| e.to_string())
-    }));
-    let outcome = run(&request(&root(&dir)), Some(runtime));
-    assert!(outcome.post_errors().next().is_some(), "{outcome:?}");
-    assert!(outcome.rollback.is_some());
-    let failure = outcome.failure().expect("rolled back");
+    let verdict = judge_planned(dir.path(), None, "behavior {\n");
+    assert!(verdict.post_errors().next().is_some(), "{verdict:?}");
+    let failure = verdict.refusal().expect("refused");
     assert!(
         matches!(failure, Failure::DoesNotCompile { errors } if errors > 0),
         "{failure:?}"
@@ -328,18 +292,19 @@ fn a_failed_migration_names_its_cause() {
         (OpErrorKind::CompilationFailed, "migration_does_not_compile")
     );
 
-    // A hook that adds an entity: the graph changed (W054), rolled back.
+    // A planned text that adds an entity: the graph changed (W054), refused.
     let dir = project_with_extension();
-    let runtime = Arc::new(hooked(|input| {
-        let path = &input.files[0];
-        let mut migrated = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        migrated.push_str("behavior added \"Added\" {\n}\n");
-        std::fs::write(path, migrated).map_err(|e| e.to_string())
-    }));
-    let outcome = run(&request(&root(&dir)), Some(runtime));
-    assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
-    assert!(outcome.post_errors().next().is_none());
-    let failure = outcome.failure().expect("rolled back");
+    let verdict = judge_planned(
+        dir.path(),
+        None,
+        format!("{}behavior added \"Added\" {{\n}}\n", migrated()),
+    );
+    assert!(
+        !structural_differences(&verdict.graph_delta).is_empty(),
+        "{verdict:?}"
+    );
+    assert!(verdict.post_errors().next().is_none());
+    let failure = verdict.refusal().expect("refused");
     assert!(
         matches!(failure, Failure::ChangedGraph { differences } if differences > 0),
         "{failure:?}"
@@ -366,11 +331,10 @@ fn a_header_only_migration_is_checked_after_it_runs() {
 
     assert!(outcome.migrated(), "{outcome:?}");
     assert!(
-        outcome.validated,
+        outcome.verdict.compared,
         "the migrated project is compiled and compared"
     );
     assert!(outcome.structural_differences().is_empty());
-    assert!(outcome.rollback.is_none());
     assert_eq!(outcome.from.to_string(), "0.9");
 }
 
@@ -385,7 +349,7 @@ fn nothing_pending_runs_nothing() {
         Some(runtime.clone()),
     );
 
-    assert!(!outcome.pending && !outcome.applied && !outcome.validated);
+    assert!(!outcome.pending && !outcome.applied && !outcome.verdict.compared);
     assert!(
         runtime.calls().is_empty(),
         "no compile and no hook with nothing to migrate: {:?}",
@@ -485,8 +449,8 @@ fn the_hook_an_extension_declares_in_its_handshake_runs_on_migrate() {
     );
 
     assert!(outcome.migrated(), "{outcome:?}");
-    assert_eq!(outcome.hooks_invoked, ["@acme/x:migrate_acme"]);
-    assert!(outcome.hook_failures.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.verdict.hooks_invoked, ["@acme/x:migrate_acme"]);
+    assert!(outcome.verdict.hook_failures.is_empty(), "{outcome:?}");
     assert!(exports_called(&runtime).contains(&"migrate_acme".to_string()));
 }
 
@@ -504,13 +468,14 @@ fn an_extension_whose_handshake_names_no_hook_is_skipped_silently() {
     );
 
     assert!(outcome.migrated(), "{outcome:?}");
-    assert!(outcome.hooks_invoked.is_empty() && outcome.hook_failures.is_empty());
+    assert!(outcome.verdict.hooks_invoked.is_empty() && outcome.verdict.hook_failures.is_empty());
     assert!(
         exports_called(&runtime).iter().all(|c| c.starts_with("__")),
         "only the protocol exports are called"
     );
     assert!(
         !outcome
+            .verdict
             .post_diagnostics
             .iter()
             .any(|d| d.message.contains("hook")),
@@ -697,24 +662,24 @@ fn a_required_peer_cycle_does_not_stop_the_hooks() {
     );
 
     assert!(
-        outcome.hook_failures.is_empty(),
+        outcome.verdict.hook_failures.is_empty(),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert_eq!(
-        outcome.hooks_invoked,
+        outcome.verdict.hooks_invoked,
         ["@acme/a:migrate_a", "@acme/b:migrate_b"]
     );
-    assert!(outcome.rollback.is_none(), "{outcome:?}");
-    assert!(outcome.ok());
+    assert!(outcome.ok(), "{outcome:?}");
     // The cycle is the compile's E027, among the post-migration diagnostics.
     assert!(
         outcome
+            .verdict
             .post_diagnostics
             .iter()
             .any(|d| d.code == "E027" && d.message.contains("cycle detected in peer dependencies")),
         "{:?}",
-        outcome.post_diagnostics
+        outcome.verdict.post_diagnostics
     );
 }
 
@@ -751,37 +716,32 @@ fn handshakes_of(runtime: &InProcessRuntime, extension: &str) -> usize {
 )]
 fn a_diagnostic_the_migration_introduces_is_reported() {
     let dir = project_with_extension();
-    let runtime = Arc::new(hooked(|input| {
-        let file = &input.files[0];
-        let migrated = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
-        std::fs::write(
-            file,
-            format!("{migrated}\nbehavior extra \"Extra\" {{\n  features [ghost]\n}}\n"),
-        )
-        .map_err(|e| e.to_string())
-    }));
-    let before = compile_at(dir.path(), Some(runtime.clone()));
+    let before = compile_at(dir.path(), None);
     assert!(
         !before.diagnostics().iter().any(|d| d.code == "E003"),
         "{:?}",
         before.diagnostics()
     );
 
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
+    let verdict = judge_planned(
+        dir.path(),
+        None,
+        format!(
+            "{}\nbehavior extra \"Extra\" {{\n  features [ghost]\n}}\n",
+            migrated()
+        ),
     );
 
     assert!(
-        outcome
+        verdict
             .post_diagnostics
             .iter()
             .any(|d| d.code == "E003" && d.message.contains("ghost")),
         "{:?}",
-        outcome.post_diagnostics
+        verdict.post_diagnostics
     );
-    // `extra` appeared: the graph changed structure, so the run is undone.
-    assert!(outcome.rollback.is_some(), "{outcome:?}");
+    // `extra` appeared: the graph changed structure, so the migration is refused.
+    assert!(verdict.refusal().is_some(), "{verdict:?}");
 }
 
 #[specforge_test(
@@ -825,23 +785,23 @@ fn a_hook_that_answers_an_error_is_recorded_and_the_next_one_runs() {
         Some(runtime.clone()),
     );
 
-    assert_eq!(outcome.hooks_invoked, ["@acme/b:migrate_b"]);
+    assert_eq!(outcome.verdict.hooks_invoked, ["@acme/b:migrate_b"]);
     assert_eq!(
-        outcome.hook_failures.len(),
+        outcome.verdict.hook_failures.len(),
         1,
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(
-        outcome.hook_failures[0].contains("migrate_a() of '@acme/a' trapped")
-            && outcome.hook_failures[0].contains("bad data"),
+        outcome.verdict.hook_failures[0].contains("migrate_a() of '@acme/a' trapped")
+            && outcome.verdict.hook_failures[0].contains("bad data"),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert_eq!(hooks_called(&runtime), ["migrate_a", "migrate_b"]);
     assert!(
-        outcome.rollback.is_some(),
-        "a failed hook rolls the run back"
+        outcome.failure().is_some() && !outcome.applied,
+        "a failed hook refuses the run"
     );
 }
 
@@ -862,7 +822,7 @@ fn hooks_run_in_dependency_order_every_time() {
             &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
             Some(runtime.clone()),
         );
-        (outcome.hooks_invoked, hooks_called(&runtime))
+        (outcome.verdict.hooks_invoked, hooks_called(&runtime))
     };
 
     let (first_invoked, first_called) = order();
@@ -900,20 +860,21 @@ fn an_extension_that_failed_to_load_runs_no_hook() {
         Some(runtime.clone()),
     );
 
-    assert_eq!(outcome.hooks_invoked, ["@acme/ok:migrate_ok"]);
+    assert_eq!(outcome.verdict.hooks_invoked, ["@acme/ok:migrate_ok"]);
     assert_eq!(hooks_called(&runtime), ["migrate_ok"]);
     assert!(
-        outcome.hook_failures.is_empty(),
+        outcome.verdict.hook_failures.is_empty(),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(
         outcome
+            .verdict
             .post_diagnostics
             .iter()
             .any(|d| d.code == "E028" && d.message.contains("@acme/broken")),
         "{:?}",
-        outcome.post_diagnostics
+        outcome.verdict.post_diagnostics
     );
 }
 
@@ -964,18 +925,18 @@ fn a_hook_over_its_deadline_is_a_trap_and_the_next_one_runs() {
         runtime.limits()
     );
     assert_eq!(
-        outcome.hook_failures.len(),
+        outcome.verdict.hook_failures.len(),
         1,
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(
-        outcome.hook_failures[0].contains("deadline_exceeded"),
+        outcome.verdict.hook_failures[0].contains("deadline_exceeded"),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
-    assert_eq!(outcome.hooks_invoked, ["@acme/b:migrate_b"]);
-    assert!(outcome.rollback.is_some(), "{outcome:?}");
+    assert_eq!(outcome.verdict.hooks_invoked, ["@acme/b:migrate_b"]);
+    assert!(outcome.failure().is_some(), "{outcome:?}");
 }
 
 #[specforge_test(
@@ -985,14 +946,14 @@ fn a_hook_over_its_deadline_is_a_trap_and_the_next_one_runs() {
 fn the_project_is_checked_once_after_the_files_and_the_hooks() {
     let dir = project_with_extension();
     let file = dir.path().join("old.spec");
-    // The hook sees the file the core migration already rewrote.
+    // The hooks run on the plan, before any file is written.
     let runtime = Arc::new(hooked(|input| {
-        let file = &input.files[0];
-        let text = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
-        if !text.starts_with("// specforge-format: 1.0") {
-            return Err(format!("the core migration did not run first: {text}"));
+        let text = std::fs::read_to_string(&input.files[0]).map_err(|e| e.to_string())?;
+        if text == OLD {
+            Ok(())
+        } else {
+            Err(format!("a file was written before the hooks ran: {text}"))
         }
-        std::fs::write(file, format!("{text}// migrated by @acme/x\n")).map_err(|e| e.to_string())
     }));
 
     let outcome = run(
@@ -1001,28 +962,28 @@ fn the_project_is_checked_once_after_the_files_and_the_hooks() {
     );
 
     assert!(
-        outcome.validated && outcome.rollback.is_none(),
+        outcome.verdict.compared && outcome.migrated(),
         "{outcome:?}"
     );
     assert!(
-        outcome.hook_failures.is_empty(),
+        outcome.verdict.hook_failures.is_empty(),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(
         std::fs::read_to_string(file)
             .unwrap()
-            .ends_with("// migrated by @acme/x\n")
+            .starts_with("// specforge-format: 1.0")
     );
-    // One compile before the files, one after the hooks.
-    assert_eq!(handshakes_of(&runtime, "@acme/x"), 2);
+    // One environment load: the hooks and the planned texts are judged over the project compiled once.
+    assert_eq!(handshakes_of(&runtime, "@acme/x"), 1);
 }
 
 #[specforge_test(
-    behavior = "rollback_failed_migration",
-    verify = "an automatic rollback restores only the files its run migrated"
+    behavior = "migrate_spec_files_in_place",
+    verify = "a refused migration made without backups leaves the record as it was"
 )]
-fn an_automatic_rollback_restores_only_what_its_run_migrated() {
+fn a_refused_migration_without_backups_keeps_the_record() {
     let dir = project_with_extension();
     let root = dir.path();
     let first = run(
@@ -1030,53 +991,22 @@ fn an_automatic_rollback_restores_only_what_its_run_migrated() {
         Some(Arc::new(unhooked())),
     );
     assert!(first.ok(), "{first:?}");
-    let old = root.join("old.spec");
-    let migrated = std::fs::read_to_string(&old).unwrap();
-    let edited = format!("{migrated}// edited\n");
-    std::fs::write(&old, &edited).unwrap();
+    let record = root.join(".specforge/migration.json");
+    let recorded = std::fs::read(&record).unwrap();
     std::fs::write(root.join("second.spec"), OLD).unwrap();
-
-    let second = run(
-        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
-        Some(Arc::new(hooked(|_| Err("trapped".into())))),
-    );
-
-    assert!(second.rollback.is_some() && !second.ok(), "{second:?}");
-    assert_eq!(
-        std::fs::read_to_string(&old).unwrap(),
-        edited,
-        "an earlier migration's file keeps its edit"
-    );
-    assert_eq!(
-        std::fs::read_to_string(root.join("second.spec")).unwrap(),
-        OLD
-    );
-    assert!(
-        !second
-            .writes
-            .paths()
-            .any(|p| p.ends_with("old.spec") || p.ends_with("second.spec")),
-        "{:?}",
-        second.writes
-    );
-}
-
-#[specforge_test(
-    behavior = "rollback_failed_migration",
-    verify = "an automatic rollback restores a run made without backups"
-)]
-fn an_automatic_rollback_restores_a_run_without_backups() {
-    let dir = project_with_extension();
-    let root = dir.path();
     let project = specforge_common::ProjectRoot::of(root).unwrap();
     let mut req = request(&project);
     req.no_backup = true;
 
     let outcome = run(&req, Some(Arc::new(hooked(|_| Err("trapped".into())))));
 
-    assert!(outcome.rollback.is_some() && !outcome.ok(), "{outcome:?}");
-    assert_eq!(std::fs::read_to_string(root.join("old.spec")).unwrap(), OLD);
-    assert!(!root.join("old.spec.bak").exists());
+    assert!(!outcome.ok() && outcome.failure().is_some(), "{outcome:?}");
+    assert_eq!(std::fs::read(&record).unwrap(), recorded);
+    assert_eq!(
+        std::fs::read_to_string(root.join("second.spec")).unwrap(),
+        OLD
+    );
+    assert!(!root.join("second.spec.bak").exists());
 }
 
 #[specforge_test(

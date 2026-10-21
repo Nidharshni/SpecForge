@@ -1,6 +1,6 @@
 # Operations reach the package registry through a port
 
-**Status:** accepted (2026-10-03)
+**Status:** accepted (2026-10-03). Amended by [ADR 0178](0178-a-registry-credential-belongs-to-its-registry-root.md) (architecture round 20, plan 01): credential health is read through `specforge_ops_registry::User`, and the client holds no OS keyring.
 
 Splitting out the Package registry client (`specforge-registry-client`: reqwest, the OS keyring,
 ed25519) did not keep it out of the LSP. `specforge-ops` used it for four things, so every
@@ -60,3 +60,5 @@ ed25519 today are the client and the wire crate; a new direct dependency on one 
 would escape the rule.
 
 **Amended by ADR 0086 (2026-10-14):** `Trust` is defined in `specforge_ops::registry`, beside `TrustPolicy`, and named `registry::Trust`; the port names no extension module.
+
+**Amended in architecture round 20 (plan 10):** the port also opens (`Registry::open`): the refusal of the whole project, once (ADR 0044 as amended).

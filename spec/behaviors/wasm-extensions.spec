@@ -965,7 +965,12 @@ behavior update_all_extensions "Update All Extensions" {
     When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
-    names the registries key.
+    names the registries key. So does a registries entry that can't be read
+    (E067) and a credentials.json that can't be read (R012): update opens its
+    registry once, before it asks about any registry install, and is refused
+    with that one error, as add is, with no extension's status and no
+    batch_update_completed; an update that selects no registry install opens
+    none.
     Under --format json it prints the update document: ok (nothing
     failed, so the update was written), each locked extension in lock
     order with its status (updated, with its publisher's acceptance and
@@ -989,6 +994,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
   verify unit "an update of a name the lock does not hold is refused before any registry is asked"
   verify unit "an update over an unreadable specforge.lock is refused as add refuses it, before any registry is asked"
+  verify unit "a refusal of the project's registry configuration or the user's credential store refuses the update once, before any registry is asked"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

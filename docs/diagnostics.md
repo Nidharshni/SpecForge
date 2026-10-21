@@ -711,9 +711,9 @@ E062: Token budget too small for the export
 the most central entities that fit the budget, but some of the export never
 shrinks: the envelope (`format_version`, `schema_version`), the `token_budget`
 block listing the dropped entity IDs, and, with `--with-schema`, the embedded
-schema, which is never cut short. The budget is below that fixed part, so no
-export fits. Raise the budget, or drop `--with-schema` when the schema alone is
-over it.
+schema, which is never cut short, and, in a scoped export (`--scope`), the
+scope's own entity. The budget is below that fixed part, so no export fits.
+Raise the budget, or drop `--with-schema` when the schema alone is over it.
 
 Owner: core
 Level: error
@@ -1684,9 +1684,10 @@ Level: error
 ```
 R-AUTH-021: Stored registry token unreadable
 
-The OS keyring entry that holds this registry's token is missing or can't be
-read, although the credentials file refers to it. Log in again: `specforge login
---registry <alias> --token <NEW_TOKEN>`.
+The secret `specforge login --token` kept for this registry (a file under
+`~/.specforge/secrets/`) is missing or can't be read, although the credentials
+file refers to it. Log in again: `specforge login --registry <alias> --token
+<NEW_TOKEN>`.
 
 Owner: core
 Level: error
@@ -1709,9 +1710,8 @@ Level: error
 ```
 R-LOGIN-002: Login token not stored
 
-`specforge login` couldn't store the token in the OS keyring or in the fallback
-file `~/.specforge/credentials.json`. Check that the keyring service is
-available and that `~/.specforge` is writable.
+`specforge login` couldn't write the token's secret file under
+`~/.specforge/secrets/`. Check that `~/.specforge` is writable.
 
 Owner: core
 Level: error

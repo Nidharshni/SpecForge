@@ -123,26 +123,8 @@ pub fn explore(
         depth: request.depth,
         kinds: request.kind.as_slice(),
     })?;
-    let graph = view.graph();
-    let reached = checked.reach(None);
-    let of_kind = |id: &str| {
-        graph
-            .node(id)
-            .is_some_and(|node| checked.keeps(node.kind.raw.as_str()))
-    };
-    let selection: BTreeSet<&'static str> = match &reached {
-        Some(reached) => reached
-            .iter()
-            .map(|r| r.id.as_str())
-            .filter(|id| of_kind(id))
-            .collect(),
-        None => graph
-            .nodes()
-            .into_iter()
-            .map(|node| node.id.raw.as_str())
-            .filter(|id| of_kind(id))
-            .collect(),
-    };
+    let selected = checked.selected(None);
+    let selection: BTreeSet<&'static str> = selected.ids().map(|id| id.as_str()).collect();
 
     let connectivity = view.connectivity();
     let mut connected: Vec<(&'static str, _)> = connectivity
@@ -167,23 +149,19 @@ pub fn explore(
         .map(str::to_string)
         .collect();
 
+    let reached = selected.reached();
     let paths = reached
-        .as_deref()
-        .map(|reached| {
-            reached
+        .iter()
+        .skip(1)
+        .filter(|r| selection.contains(r.id.as_str()))
+        .map(|r| RelationshipPath {
+            to: r.id.as_str().to_string(),
+            labels: Graph::reach_path(reached, r.id)
                 .iter()
-                .skip(1)
-                .filter(|r| selection.contains(r.id.as_str()))
-                .map(|r| RelationshipPath {
-                    to: r.id.as_str().to_string(),
-                    labels: Graph::reach_path(reached, r.id)
-                        .iter()
-                        .map(|label| label.as_str().to_string())
-                        .collect(),
-                })
-                .collect()
+                .map(|label| label.as_str().to_string())
+                .collect(),
         })
-        .unwrap_or_default();
+        .collect();
 
     Ok(Noticed::new(
         Exploration {

@@ -2021,9 +2021,9 @@ fn migrate_refuses_a_bad_target_version() {
 
 #[specforge_test(
     behavior = "provide_mcp_migrate_tool",
-    verify = "the result reports the hooks run, the structural differences and whether the migration was rolled back"
+    verify = "the result reports the hooks run and the structural differences"
 )]
-fn migrate_reports_hooks_structure_and_rollback() {
+fn migrate_reports_hooks_and_structure() {
     let (mut server, root) = server_with_old_spec();
 
     let resp = call_tool(&mut server, "specforge.migrate", json!({}));
@@ -2035,7 +2035,6 @@ fn migrate_reports_hooks_structure_and_rollback() {
     assert_eq!(result["hook_failures"], json!([]), "{result}");
     // A header-only migration keeps the graph's structure.
     assert_eq!(result["structural_differences"], json!([]), "{result}");
-    assert_eq!(result["rolled_back"], false, "{result}");
     assert!(
         std::fs::read_to_string(root.join("old.spec"))
             .unwrap()

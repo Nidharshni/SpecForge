@@ -11,13 +11,13 @@ use crate::diagram::{escape_dot, extension_id};
 /// subgraph clusters for the previous flat hairball.
 #[derive(Debug, Clone, Copy)]
 pub struct DotOptions<'a> {
-    /// Registry for per-kind `dot_shape`/`dot_color`/`dot_fillcolor` and for
-    /// extension lookup when clustering.
-    pub kind_registry: Option<&'a specforge_registry::KindRegistry>,
+    /// The Registry build the graph was built in: the kinds' `dot_shape`/`dot_color`/`dot_fillcolor`
+    /// and declaring extension (when clustering), and each edge type's style.
+    pub registries: &'a specforge_registry::RegistryBuild,
     /// Include node title labels (default true; `false` emits bare IDs).
     pub labels: bool,
     /// Wrap nodes in one `subgraph cluster_*` per declaring extension
-    /// (needs `kind_registry`; kinds absent from the registry stay top-level).
+    /// (needs the kinds; kinds absent from the registry stay top-level).
     pub cluster_by_extension: bool,
     /// Emit only nodes whose kind is listed (`None` = all kinds). Edges whose
     /// endpoints were filtered out are dropped with them.
@@ -27,7 +27,7 @@ pub struct DotOptions<'a> {
 impl Default for DotOptions<'_> {
     fn default() -> Self {
         Self {
-            kind_registry: None,
+            registries: crate::emit::no_extensions(),
             labels: true,
             cluster_by_extension: false,
             kind_filter: None,
@@ -40,12 +40,13 @@ pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
         writeln!(out, "  rankdir=LR;")?;
         writeln!(out, "  node [shape=box];")?;
 
-        let kind_entry = |kind: &str| match options.kind_registry {
-            Some(registry) => registry
+        let kind_entry = |kind: &str| {
+            options
+                .registries
+                .kinds()
                 .iter()
                 .find(|(name, _)| *name == kind)
-                .map(|(_, e)| e),
-            None => None,
+                .map(|(_, e)| e)
         };
         let included = |node: &Node| {
             options
@@ -63,6 +64,7 @@ pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
                 }
                 if let Some(fill) = &entry.declared.dot_fillcolor {
                     style.push_str(&format!(" fillcolor=\"{}\"", escape_dot(fill)));
+                    style.push_str(" style=\"filled\"");
                 }
             }
             let label = if options.labels {
@@ -131,12 +133,36 @@ pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
             if !keep {
                 continue;
             }
+            // The edge type the source's kind writes through this label declares its style.
+            let declared = graph
+                .node(edge.source.as_str())
+                .and_then(|n| {
+                    options
+                        .registries
+                        .edges()
+                        .written_by(n.kind.raw.as_str(), edge.label.as_str())
+                })
+                .and_then(|entry| entry.declared());
+            let mut style = String::new();
+            for (name, value) in [
+                ("style", declared.and_then(|d| d.edge_style.as_ref())),
+                ("color", declared.and_then(|d| d.edge_color.as_ref())),
+                (
+                    "arrowhead",
+                    declared.and_then(|d| d.edge_arrowhead.as_ref()),
+                ),
+            ] {
+                if let Some(value) = value {
+                    style.push_str(&format!(" {name}=\"{}\"", escape_dot(value)));
+                }
+            }
             writeln!(
                 out,
-                "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                "  \"{}\" -> \"{}\" [label=\"{}\"{}];",
                 escape_dot(edge.source.as_str()),
                 escape_dot(edge.target.as_str()),
-                escape_dot(edge.label.as_str())
+                escape_dot(edge.label.as_str()),
+                style
             )?;
         }
 

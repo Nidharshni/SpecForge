@@ -12,7 +12,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 /// User-level publisher key state.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,11 +47,6 @@ impl KnownKeys {
     pub fn is_trusted(&self, key_id: &str) -> bool {
         self.trusted_keys.iter().any(|k| k == key_id)
     }
-}
-
-/// Default on-disk location of the known-keys store.
-pub fn known_keys_path() -> PathBuf {
-    crate::credentials::user_dir().join("known-keys.json")
 }
 
 /// The trust store at `path`. A missing file is an empty store. A file that can't be read, or isn't

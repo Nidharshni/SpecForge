@@ -132,15 +132,14 @@ pub fn coverage(
         depth: None,
         kinds: query.kind.as_slice(),
     })?;
+    // The entity alone, its selection at no hops: the request gave no depth.
+    let selected = selection.selected(Some(0));
     let coverage = view.coverage()?;
     let rows = view
         .entities()
         .iter()
         .filter(|(record, standing)| {
-            selection
-                .entity
-                .map_or(standing.counts(), |entity| record.id == entity.record.id)
-                && selection.keeps(&record.kind)
+            selected.contains(&record.id) && (selection.entity.is_some() || standing.counts())
         })
         .filter_map(|(record, standing)| {
             Some(CoverageRow::of(

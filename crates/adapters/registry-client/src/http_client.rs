@@ -81,6 +81,7 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<String>, RegistryError> {
+        let credential = credential.filter(|c| c.is_for(registry));
         let address = registry.url.address(&Call::Package(name));
         let body: VersionList = self.get(&address, credential, name.as_str())?;
         Ok(body.versions)
@@ -93,6 +94,7 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<PackageMetadata, RegistryError> {
+        let credential = credential.filter(|c| c.is_for(registry));
         let subject = format!("{name}@{version}");
         let address = registry.url.address(&Call::Version(name, version));
         let mut body: PackageMetadata = self.get(&address, credential, &subject)?;
@@ -113,7 +115,8 @@ impl RegistryClient for HttpRegistryClient {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<u8>, RegistryError> {
         // The registry's token goes to the registry, not to wherever it points a download.
-        let credential = credential.filter(|_| registry.url.same_origin(wasm_url));
+        let credential =
+            credential.filter(|c| c.is_for(registry) && registry.url.same_origin(wasm_url));
         let resp = self.send(authorized(self.client.get(wasm_url), credential), wasm_url)?;
         match resp.status() {
             StatusCode::OK => {
@@ -133,6 +136,7 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError> {
+        let credential = credential.filter(|c| c.is_for(registry));
         let address = registry.url.address(&Call::Search(query));
         let body: SearchResults = self.get(&address, credential, &query.q)?;
         Ok(body.results)
@@ -147,6 +151,7 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<PublishReceipt, RegistryError> {
+        let credential = credential.filter(|c| c.is_for(registry));
         let (name, version) = (package.name(), package.version());
         let url = registry.url.address(&Call::Version(name, version));
 
@@ -338,7 +343,7 @@ fn parse_retry_after_ms(header: Option<&str>, now: SystemTime) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use specforge_registry_wire::ErrorBody;
+    use specforge_registry_wire::{ErrorBody, RegistryRoot};
 
     const NOW: SystemTime = SystemTime::UNIX_EPOCH;
 
@@ -578,5 +583,64 @@ mod tests {
             parse_retry_after_ms(Some("soon"), now),
             DEFAULT_RETRY_AFTER_MS
         );
+    }
+
+    /// A listener that answers every request "no such package" and sends back the `Authorization` lines it saw.
+    fn catcher() -> (RegistryRoot, std::sync::mpsc::Receiver<String>) {
+        use std::io::{Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let root = RegistryRoot::parse(&format!(
+            "http://127.0.0.1:{}/b",
+            listener.local_addr().unwrap().port()
+        ))
+        .unwrap();
+        let (seen, lines) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut head = Vec::new();
+                let mut byte = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") && stream.read(&mut byte).is_ok_and(|n| n == 1) {
+                    head.push(byte[0]);
+                }
+                let head = String::from_utf8_lossy(&head).to_ascii_lowercase();
+                let line = head.lines().find(|l| l.starts_with("authorization:"));
+                let _ = seen.send(line.unwrap_or("").to_string());
+                let body = r#"{"error":{"code":"NOT_FOUND","message":"gone"}}"#;
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        (root, lines)
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "authenticate_registry_request",
+        verify = "a request carries a credential only to the registry root it was kept for"
+    )]
+    fn a_credential_goes_only_to_its_own_root() {
+        let (root, lines) = catcher();
+        let registry = RegistryConfig {
+            alias: "main".into(),
+            url: root.clone(),
+            scope_filter: None,
+            default_registry: true,
+        };
+        let name = PackageName::parse("@acme/thing").unwrap();
+        let other = RegistryRoot::parse("http://127.0.0.1:1/a").unwrap();
+        let client = HttpRegistryClient::new();
+
+        let _ = client.versions(&name, &registry, Some(&RegistryCredential::new(other, "t")));
+        assert_eq!(
+            lines.recv().unwrap(),
+            "",
+            "a credential for another root was sent"
+        );
+
+        let _ = client.versions(&name, &registry, Some(&RegistryCredential::new(root, "t")));
+        assert_eq!(lines.recv().unwrap(), "authorization: bearer t");
     }
 }

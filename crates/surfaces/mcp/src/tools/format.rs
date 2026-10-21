@@ -91,7 +91,9 @@ impl CoreTool for Tool {
             paths: &explicit,
             mode,
             caller: project.caller(),
-            runtime: Some(project.runtime.clone()),
+            // The served project's forms are lent: no load per call; a nested project's load through the
+            // state's source, never into the served runtime.
+            forms: format::Forms::lending(project.view().env(), project.source.clone()),
         })
         .map_err(Self::failed)?;
 

@@ -186,7 +186,7 @@ fn format_writes_are_the_files_it_rewrote() {
         paths: &[],
         mode: Mode::Write,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -202,7 +202,7 @@ fn format_writes_are_the_files_it_rewrote() {
         paths: &[],
         mode: Mode::Check,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     assert!(outcome.writes().is_empty());
@@ -562,7 +562,7 @@ fn a_migration_writes_each_file_and_its_backup() {
 }
 
 #[test]
-fn a_rolled_back_migration_leaves_nothing() {
+fn a_refused_migration_leaves_nothing() {
     let dir = project(&["@t/x"], &[("old.spec", OLD)]);
     let root = dir.path();
     specforge_installed::testing::install(root, &["@t/x"]);
@@ -581,7 +581,7 @@ fn a_rolled_back_migration_leaves_nothing() {
     )
     .unwrap();
 
-    assert!(outcome.rollback.is_some());
+    assert!(outcome.failure().is_some());
     assert_eq!(listed(&outcome.writes, root), Vec::<String>::new());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 }

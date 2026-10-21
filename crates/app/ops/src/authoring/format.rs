@@ -16,7 +16,7 @@ mod tests;
 
 pub(crate) use document::Configs;
 pub use document::{
-    ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, document, forms,
+    ConfigSource, Edit, EditorOptions, FormattedDocument, Forms, Lines, Place, document,
 };
 pub(crate) use edits::between;
 pub use run::{

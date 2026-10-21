@@ -74,7 +74,7 @@ Peer dependencies are SemVer ranges read as Cargo reads them; one rule judges th
 `protocol_version`, `name`, `version`, `peer_dependencies` and `sandbox_policy` are required on the wire (`sandbox_policy` may be `null`: the extension then runs under the host's ceiling; see Sandbox). The others are optional and omitted when absent:
 
 - `starter_template`: the text of the starter `.spec` file `specforge init` writes for a project that enables the extension, `{project}` standing for the project's entity id and `{version}` for its version. When several enabled extensions declare one, `init` uses the first listed in `specforge.json`. SDK: `ContributionsBuilder::starter_template`.
-- `migration_hook`: the export `specforge migrate` calls after migrating the project's files. SDK: `ContributionsBuilder::migration_hook`.
+- `migration_hook`: the export `specforge migrate` calls before it writes the migrated files, with their names. SDK: `ContributionsBuilder::migration_hook`.
 - `theme_color`: the hex colour (`#rgb`, `#rrggbb` or `#rrggbbaa`) the `model` and `outline` diagrams draw the extension in; grey otherwise. SDK: `ContributionsBuilder::theme_color`.
 - `ext_short`: the short name that routes the extension's commands, `specforge <ext_short> <command>` on the CLI and `specforge.<ext_short>.<id>` over MCP. Lowercase kebab case (`[a-z][a-z0-9-]*`); a malformed one is E030. Absent, it is the name's last segment (`@specforge/product` is `product`). SDK: `#[extension(short = "...")]`, checked at compile time.
 - `description` and `keywords`: what a package registry shows for the extension. `specforge publish` uploads them with the rest of the declaration. SDK: `#[extension(description = "...")]`, `ExtensionMeta::keywords`.
@@ -569,8 +569,8 @@ its error (exit 1; under `--format json` one `{code, message, suggestion}`
 object on stderr), an MCP tool's or resource's a structured MCP error, a
 scanner's an entry of the gap report's `scan_failures` (the report is then
 approximate), a collector's the `collect` error, a custom validator's the
-probe's W112 at load, a migration hook's a failure line that rolls the
-migration back.
+probe's W112 at load, a migration hook's a failure line that refuses the
+migration (nothing is written).
 
 With the SDK, every one of these exports is declared together with its
 handler (`ContributionsBuilder::command`, `mcp_tool`, `mcp_resource`, `pass`

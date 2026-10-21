@@ -273,7 +273,10 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     provide_infer_plan_scope) MUST each be one operation over the project
     view, shared by the surfaces that show them (the CLI, MCP's tools and
     prompts, and the LSP hover and keyword completion); a surface maps its
-    arguments and renders the outcome. A kind the project knows is one a
+    arguments and renders the outcome. A read selection selects what its
+    entity reaches within its depth (every entity without one), of the kinds
+    it keeps; the entity itself is selected only when its kind is kept, and
+    an export or a query draws it always (ADR 0190). A kind the project knows is one a
     loaded extension declares or an entity is written with; names are
     exact. A kind filter that names another kind matches nothing and is
     reported as I020; an argument that needs a kind's declaration refuses
@@ -333,6 +336,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "the entities of each kind are counted once, for every kind an entity is written with"
   verify unit "a coverage row is one JSON document on every surface"
   verify unit "a kind filter reports each kind the project does not know with I020, naming the closest"
+  verify unit "a read selection selects what its entity reaches within its depth, of its kinds; the entity is selected only when its kind is kept, and an export draws it always"
   verify unit "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
   verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
@@ -1349,7 +1353,10 @@ behavior enforce_token_budget "Enforce Token Budget" {
     The graph, context and brief exports are budgeted alike: each lists the
     entities it dropped under `token_budget`, keeps no entity when only its
     envelope and that block fit, and fails with E062 when even those, or an
-    embedded schema (which is never cut short), are over the budget.
+    embedded schema (which is never cut short), are over the budget. A scoped
+    export never drops its scope entity (the export keeps it always): it keeps
+    that entity alone when only it, the envelope and that block fit, and fails
+    with E062 when even those do not.
   """
   verify unit "output within budget includes all entities"
   verify unit "output exceeding budget truncates low-priority entities"
@@ -1363,6 +1370,8 @@ behavior enforce_token_budget "Enforce Token Budget" {
   verify integration "a budget smaller than the embedded schema fails with E062 instead of truncating the schema"
   verify integration "a budget below one entity yields the envelope with no entities and the truncation marker"
   verify integration "a budget below the empty envelope fails with E062"
+  verify unit "a token budget never cuts the scope entity of a scoped export"
+  verify unit "a scoped export whose budget cannot hold its scope entity alone fails with E062"
   verify integration "the context and brief exports honour --max-tokens, listing the dropped entities under token_budget"
   verify integration "a context or brief export that cannot fit even without entities, or whose embedded schema is over the budget, fails with E062"
   verify contract "Enforce Token Budget: token budget enforcement holds — validation_complete_fired, budget_respected, truncation_metadata_produced, valid_subgraph_after_truncation, token_budget_applied_emitted"

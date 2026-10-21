@@ -151,9 +151,13 @@ pub struct TokenVerified {
     pub expires_at: Option<String>,
 }
 
-/// `POST {root}/v1/admin/tokens` body (an admin token authenticates it). Every field is optional.
+/// `POST {root}/v1/admin/tokens` body (an admin token authenticates it). `account` is required; the other fields are optional.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenRequest {
+    /// The account the token is issued to (it owns the scopes the token claims); the registry refuses a
+    /// request that names none.
+    #[serde(default)]
+    pub account: Option<String>,
     #[serde(default)]
     pub scope: Option<String>,
     #[serde(default)]
@@ -181,6 +185,7 @@ pub struct TokenList {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenSummary {
     pub prefix: String,
+    pub account: String,
     pub scope: Option<String>,
     pub label: String,
     pub created_at: String,
@@ -424,6 +429,7 @@ mod tests {
             &TokenList {
                 tokens: vec![TokenSummary {
                     prefix: "abcd1234".into(),
+                    account: "acme".into(),
                     scope: Some("@acme".into()),
                     label: "ci".into(),
                     created_at: "c".into(),
@@ -431,7 +437,7 @@ mod tests {
                     admin: false,
                 }],
             },
-            json!({"tokens": [{"prefix": "abcd1234", "scope": "@acme", "label": "ci", "created_at": "c", "expires_at": null, "admin": false}]}),
+            json!({"tokens": [{"prefix": "abcd1234", "account": "acme", "scope": "@acme", "label": "ci", "created_at": "c", "expires_at": null, "admin": false}]}),
         );
         is_this_json(&TokenRevoked { revoked: true }, json!({"revoked": true}));
         is_this_json(&Yanked { yanked: true }, json!({"yanked": true}));

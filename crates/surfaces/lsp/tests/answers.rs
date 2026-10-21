@@ -258,7 +258,14 @@ fn formatting_answers_its_edits_and_what_to_publish() {
         ..Default::default()
     };
 
-    let formatted = answers::formatting(&state, &uri, &options, None).expect("an open document");
+    let formatted = answers::formatting(
+        &state,
+        &specforge_project::RuntimeSource::Fixed(None),
+        &uri,
+        &options,
+        None,
+    )
+    .expect("an open document");
     let codes_of = |list: &[tower_lsp::lsp_types::Diagnostic]| {
         let mut codes: Vec<String> = list
             .iter()
@@ -289,7 +296,16 @@ fn formatting_answers_its_edits_and_what_to_publish() {
 
     // A document that is not open is not formatted.
     let closed = crate::served::uri_of_path("/buffer/closed.spec");
-    assert!(answers::formatting(&state, &closed, &options, None).is_none());
+    assert!(
+        answers::formatting(
+            &state,
+            &specforge_project::RuntimeSource::Fixed(None),
+            &closed,
+            &options,
+            None
+        )
+        .is_none()
+    );
 }
 
 #[test]

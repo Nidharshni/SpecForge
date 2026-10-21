@@ -1,4 +1,5 @@
 use super::*;
+use crate::registry::NO_REGISTRY;
 
 #[specforge_test(
     behavior = "update_all_extensions",
@@ -131,4 +132,67 @@ fn an_update_over_an_unreadable_lock_is_refused_as_add_refuses_it() {
         std::fs::read_to_string(lock_path(dir.path())).unwrap(),
         "not a lock {{{"
     );
+}
+
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "a refusal of the project's registry configuration or the user's credential store refuses the update once, before any registry is asked"
+)]
+fn a_registry_that_cannot_be_opened_refuses_the_update_once() {
+    use crate::config::testing::files_under;
+    for error in [
+        OpError::coded(
+            OpErrorKind::SchemaMismatch,
+            specforge_common::codes::E067,
+            "Failed to parse registry entry at index 0",
+        ),
+        OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            specforge_common::codes::R012,
+            "invalid credentials file format",
+        ),
+    ] {
+        let dir = enabled_project(vec![
+            entry("@acme/a", "1.0.0", "registry", &[]),
+            entry("@acme/b", "1.0.0", "registry", &[]),
+        ]);
+        let registry = MemoryRegistry::new()
+            .serving(old("@acme/a", "1.1.0"))
+            .refusing_open(error.clone());
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let before = files_under(dir.path());
+
+        let refused = update(&request(&root, Reach::Major), &registry, &runtime()).unwrap_err();
+
+        assert_eq!(refused, error);
+        assert!(registry.asked().is_empty());
+        assert_eq!(files_under(dir.path()), before);
+    }
+}
+
+#[test]
+fn an_update_of_local_installs_opens_no_registry() {
+    let dir = enabled_project(vec![
+        entry("@sdk/greet", "0.0.9", "local:greet.wasm", &[]),
+        entry("@acme/a", "1.0.0", "registry", &[]),
+    ]);
+    let registry = MemoryRegistry::new().refusing_open(OpError::coded(
+        OpErrorKind::SchemaMismatch,
+        specforge_common::codes::E067,
+        "Failed to parse registry entry at index 0",
+    ));
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
+    let local = UpdateRequest {
+        name: Some("@sdk/greet"),
+        ..request(&root, Reach::Major)
+    };
+    let outcome = update(&local, &registry, &runtime()).unwrap();
+    assert!(matches!(
+        outcome.extensions[0].status,
+        UpdateStatus::NotFromRegistry { .. }
+    ));
+
+    let all = update(&request(&root, Reach::Major), &registry, &runtime()).unwrap_err();
+    assert!(all.is(specforge_common::codes::E067), "{all:?}");
 }

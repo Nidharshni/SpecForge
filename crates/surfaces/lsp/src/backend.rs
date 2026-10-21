@@ -35,6 +35,9 @@ pub struct Backend {
     /// published, the editor's watchers followed, its highlighting
     /// refreshed (ADR 0035, ADR 0043).
     reaction: Shared,
+    /// Where a project the server does not serve loads its extensions, for formatting its
+    /// documents; the reaction's too.
+    runtime: RuntimeSource,
     /// Dropped with the backend: the editor's calls give up once the server is gone, so a
     /// request the editor never answers cannot hold the reaction's thread (and the runtime's
     /// shutdown) for good.
@@ -45,10 +48,11 @@ impl Backend {
     pub fn new(client: Client) -> Self {
         let state = Arc::new(RwLock::new(LspState::new()));
         let (gone, closed) = watch::channel(());
+        let runtime = RuntimeSource::project();
         let reaction: Shared = Arc::new(Mutex::new(Reaction::new(
             ClientEditor::new(client.clone(), closed),
             Arc::clone(&state),
-            RuntimeSource::project(),
+            runtime.clone(),
         )));
         let (update_tx, mut update_rx) = mpsc::unbounded_channel::<Url>();
 
@@ -71,6 +75,7 @@ impl Backend {
             root_dir: Arc::new(Mutex::new(None)),
             update_tx,
             reaction,
+            runtime,
             _gone: gone,
         }
     }
@@ -359,7 +364,13 @@ impl Backend {
     ) -> Result<Option<Vec<TextEdit>>> {
         let formatted = self
             .answering("textDocument/formatting", |state| {
-                Ok(answers::formatting(state, uri, options, lines))
+                Ok(answers::formatting(
+                    state,
+                    &self.runtime,
+                    uri,
+                    options,
+                    lines,
+                ))
             })
             .await?;
         let Some(formatted) = formatted else {

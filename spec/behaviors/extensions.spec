@@ -784,6 +784,9 @@ behavior search_registry "Search Registry" {
     A specforge.json that is there and can't be used MUST be refused as add
     refuses it (config_invalid, naming E069), before any network call; so
     for login and publish.
+    A credentials.json that can't be read MUST refuse the search with R012
+    before any network call, as add refuses it: it is the user's store, not a
+    registry that failed.
   """
   verify unit "with no registry configured, search makes no network call and reports how to configure one"
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
@@ -792,6 +795,7 @@ behavior search_registry "Search Registry" {
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
+  verify unit "a credential store that can't be read refuses the search once, before any request: it is no registry's failure"
   verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
   verify integration "search's document writes its diagnostics as check does and carries no null"
   verify unit "deduplicates results across registries"
@@ -822,6 +826,8 @@ behavior publish_to_registry "Publish to Registry" {
     receipt_checked             "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
     registry_url_returned       "Successful publish returns the registry URL for the published version"
     published_event_emitted     "extension_published_to_registry event fires on successful publish"
+    scope_owned_by_account      "A scope belongs to the account of the token that claimed it, not to the token"
+    yank_held_to_owner          "A yank by a token of an account that does not own the package's scope is refused (SCOPE_OWNED) and the version stays installable"
   }
   contract   """
     When specforge publish is invoked with a registry target, the system
@@ -839,18 +845,25 @@ behavior publish_to_registry "Publish to Registry" {
     version it refuses stays publishable; it judges no key's trust
     (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
-    On the registry server, the first accepted publish into a scope claims
-    the scope for its publisher; only that publisher publishes into it
-    after. A publish the registry refuses (an invalid upload, a duplicate
+    On the registry server, every token is issued to an account; the first
+    accepted publish into a scope claims the scope for the publishing
+    token's account, and only tokens issued to that account publish or
+    yank in it after, whichever token, so a revoked or expired token's
+    replacement keeps the scope (SCOPE_OWNED otherwise). The registry's
+    operator may assign a scope to another account
+    (`specforge-registry scope assign`). A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
+    A yank is held to the same rule as a publish: only a token the scope's
+    owner holds withdraws a version, so a version another token withdraws
+    stays installable.
     A registry's refusal MUST reach the publisher as R008 naming the
     registry's code and reason. Publish MUST check that the registry's
     receipt names what it uploaded.
     The package MUST go to the one registry that serves its name, the
     registry add and update fetch that name from (ADR 0045). The upload MUST
     be authenticated: with no credential for that registry
-    (SPECFORGE_REGISTRY_TOKEN unset or blank, and none stored for its alias)
+    (SPECFORGE_REGISTRY_TOKEN unset or blank, and none stored for its root)
     publish MUST refuse with R001 before any network call and MUST NOT
     create a publisher signing key; a signing key that can't be read or
     created MUST be refused with E074 before any network call. Publish
@@ -878,6 +891,10 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "a version already published is refused with R007"
   verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
   verify integration "a publish the registry refuses claims no scope"
+  verify integration "a token is issued to an account; the registry refuses a token request that names none"
+  verify unit "an operator assigns a scope to another account, whose tokens then write into it and the old account's no longer do"
+  verify integration "a scope belongs to the account its tokens are issued to: a revoked or expired token's replacement publishes into it"
+  verify integration "a yank is refused unless the yanking token's account owns the package's scope, and the version stays installable"
   verify unit "successful publish returns registry URL"
   verify unit "unauthenticated publish produces ExtensionError"
   verify unit "the registry refuses a name or version that is not a package name or version"
@@ -888,7 +905,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, scope_owned_by_account, yank_held_to_owner"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
@@ -1126,8 +1143,10 @@ behavior configure_registries "Configure Registries" {
     configured. First-use MUST NOT require network access — registries are
     opt-in configuration, and first use is always local/offline per P8.
     An entry that can't be read (E067) refuses every registry operation
-    before any request, so no other registry serves the names its
-    scope_filter claims. The other diagnostics of reading the registries
+    before any request, once: an operation opens its registry (the registries
+    array and the user's credential store, read once) when it first needs one,
+    and a refusal there is the operation's, not a package's, so no other
+    registry serves the names its scope_filter claims. The other diagnostics of reading the registries
     array (W140, I003) are shown by an operation only once it has asked a
     registry: an add of an
     exact version already installed asks none and shows none; a dry run of
@@ -1135,6 +1154,7 @@ behavior configure_registries "Configure Registries" {
     shows them.
   """
   verify unit "registries parsed from specforge.json"
+  verify unit "a registry operation opens its registry once: the configuration and the credential store are read before any request, and their refusal is the operation's"
   verify unit "scope_filter routes to correct registry"
   verify unit "no registries configured produces I003 info diagnostic"
   verify unit "scope mismatch falls back to default registry URL"
@@ -1168,11 +1188,11 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
   ports      [RegistryClient]
   produces   [registry_authenticated]
   requires {
-    credential_configured     "~/.specforge/credentials.json has an entry for the registry's alias, or SPECFORGE_REGISTRY_TOKEN is set for a publish"
+    credential_configured     "~/.specforge/credentials.json has an entry for the registry's root, or SPECFORGE_REGISTRY_TOKEN is set for a publish"
     registry_client_available "RegistryClient port is available for authentication requests"
   }
   ensures {
-    token_resolved           "The token is resolved before any request: the secret login stored (OS keyring, else a 0600 file), an environment variable, or a token file"
+    token_resolved           "The token is resolved before any request: the secret login stored (a 0600 file), an environment variable, or a token file"
     auth_header_attached     "The resolved token is attached as an Authorization: Bearer header"
     missing_source_diagnosed "An unset variable is R010 and an unreadable token file R011, before any request"
     unauthorized_diagnosed   "A 401 is R001 naming how to log in again; a 403 is R002 with permission guidance"
@@ -1180,17 +1200,17 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     authenticated_emitted    "registry_authenticated event fires on successful authentication"
   }
   contract   """
-    A registry credential is kept per registry alias in
+    A registry credential is kept per registry root in
     ~/.specforge/credentials.json, never in specforge.json. Its token
     comes from one of three sources: the secret specforge login --token
-    stored (in the OS keyring, else in a 0600 file under
+    stored (in a 0600 file under
     ~/.specforge/secrets/), an environment variable (login --token-env),
     or a file whose trimmed content is the token (login --token-file).
     The system MUST resolve the token before any request: an unset or
     blank variable MUST be R010 and a token file that can't be read or
-    is empty MUST be R011, each naming the alias and how to fix it; an
-    expired stored token is R-AUTH-020 and an unreadable keyring entry
-    R-AUTH-021. The resolved token MUST be attached as an Authorization:
+    is empty MUST be R011, each naming the registry and how to fix it; an
+    expired stored token is R-AUTH-020 and a stored secret that is missing
+    or unreadable R-AUTH-021, before any request. The resolved token MUST be attached as an Authorization:
     Bearer header. A 401 answer MUST be R001, whose suggestion is
     `specforge login --registry <alias> --token <TOKEN>`; a 403 answer
     MUST be R002 with permission guidance. A 429 answer is retried by
@@ -1206,8 +1226,11 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
   verify unit "a token file that can't be read is R011 before any request"
   verify unit "a 401 is R001 naming how to log in again"
   verify unit "raw tokens never logged or stored in config"
+  verify unit "a request carries a credential only to the registry root it was kept for"
   verify unit "403 response produces E-level diagnostic with permission guidance"
   verify unit "every registry call reads an answer's status as one error"
+  verify integration "a credential kept for one registry root is never sent to another root under the same alias"
+  verify unit "a kept token whose secret is missing is R-AUTH-021 before any request"
   verify contract "Authenticate Registry Request: registry authentication holds — credential_configured, registry_client_available, token_resolved, auth_header_attached, missing_source_diagnosed, unauthorized_diagnosed, tokens_never_logged, authenticated_emitted"
 }
 
@@ -1260,7 +1283,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
     registry_client_available "RegistryClient port is available for test authentication request"
   }
   ensures {
-    valid_credentials_stored      "--token is stored as a secret in the OS keyring (0600-file fallback); --token-env and --token-file are stored as references, never as the token"
+    valid_credentials_stored      "--token is stored as a secret in a 0600 file; --token-env and --token-file are stored as references, never as the token"
     invalid_credentials_diagnosed "Invalid credentials produce error diagnostic with guidance"
     raw_token_never_stored        "Raw token value is never stored in specforge.json"
     credentials_validated_emitted "registry_credentials_validated event fires on successful validation"
@@ -1268,14 +1291,14 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   contract   """
     When specforge login is invoked, the system MUST validate the
     provided credentials against the target registry by making an authenticated
-    test request. The credential MUST be stored under the alias of the
+    test request. The credential MUST be stored under the root of the
     registry it was validated against: the entry --registry names, else the
     default registry; a --registry that names no entry MUST be refused (E063)
     before any network call. login MUST take exactly one token source:
     --token, --token-env or --token-file (R-LOGIN-001 otherwise, before any
     network call). The token is resolved from it and validated; then --token
-    is kept as a secret in the OS keyring (a 0600 file under
-    ~/.specforge/secrets/ when no keyring is available) and --token-env and
+    is kept as a secret in a 0600 file under
+    ~/.specforge/secrets/ and --token-env and
     --token-file are kept as references, so the variable's or the file's
     token is read on each use. The raw token MUST never be stored in
     specforge.json or in credentials.json. A credentials.json that cannot be
@@ -1292,7 +1315,8 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   verify unit "invalid credentials produce error with guidance"
   verify unit "raw token never stored in specforge.json"
   verify unit "success message includes registry alias and scope"
-  verify unit "login stores the credential under the alias of the registry it validated against"
+  verify unit "login stores the credential under the root of the registry it validated against"
+  verify unit "two registries with one alias keep two credentials, one per root"
   verify contract "Validate Registry Credentials: registry credential validation holds — registry_configured, registry_client_available, valid_credentials_stored, invalid_credentials_diagnosed, raw_token_never_stored, credentials_validated_emitted"
 }
 
@@ -1304,32 +1328,35 @@ behavior logout_registry "Logout Registry" {
   ports      [FileSystem]
   produces   [registry_logged_out]
   requires {
-    alias_given          "--registry names the alias, or the project at --path has a default registry"
+    alias_given          "--registry names the alias, --url names the root, or the project at --path has a default registry"
     filesystem_available "FileSystem port is available for credential removal"
   }
   ensures {
-    credential_removed        "RegistryCredential entry for the matching alias is removed"
-    other_credentials_intact  "Credentials for other aliases and scopes remain untouched"
-    missing_credential_silent "No credential for the specified alias succeeds silently"
+    credential_removed        "RegistryCredential entry for the matching registry root is removed"
+    other_credentials_intact  "Credentials for other registry roots remain untouched"
+    missing_credential_silent "No credential for the specified root succeeds silently"
     no_network_requests       "No network requests are made during logout"
     logged_out_emitted        "registry_logged_out event fires after credential removal"
   }
   contract   """
     When specforge logout --registry <alias> is invoked, the system
-    MUST remove the stored credential reference for the given registry alias.
-    Without --registry, the alias is the default registry's, read from
-    the specforge.json of the project at --path.
-    The removal MUST delete only the RegistryCredential entry whose alias matches —
-    credentials for other aliases (and their scopes) MUST remain untouched.
-    If no credential exists for the specified alias, the command MUST succeed
+    MUST remove the stored credential reference for the root of the registry
+    that alias names in the specforge.json of the project at --path (E063
+    when there is none). Without --registry, the registry is the default
+    registry's. specforge logout --url <root> forgets the credential kept
+    for that root and reads no project.
+    The removal MUST delete only the RegistryCredential entry whose root matches —
+    credentials for other registry roots MUST remain untouched.
+    If no credential exists for the specified root, the command MUST succeed
     silently. A credentials.json that cannot be read MUST be refused (R012):
     no entry is removed and no secret deleted. The system MUST NOT attempt
     any network requests during logout.
   """
   verify unit "logout refuses an unreadable credential store and deletes no secret"
-  verify unit "credential reference removed for matching alias"
-  verify unit "credentials for other aliases and scopes remain untouched"
-  verify unit "no credential for alias succeeds silently"
+  verify unit "credential reference removed for matching registry root"
+  verify unit "credentials for other registry roots remain untouched"
+  verify integration "logout --url forgets the credential kept for that root without reading a project"
+  verify unit "no credential for the root succeeds silently"
   verify unit "no network requests made during logout"
   verify unit "logout without --registry forgets the default registry's credential"
   verify contract "Logout Registry: registry logout holds — alias_given, filesystem_available, credential_removed, other_credentials_intact, missing_credential_silent, no_network_requests, logged_out_emitted"
@@ -1373,6 +1400,7 @@ behavior support_private_registries "Support Private Registries" {
   verify unit "scope_filter restricts which extensions are fetched"
   verify unit "error messages do not leak authentication details"
   verify unit "a download from another origin carries no credential"
+  verify unit "a read carries the credential kept for its registry's root, and none kept for another root"
   verify unit "an unusable stored credential refuses the read before any request"
   verify integration "a private registry refuses an anonymous read and answers an authenticated one"
   verify integration "a registry that requires a token to read is read with the stored credential"

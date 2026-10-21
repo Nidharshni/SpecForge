@@ -2,10 +2,10 @@
 //! migration steps (`titles`).
 //!
 //! The run plans first: a project with nothing to migrate, or with a file that cannot be migrated, is left alone
-//! (no compile, no hooks, nothing written). Otherwise it compiles the project, writes the plan as one project
-//! change (each source and the record staged, each backup a name the migration owns, ADR 0171), runs the
-//! extensions' migration hooks, and compiles again. When a hook fails, or the graph delta from before to after is
-//! not empty, the change is put back: every source has its text, the backups are gone.
+//! (no compile, no hooks, nothing written). Otherwise it compiles the project and judges the plan in memory
+//! ([`judge`], ADR 0186): the extensions' migration hooks run, and the planned texts are compiled over the project
+//! and compared with it. A dry run, or a migration the judgement refuses, ends there and writes nothing; a kept one is
+//! written as one project change (each source and the record staged, each backup a name the migration owns, ADR 0171).
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
@@ -17,7 +17,7 @@ pub use specforge_migrate::{
     MigrationSummary, RecordChange, RollbackSummary,
 };
 use specforge_migrate::{
-    Rewrite, backup_of, beyond_steps, migrate_project, run_rollback, structural_differences,
+    backup_of, beyond_steps, migrate_project, run_rollback, structural_differences,
 };
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
@@ -25,9 +25,10 @@ use specforge_parser::{
 use specforge_project::{CompiledProject, SharedRuntime};
 use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
+use crate::authoring::edit::validate::added;
 use crate::change::{ProjectChange, unreadable, unwritable};
 use crate::{Caller, Held, OpError, OpErrorKind, ReadFailure, Refusal, Writes, Wrote};
 
@@ -90,43 +91,31 @@ pub struct Outcome {
     pub dry_run: bool,
     /// Whether any file needed migrating. When not, nothing else ran.
     pub pending: bool,
-    /// Whether the change was committed (not a dry run, and no file failed to migrate): kept, or undone by its
-    /// put-back.
+    /// Whether the migration was written: kept and committed (not a dry run, no file failed to migrate, and the
+    /// verdict did not refuse it).
     pub applied: bool,
     /// The per-file migration (the preview, in a dry run or with nothing
     /// pending).
     pub summary: MigrationSummary,
-    /// `extension:hook` for each migration hook that ran.
-    pub hooks_invoked: Vec<String>,
-    /// Why each failing hook failed.
-    pub hook_failures: Vec<String>,
-    /// Whether the migrated project was compiled and compared.
-    pub validated: bool,
-    /// The graph delta from the graph before the migration to the graph after it, source positions ignored, less the
-    /// changes the migration steps declare (a title where a block had none): the run keeps the migration only when it
-    /// is empty. Empty when the run did not compare.
-    pub graph_delta: GraphDelta,
-    /// What compiling the migrated project reported.
-    pub post_diagnostics: Vec<Diagnostic>,
+    /// What judging the plan found: the same for a dry run and a real run. Not judged (the default) with nothing
+    /// pending or a file that could not be migrated.
+    pub verdict: Verdict,
     /// One E069 per problem in `specforge.json` the run went around.
     pub diagnostics: Vec<Diagnostic>,
-    /// The restore, when the migration was rolled back.
-    pub rollback: Option<RollbackSummary>,
     /// The files the run left changed: each backup, each migrated file and the record (or the removed record
-    /// under `--no-backup`); after an undone run, what could not be put back. Nothing for a dry run, with nothing
-    /// pending, or when a file could not be migrated.
+    /// under `--no-backup`). Nothing for a dry run, a refused migration, with nothing pending, or when a file could
+    /// not be migrated.
     pub writes: Writes,
 }
 
 /// Why a migration run failed ([`Outcome::failure`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Failure {
-    /// A migration hook failed (each failure as the hook's call reported it); every migrated file
-    /// was restored.
+    /// A migration hook failed (each failure as the hook's call reported it); nothing was written.
     HookFailed { hooks: Vec<String> },
-    /// The migrated project reports errors; every migrated file was restored.
+    /// The migrated project reports errors; nothing was written.
     DoesNotCompile { errors: usize },
-    /// The migrated project compiles to another graph (W054); every migrated file was restored.
+    /// The migrated project compiles to another graph (W054); nothing was written.
     ChangedGraph { differences: usize },
     /// Files that could not be migrated (each shown path and its error); nothing was written.
     FilesFailed { files: Vec<(String, String)> },
@@ -140,7 +129,7 @@ impl From<Failure> for OpError {
                 OpErrorKind::Internal,
                 "migration_hook_failed",
                 format!(
-                    "a migration hook failed ({}); every migrated file was restored",
+                    "a migration hook failed ({}); nothing was written",
                     hooks.join("; ")
                 ),
             ),
@@ -148,14 +137,14 @@ impl From<Failure> for OpError {
                 OpErrorKind::CompilationFailed,
                 "migration_does_not_compile",
                 format!(
-                    "the migrated project does not compile ({errors} error(s)); every migrated file was restored"
+                    "the migrated project does not compile ({errors} error(s) it would add); nothing was written"
                 ),
             ),
             Failure::ChangedGraph { differences } => OpError::new(
                 OpErrorKind::CompilationFailed,
                 "migration_changed_graph",
                 format!(
-                    "the migration changed the graph ({differences} structural difference(s), W054); every migrated file was restored"
+                    "the migration changed the graph ({differences} structural difference(s), W054); nothing was written"
                 ),
             ),
             Failure::FilesFailed { files } => {
@@ -180,7 +169,7 @@ impl From<Failure> for OpError {
 /// (`McpMigrateResult`): one record whether anything was pending or not.
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct MigrateDocument {
-    /// No file failed, nothing was rolled back and `specforge.json` is used
+    /// No file failed, the migration is not refused and `specforge.json` is used
     /// as written ([`Outcome::ok`]).
     pub ok: bool,
     /// Some file was behind `to_version`; when false nothing else ran.
@@ -205,10 +194,6 @@ pub struct MigrateDocument {
     pub hook_failures: Vec<String>,
     /// How the migrated graph differs from the one before (W054).
     pub structural_differences: DiagnosticList,
-    pub rolled_back: bool,
-    /// The restore, when the migration was rolled back.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rollback: Option<RollbackSummary>,
     pub post_migration_validated: bool,
     /// The errors compiling the migrated project reported.
     pub post_migration_errors: DiagnosticList,
@@ -220,10 +205,10 @@ impl Outcome {
         Wrote::of(self.dry_run, self.writes.clone())
     }
 
-    /// How the migrated graph differs from the one before: one W054 per change in [`Self::graph_delta`]; empty
-    /// exactly when it is.
+    /// How the migrated graph differs from the one before: one W054 per change in the verdict's graph delta;
+    /// empty exactly when it is.
     pub fn structural_differences(&self) -> Vec<Diagnostic> {
-        structural_differences(&self.graph_delta)
+        structural_differences(&self.verdict.graph_delta)
     }
 
     /// The document both surfaces print.
@@ -242,44 +227,32 @@ impl Outcome {
             results: self.summary.results.clone(),
             diffs: self.summary.diffs.clone(),
             backups: self.summary.backups.clone(),
-            hooks_invoked: self.hooks_invoked.clone(),
-            hook_failures: self.hook_failures.clone(),
+            hooks_invoked: self.verdict.hooks_invoked.clone(),
+            hook_failures: self.verdict.hook_failures.clone(),
             structural_differences: DiagnosticList(self.structural_differences()),
-            rolled_back: self.rollback.is_some(),
-            rollback: self.rollback.clone(),
-            post_migration_validated: self.validated,
-            post_migration_errors: DiagnosticList(self.post_errors().cloned().collect()),
+            post_migration_validated: self.verdict.compared,
+            post_migration_errors: DiagnosticList(self.verdict.post_errors().cloned().collect()),
         }
     }
 
-    /// Whether the change was put back because a check failed (a hook, the graph comparison).
-    fn undone(&self) -> bool {
-        !self.hook_failures.is_empty() || !self.graph_delta.is_empty()
-    }
-
-    /// Whether the migrated files are on disk now.
+    /// Whether the migrated files are on disk now: a kept migration that rewrote a file.
     pub fn migrated(&self) -> bool {
-        self.applied && self.summary.migrated_count > 0 && self.rollback.is_none()
+        self.applied && self.summary.migrated_count > 0
     }
 
-    /// The run's verdict: no file failed to migrate, nothing was rolled
-    /// back, and `specforge.json` is used as written (no E069).
-    /// `specforge migrate` exits by it; MCP `specforge.migrate` returns it
-    /// as `ok`. A failed run ([`Self::failure`]) always fails it; an E069 alone
+    /// The run's verdict, the same for a dry run and a real run: no file failed to migrate, the migration is not
+    /// refused, and `specforge.json` is used as written (no E069). `specforge migrate` exits by it; MCP
+    /// `specforge.migrate` returns it as `ok`. A failed run ([`Self::failure`]) always fails it; an E069 alone
     /// fails only it.
     pub fn ok(&self) -> bool {
-        self.summary.failed_count == 0 && self.rollback.is_none() && self.diagnostics.is_empty()
+        self.failure().is_none() && self.diagnostics.is_empty()
     }
 
-    /// Why the run failed (ADR 0170): a rollback's cause first (a hook that failed, a project that
-    /// does not compile, a graph that changed), then files that could not be migrated. `None` when
-    /// every file migrated and nothing was rolled back: an E069 the run went around fails
-    /// [`Self::ok`], not the run.
+    /// Why the run failed (ADR 0170): files that could not be migrated, else the verdict's refusal (a hook that
+    /// failed, a project that does not compile, a graph that changed). `None` when every file migrated and the
+    /// migration is kept: an E069 the run went around fails [`Self::ok`], not the run.
     pub fn failure(&self) -> Option<Failure> {
-        if self.rollback.is_none() {
-            if self.summary.failed_count == 0 {
-                return None;
-            }
+        if self.summary.failed_count > 0 {
             let files = self
                 .summary
                 .results
@@ -289,18 +262,7 @@ impl Outcome {
                 .collect();
             return Some(Failure::FilesFailed { files });
         }
-        if !self.hook_failures.is_empty() {
-            return Some(Failure::HookFailed {
-                hooks: self.hook_failures.clone(),
-            });
-        }
-        let errors = self.post_errors().count();
-        if errors > 0 {
-            return Some(Failure::DoesNotCompile { errors });
-        }
-        Some(Failure::ChangedGraph {
-            differences: self.structural_differences().len(),
-        })
+        self.verdict.refusal()
     }
 
     /// The run failed (ADR 0170), as every operation reports a failure: [`Self::failure`]'s kind,
@@ -315,13 +277,6 @@ impl Outcome {
                 .with_writes(self.writes.clone()),
         )
     }
-
-    /// The errors compiling the migrated project reported.
-    pub fn post_errors(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.post_diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-    }
 }
 
 /// The migration hooks that ran (`extension:hook`), and why any failed.
@@ -332,19 +287,125 @@ pub type HookRun = (Vec<String>, Vec<String>);
 /// the files the core migration rewrote.
 pub use specforge_protocol_types::MigrationInput;
 
-/// Migrate the project at `request.root`: plan, compile, write the plan as one project change, run the
-/// extensions' migration hooks in `runtime` in dependency order, compile again and compare. A failing hook or a
-/// non-empty graph delta puts the change back: every migrated file has its text again and the run's backups are
-/// removed. With no runtime no extension is loaded, so no hook runs.
+/// What judging a planned migration found (ADR 0186): the hooks that ran and why any failed; when none failed, what
+/// the edited compile of the planned texts reports and its graph delta from the graph before, less the steps' own
+/// changes.
+#[derive(Debug, Clone, Default)]
+pub struct Verdict {
+    /// `extension:hook` for each migration hook that ran.
+    pub hooks_invoked: Vec<String>,
+    /// Why each failing hook failed.
+    pub hook_failures: Vec<String>,
+    /// The planned texts were compiled and compared: every hook passed.
+    pub compared: bool,
+    /// The delta from the graph before to the planned graph, source positions ignored, less the changes the
+    /// migration steps declare (a title where a block had none). Empty when the run did not compare.
+    pub graph_delta: GraphDelta,
+    /// What the edited compile reports, in `specforge check`'s order.
+    pub post_diagnostics: Vec<Diagnostic>,
+    /// How many of its errors the project does not report now (`edit::validate::added`).
+    pub added_errors: usize,
+}
+
+impl Verdict {
+    /// Why the migration is refused, or `None` when it is kept: a hook that failed; else a graph that changed, as
+    /// "does not compile" when the planned project has errors the project has not, else as W054s.
+    pub fn refusal(&self) -> Option<Failure> {
+        if !self.hook_failures.is_empty() {
+            return Some(Failure::HookFailed {
+                hooks: self.hook_failures.clone(),
+            });
+        }
+        if self.graph_delta.is_empty() {
+            return None;
+        }
+        if self.added_errors > 0 {
+            return Some(Failure::DoesNotCompile {
+                errors: self.added_errors,
+            });
+        }
+        Some(Failure::ChangedGraph {
+            differences: structural_differences(&self.graph_delta).len(),
+        })
+    }
+
+    /// The errors the planned project reports.
+    pub fn post_errors(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.post_diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+    }
+}
+
+/// Judge `planned` (the planned text of each migrated source, by source key) against `pre`, the project compiled
+/// before: run each extension's migration hook in `pre`'s runtime with `input`, in load order ([`invoke_hooks`]);
+/// when none failed, compile the planned texts over `pre` in memory (`CompiledProject::edited`: reads no source,
+/// shares `pre`'s environment) and compare graphs. Writes nothing; the hooks get no file system (ADR 0037).
+pub fn judge(
+    pre: &CompiledProject,
+    planned: &BTreeMap<String, String>,
+    input: &MigrationInput,
+) -> Verdict {
+    let (hooks_invoked, hook_failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
+        Some(runtime) => invoke_hooks(pre.environment().registries(), runtime, input),
+        None => (Vec::new(), Vec::new()),
+    };
+    let mut verdict = Verdict {
+        hooks_invoked,
+        hook_failures,
+        ..Verdict::default()
+    };
+    if !verdict.hook_failures.is_empty() {
+        return verdict;
+    }
+    let post = pre.edited(planned);
+    verdict.compared = true;
+    verdict.graph_delta = beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
+    verdict.post_diagnostics = post.diagnostics();
+    verdict.added_errors = added(&pre.checked_diagnostics(), verdict.post_diagnostics.clone())
+        .0
+        .len();
+    verdict
+}
+
+/// What the hooks are called with: the format versions and the files the core migration rewrites.
+fn hook_input(outcome: &Outcome, project: &specforge_common::ProjectRoot) -> MigrationInput {
+    MigrationInput {
+        from: outcome.from.to_string(),
+        to: outcome.to.to_string(),
+        files: outcome
+            .summary
+            .results
+            .iter()
+            .filter(|r| r.status == MigrationStatus::Migrated)
+            .map(|r| r.file_path.under(project.dir()).display().to_string())
+            .collect(),
+    }
+}
+
+/// Remove the migration record, which a kept migration made without backups leaves out of date.
+fn remove_record(record: &Held) -> Result<(), OpError> {
+    match record.remove() {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(unwritable(&record.spelled, &e).prefixed("cannot migrate: "))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Migrate the project at `request.root`: plan, compile, judge the plan in memory ([`judge`]: the extensions'
+/// migration hooks in `runtime` in dependency order, then the planned texts compiled and compared with the project),
+/// and write a kept migration as one project change. A dry run, or a migration whose hook fails or whose graph delta
+/// is not empty, ends at the judgement: nothing is written. With no runtime no extension is loaded, so no hook runs.
 ///
 /// Its `specforge.json` is read once, through [`crate::config::rewritable`]:
 /// refused (`config_invalid`, nothing read or written) when it does not say
 /// which files are the project's sources or which extensions it loads; each
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
-/// [`Outcome::ok`]. Each source is read once, through the caller's containment: over MCP a source with more
-/// than one name fails its file (ADR 0146, ADR 0158), and the project is compiled through it before and after
-/// (ADR 0166). A file that cannot be migrated leaves every file as it was. A write that fails (a read-only
-/// source, a changed one) is the project change's `Err` (ADR 0155, ADR 0171).
+/// [`Outcome::ok`]. Each source is read twice, through the caller's containment: over MCP a source with more
+/// than one name fails its file (ADR 0146, ADR 0158), and the project is compiled through it (ADR 0166). A file
+/// that cannot be migrated leaves every file as it was. A write that fails (a read-only source, a changed one) is
+/// the project change's `Err` (ADR 0155, ADR 0171).
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
@@ -357,8 +418,8 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         .iter()
         .map(|source| Ok((source.as_path(), containment.resolve(source)?)))
         .collect::<Result<_, OpError>>()?;
-    // Every source is read, and the project compiled before and after, through the caller's containment: over
-    // MCP a file with more than one name fails its file and is E025 in the compiles (ADR 0146, 0158, 0166).
+    // Every source is read, and the project compiled, through the caller's containment: over MCP a file with more
+    // than one name fails its file and is E025 in the compile (ADR 0146, 0158, 0166).
     let bound = containment.disk();
     let read_source = |path: &Path| -> std::io::Result<String> {
         String::from_utf8(bound.read(path)?).map_err(|_| {
@@ -383,24 +444,38 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         pending,
         applied: false,
         summary: plan,
-        hooks_invoked: Vec::new(),
-        hook_failures: Vec::new(),
-        validated: false,
-        graph_delta: GraphDelta::default(),
-        post_diagnostics: Vec::new(),
+        verdict: Verdict::default(),
         diagnostics: read.diagnostics(),
-        rollback: None,
         writes: Writes::none(),
     };
-    // A file that cannot be migrated leaves every file as it was (ADR 0171): the plan reports each one.
-    if !pending || request.dry_run || outcome.summary.failed_count > 0 {
+    // Nothing pending, or a file that cannot be migrated: nothing is compiled, judged or written (ADR 0171): the
+    // plan reports each one.
+    if !pending || outcome.summary.failed_count > 0 {
         return Ok(outcome);
     }
 
     // The graph before any file is touched, read through the same bound: a refused source is its E025 (ADR 0166).
-    let pre = CompiledProject::compile_through(project, runtime.clone(), &bound);
+    // The plan is judged against it in memory (ADR 0186).
+    let pre = CompiledProject::compile_through(project, runtime, &bound);
+    let planned: BTreeMap<String, String> = outcome
+        .summary
+        .rewrites
+        .iter()
+        .map(|r| (pre.environment().source_key(&r.path), r.after.clone()))
+        .collect();
+    debug_assert!(
+        planned
+            .keys()
+            .all(|key| pre.source_keys().contains(key.as_str())),
+        "a planned source is one the compile holds"
+    );
+    outcome.verdict = judge(&pre, &planned, &hook_input(&outcome, project));
+    // A preview reports the verdict; a refused migration writes nothing (ADR 0186).
+    if request.dry_run || outcome.verdict.refusal().is_some() {
+        return Ok(outcome);
+    }
 
-    // The plan as one change: per file its backup (a name the migration owns, with its source's permissions),
+    // The kept plan as one change: per file its backup (a name the migration owns, with its source's permissions),
     // then the source; then the record.
     let rewrites = std::mem::take(&mut outcome.summary.rewrites);
     let record_name = project.dir().join(MigrationRecord::PATH);
@@ -426,11 +501,11 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             .into_bytes()
     });
     let mut change = ProjectChange::new(project.dir(), "cannot migrate");
-    let mut staged: Vec<(Rewrite, Held)> = Vec::new();
+    let mut staged: Vec<std::path::PathBuf> = Vec::new();
     for rewrite in rewrites {
         let source = held[rewrite.path.as_path()].clone();
         // Two names for one file (an inside link that is also a source) are written once.
-        if staged.iter().any(|(_, other)| other.real == source.real) {
+        if staged.contains(&source.real) {
             continue;
         }
         if !request.no_backup {
@@ -444,113 +519,26 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             });
             change.stage_owned(backup, rewrite.before.clone().into_bytes(), mode);
         }
+        staged.push(source.real.clone());
         change.stage(
-            source.clone(),
-            Some(rewrite.before.clone().into_bytes()),
-            rewrite.after.clone().into_bytes(),
+            source,
+            Some(rewrite.before.into_bytes()),
+            rewrite.after.into_bytes(),
         );
-        staged.push((rewrite, source));
     }
     if let Some(recorded) = recorded {
-        change.stage(record.clone(), record_was.clone(), recorded);
+        change.stage(record.clone(), record_was, recorded);
     }
 
-    // Extension hooks run on the migrated files, before validation.
-    let input = MigrationInput {
-        from: outcome.from.to_string(),
-        to: outcome.to.to_string(),
-        files: outcome
-            .summary
-            .results
-            .iter()
-            .filter(|r| r.status == MigrationStatus::Migrated)
-            .map(|r| r.file_path.under(project.dir()).display().to_string())
-            .collect(),
-    };
-    let committed = change.commit_then(|| {
-        let (invoked, failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
-            Some(runtime) => invoke_hooks(pre.environment().registries(), runtime, &input),
-            None => (Vec::new(), Vec::new()),
-        };
-        outcome.hooks_invoked = invoked;
-        outcome.hook_failures = failures;
-        if !outcome.hook_failures.is_empty() {
-            return Err(Failure::HookFailed {
-                hooks: outcome.hook_failures.clone(),
-            }
-            .into());
-        }
-        // The migrated project must have the graph it had before.
-        let post = CompiledProject::compile_through(project, runtime, &bound);
-        outcome.validated = true;
-        outcome.graph_delta =
-            beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
-        outcome.post_diagnostics = post.diagnostics();
-        if !outcome.graph_delta.is_empty() {
-            return Err(Failure::ChangedGraph {
-                differences: outcome.structural_differences().len(),
-            }
-            .into());
-        }
-        // A kept migration made without backups removes the record, since a rollback after it would mix versions.
-        if request.no_backup {
-            return match record.remove() {
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                    Err(unwritable(&record.spelled, &e).prefixed("cannot migrate: "))
-                }
-                _ => Ok(()),
-            };
-        }
-        Ok(())
-    });
+    // A kept migration made without backups removes the record, since a rollback after it would mix versions.
+    let written = if request.no_backup {
+        change.commit_then(|| remove_record(&record))
+    } else {
+        change.commit()
+    }?;
+    outcome.writes = written;
     outcome.applied = true;
-    match committed {
-        Ok(writes) => outcome.writes = writes,
-        Err(error) if outcome.undone() => {
-            outcome.rollback = Some(put_back_summary(&staged, &error.writes));
-            outcome.writes = error.writes;
-            outcome.summary.backups.clear();
-        }
-        Err(error) => {
-            outcome.applied = false;
-            return Err(error);
-        }
-    }
     Ok(outcome)
-}
-
-/// The automatic rollback's summary: each rewritten source, restored by the change's put-back, or failed when it
-/// is among the files `left` that could not be put back.
-fn put_back_summary(staged: &[(Rewrite, Held)], left: &Writes) -> RollbackSummary {
-    let results: Vec<MigrationResult> = staged
-        .iter()
-        .map(|(rewrite, source)| {
-            let stuck = left.paths().any(|path| path == source.spelled);
-            MigrationResult {
-                file_path: rewrite.name.clone(),
-                status: if stuck {
-                    MigrationStatus::Failed
-                } else {
-                    MigrationStatus::Restored
-                },
-                from_version: None,
-                to_version: None,
-                error: stuck.then(|| "could not be put back".to_string()),
-            }
-        })
-        .collect();
-    let failed_count = results
-        .iter()
-        .filter(|r| r.status == MigrationStatus::Failed)
-        .count();
-    RollbackSummary {
-        restored_count: results.len() - failed_count,
-        skipped_count: 0,
-        failed_count,
-        results,
-        warnings: Vec::new(),
-        record: RecordChange::Unchanged,
-    }
 }
 
 /// What a rollback rewrote: each file it restored from its backup.

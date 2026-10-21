@@ -52,19 +52,24 @@ fn login_refuses_an_unreadable_credential_store_and_keeps_it() {
     verify = "logout refuses an unreadable credential store and deletes no secret"
 )]
 fn logout_refuses_an_unreadable_credential_store_and_keeps_the_secret() {
-    let dir = TestProject::new().without_config();
+    // A secret kept by a real `login --token`; then the store breaks.
+    let registry = crate::support::registry::serve(vec![]);
+    let dir = project_on(&registry);
+    let login = Cli::on(&dir)
+        .command(&["login", "--token", registry.token()])
+        .output()
+        .unwrap();
+    assert!(login.status.success(), "{login:?}");
+    let secrets = dir.home().join(".specforge/secrets");
+    let kept = || std::fs::read_dir(&secrets).unwrap().count();
+    assert_eq!(kept(), 1);
     write_broken_store(&dir);
-    let secret = dir
-        .home()
-        .join(".specforge/secrets/p11-unreadable-store.json");
-    std::fs::create_dir_all(secret.parent().unwrap()).unwrap();
-    std::fs::write(&secret, r#"{"secret":"s"}"#).unwrap();
 
     let output = Cli::on(&dir)
         .bare_command(&[
             "logout",
-            "--registry",
-            "p11-unreadable-store",
+            "--url",
+            registry.root().as_str(),
             "--format",
             "json",
         ])
@@ -75,5 +80,5 @@ fn logout_refuses_an_unreadable_credential_store_and_keeps_the_secret() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["code"], "R012", "{json}");
     assert_eq!(stored(&dir), BROKEN);
-    assert!(secret.exists(), "the secret was deleted");
+    assert_eq!(kept(), 1, "the secret was deleted");
 }

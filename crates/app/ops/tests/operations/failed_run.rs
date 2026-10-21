@@ -29,7 +29,7 @@ fn a_file_that_could_not_migrate_is_a_failed_run() {
 }
 
 #[test]
-fn a_rolled_back_migration_is_a_failed_run() {
+fn a_refused_migration_is_a_failed_run() {
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("trapped".into())));
     let outcome = run(
@@ -40,7 +40,7 @@ fn a_rolled_back_migration_is_a_failed_run() {
     let error = outcome.failed().expect("a failed run");
 
     assert_eq!(error.kind, OpErrorKind::Internal);
-    assert_eq!(error.data.as_deref().unwrap()["rolled_back"], true);
+    assert_eq!(error.data.as_deref().unwrap()["ok"], false);
     assert_eq!(error.writes, outcome.writes);
     assert!(error.suggestion.is_none());
     assert!(!outcome.ok());

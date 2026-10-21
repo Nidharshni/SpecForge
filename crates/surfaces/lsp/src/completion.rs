@@ -4,13 +4,15 @@
 
 use specforge_common::structural;
 use specforge_graph::Reading;
+use specforge_ops::authoring::edit::{Skeleton, Skeletons, SlotOf};
+use specforge_ops::authoring::format::Place;
 use specforge_ops::read::infer::{KindGuide, guide};
 use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities};
 use specforge_ops::view::ProjectView;
 use specforge_registry::{FieldRegistry, FieldType};
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionTextEdit, Documentation, InsertReplaceEdit,
-    InsertTextFormat, MarkupContent, MarkupKind, TextEdit,
+    InsertTextFormat, InsertTextMode, MarkupContent, MarkupKind, TextEdit,
 };
 
 use crate::document::{CompletionSite, WordEdit};
@@ -18,29 +20,38 @@ use crate::document::{CompletionSite, WordEdit};
 /// The completion items of `site`. Each carries an edit over the word
 /// under the cursor (`edit`): an insert-and-replace edit when the client
 /// supports one (`insert_replace`), else a plain edit over the word's start
-/// to the cursor; its `filterText` is its label.
+/// to the cursor; its `filterText` is its label. A keyword's and a field's snippet is the skeleton the typed create
+/// gives it in the file at `place` (ADR 0191).
 pub fn items(
     site: &CompletionSite,
     edit: &WordEdit,
     insert_replace: bool,
     view: &ProjectView,
+    place: Place<'_>,
 ) -> Vec<CompletionItem> {
     let registries = view.registries();
     let mut items = match *site {
-        CompletionSite::Keywords { prefix } => keywords(prefix, view),
+        CompletionSite::Keywords { prefix } => keywords(prefix, view, &Skeletons::at(view, place)),
         CompletionSite::Fields { kind, prefix } => {
+            let skeletons = Skeletons::at(view, place);
             let mut fields = registries.fields().fields_for_kind(kind);
             fields.sort_by(|a, b| a.declared().name.cmp(&b.declared().name));
             fields
                 .into_iter()
                 .filter(|field| starts_with(&field.declared().name, prefix))
-                .map(|field| CompletionItem {
-                    label: field.declared().name.clone(),
-                    kind: Some(CompletionItemKind::FIELD),
-                    detail: field.declared().description.clone(),
-                    insert_text: Some(field_snippet(field, 1)),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
+                .map(|field| {
+                    let name = &field.declared().name;
+                    let insert_text = skeletons.member(kind, name).map(|s| snippet(&s));
+                    CompletionItem {
+                        label: name.clone(),
+                        kind: Some(CompletionItemKind::FIELD),
+                        detail: field.declared().description.clone(),
+                        insert_text_format: insert_text.as_ref().map(|_| InsertTextFormat::SNIPPET),
+                        // The skeleton is relative to its line: the client adds the line's own lead.
+                        insert_text_mode: Some(InsertTextMode::ADJUST_INDENTATION),
+                        insert_text,
+                        ..Default::default()
+                    }
                 })
                 .collect()
         }
@@ -123,7 +134,7 @@ fn starts_with(label: &str, prefix: &str) -> bool {
 /// scaffolding its required fields and documented from its inference guide.
 /// `define` is a reserved word whose blocks register nothing (W143, ADR
 /// 0005): never suggested.
-fn keywords(prefix: &str, view: &ProjectView) -> Vec<CompletionItem> {
+fn keywords(prefix: &str, view: &ProjectView, skeletons: &Skeletons) -> Vec<CompletionItem> {
     let kinds = view.registries().kinds();
     let guide = guide(view);
     let mut keywords: Vec<String> = kinds.keywords().cloned().collect();
@@ -138,7 +149,7 @@ fn keywords(prefix: &str, view: &ProjectView) -> Vec<CompletionItem> {
             let (detail, snippet) = match kinds.get(&keyword) {
                 Some(entry) => (
                     Some(entry.source_extension.clone()),
-                    Some(keyword_snippet(&keyword, view.registries().fields())),
+                    skeletons.block(&keyword).map(|s| snippet(&s)),
                 ),
                 None => (None, None),
             };
@@ -243,30 +254,35 @@ fn entity_ids(view: &ProjectView, prefix: &str, kind: Option<&str>) -> Vec<Compl
         .collect()
 }
 
-/// Insert text for `field` as snippet placeholder `n`: a reference list
-/// scaffolds its brackets, a string its quotes.
-pub fn field_snippet(field: &specforge_registry::FieldRegistryEntry, n: usize) -> String {
-    let name = &field.declared().name;
-    match field.field_type() {
-        t if t.is_list() => format!("{name} [${n}]"),
-        FieldType::String => format!("{name} \"${n}\""),
-        FieldType::Block => format!("{name} {{\n    ${n}\n  }}"),
-        _ => format!("{name} ${n}"),
+/// `skeleton` as an LSP snippet: each slot a tabstop numbered in text order (`End` is `$0`), its placeholder text,
+/// when it has one, the tabstop's default; `$` and `\` escaped in the text, `}` too in a default.
+fn snippet(skeleton: &Skeleton) -> String {
+    let escaped = |text: &str, default: bool| {
+        let mut out = String::new();
+        for c in text.chars() {
+            if matches!(c, '$' | '\\') || (default && c == '}') {
+                out.push('\\');
+            }
+            out.push(c);
+        }
+        out
+    };
+    let (mut out, mut from, mut n) = (String::new(), 0, 0);
+    for slot in &skeleton.slots {
+        out.push_str(&escaped(&skeleton.text[from..slot.at.start], false));
+        let placeholder = &skeleton.text[slot.at.clone()];
+        if slot.of == SlotOf::End {
+            out.push_str("$0");
+        } else {
+            n += 1;
+            if placeholder.is_empty() {
+                out.push_str(&format!("${n}"));
+            } else {
+                out.push_str(&format!("${{{n}:{}}}", escaped(placeholder, true)));
+            }
+        }
+        from = slot.at.end;
     }
-}
-
-/// Snippet that scaffolds a `kind` block with its required fields.
-pub fn keyword_snippet(kind: &str, field_registry: &FieldRegistry) -> String {
-    let mut required: Vec<_> = field_registry
-        .fields_for_kind(kind)
-        .into_iter()
-        .filter(|f| f.declared().required)
-        .collect();
-    required.sort_by(|a, b| a.declared().name.cmp(&b.declared().name));
-    let mut snippet = format!("{kind} ${{1:id}} \"${{2:Title}}\" {{\n");
-    for (i, field) in required.iter().enumerate() {
-        snippet.push_str(&format!("  {}\n", field_snippet(field, i + 3)));
-    }
-    snippet.push_str("  $0\n}");
-    snippet
+    out.push_str(&escaped(&skeleton.text[from..], false));
+    out
 }

@@ -11,6 +11,7 @@ mod format_version;
 mod guide_spec_blocks;
 mod lex;
 mod methods_test;
+mod name_spans;
 mod parse_test;
 mod ref_components;
 mod robustness;

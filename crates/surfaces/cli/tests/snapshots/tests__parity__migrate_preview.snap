@@ -47,7 +47,7 @@ expression: snapshot
       "ok": true,
       "pending": true,
       "post_migration_errors": [],
-      "post_migration_validated": false,
+      "post_migration_validated": true,
       "results": [
         {
           "file_path": "spec/main.spec",
@@ -74,7 +74,6 @@ expression: snapshot
           }
         }
       ],
-      "rolled_back": false,
       "structural_differences": [],
       "to_version": "1.0"
     },

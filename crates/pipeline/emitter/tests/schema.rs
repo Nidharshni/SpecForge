@@ -9,9 +9,7 @@ use specforge_parser::FieldMap;
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
 };
-use specforge_registry::{
-    FieldRegistry, FieldRegistryEntry, FieldType, RegistryBuild, build_registries,
-};
+use specforge_registry::{FieldType, RegistryBuild, build_registries};
 use specforge_test::prelude::*;
 
 /// `graph` exported as `format` with `schema` attached: embedded, or
@@ -22,11 +20,16 @@ fn with_schema(
     scope: Option<&str>,
     schema: &GraphProtocolSchema,
 ) -> Result<String, EmitterError> {
+    let selected = scope.map(|scope| {
+        graph
+            .select(Some(scope), None, &[])
+            .expect("tests scope at an entity of the graph")
+    });
     specforge_emitter::emit(
         graph,
         &EmitOptions {
             format,
-            scope,
+            selected: selected.as_ref(),
             schema,
             attach_schema: true,
             ..EmitOptions::default()
@@ -138,30 +141,6 @@ fn software_and_product() -> RegistryBuild {
             vec![],
         ),
     ])
-}
-
-fn make_field_entry(kind: &str, field: &str, ft: FieldType, required: bool) -> FieldRegistryEntry {
-    FieldRegistryEntry::new(
-        kind,
-        "@specforge/software",
-        specforge_registry::FieldDescriptor {
-            name: field.to_string(),
-            field_type: ft.as_str().to_string(),
-            required,
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-/// `entry` with its declaration changed by `change`.
-fn amended(
-    entry: FieldRegistryEntry,
-    change: impl FnOnce(&mut specforge_registry::FieldDescriptor),
-) -> FieldRegistryEntry {
-    let mut declared = entry.declared().clone();
-    change(&mut declared);
-    FieldRegistryEntry::new(entry.kind_name(), entry.source_extension(), declared).unwrap()
 }
 
 fn sample_schema() -> GraphProtocolSchema {
@@ -1052,42 +1031,6 @@ fn scoped_brief_v2_export() {
     assert!(parsed["schema_ref"]["content_hash"].is_string());
 }
 
-// B:embed_schema_in_export — verify unit "scoped V2 export with nonexistent scope returns error"
-#[specforge_test(
-    behavior = "export_agent_graph_format",
-    verify = "non-existent scope entity produces E003 and exit code 1"
-)]
-fn scoped_v2_nonexistent_scope_error() {
-    let mut graph = Graph::new();
-    graph.add_node(node("a", "behavior", Some("A")));
-    let schema = GraphProtocolSchema::empty();
-
-    let err = with_schema(&graph, EmitFormat::Json, Some("nonexistent"), &schema).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-
-    // What `specforge export --format graph --scope` calls, with a schema:
-    // the same E003.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            scope: Some("nonexistent"),
-            schema: &schema,
-            attach_schema: true,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-}
-
 // C6-03: SchemaVersion Ord must honor pre-release labels — 1.0.0-beta
 // sorts strictly below 1.0.0, and cmp/Eq stay consistent.
 #[test]
@@ -1199,18 +1142,25 @@ fn published_schema_constrains_fields_per_kind() {
     verify = "published context schema admits declared headline and normative fields"
 )]
 fn published_context_schema_admits_declared_headline_and_normative_fields() {
-    let mut fields = FieldRegistry::new();
     // A headline field named neither `contract` nor `status`.
-    let stage = amended(
-        make_field_entry("task", "stage", FieldType::String, false),
-        |d| d.headline = true,
-    );
-    fields.register(stage);
-    let goal = amended(
-        make_field_entry("task", "goal", FieldType::String, false),
-        |d| d.normative = true,
-    );
-    fields.register(goal);
+    let registries = build_registries(vec![declaration(
+        "@test/ext",
+        vec![kind_decl(
+            "task",
+            false,
+            vec![
+                FieldDescriptor {
+                    headline: true,
+                    ..field_decl("stage", FieldType::String, false)
+                },
+                FieldDescriptor {
+                    normative: true,
+                    ..field_decl("goal", FieldType::String, false)
+                },
+            ],
+        )],
+        vec![],
+    )]);
 
     let mut task = node("ship", "task", Some("Ship it"));
     task.fields
@@ -1229,7 +1179,7 @@ fn published_context_schema_admits_declared_headline_and_normative_fields() {
             format: EmitFormat::Context,
             schema: &schema,
             attach_schema: true,
-            field_registry: Some(&fields),
+            registries: &registries,
             ..Default::default()
         },
     )

@@ -109,8 +109,9 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
     one specforge.json records: an extension's template writes it as
     {version} (as {project} stands for the project id), which init fills
     in. Init MUST write the starter as the
-    formatter writes it, whatever the extensions contribute, so a freshly
-    initialised project passes specforge format --check.
+    formatter writes it, with the configuration of its directory and the
+    field forms of the extensions it enables, whatever they contribute, so
+    a freshly initialised project passes specforge format --check.
   """
   verify unit "starter spec file is created alongside specforge.json"
   verify unit "starter spec file passes specforge check with zero errors"
@@ -123,6 +124,7 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
   verify integration "the software starter passes specforge check with no warnings"
   verify unit "the starter spec's version is the project's"
   verify integration "a freshly initialised project passes format --check and check"
+  verify unit "init writes the starter's values in the forms of the fields the extensions it enables declare"
   verify contract "Scaffold Starter Spec File: starter spec file scaffolding holds — config_created, filesystem_available, starter_file_created, structural_syntax_only, zero_diagnostic_pass"
 }
 
@@ -222,9 +224,11 @@ behavior non_interactive_init "Non-Interactive Init" {
     A registry package MUST be rejected with E063 (a new project has no
     registry configured; the suggestion names the specforge add to run
     once one is), a git source with E064, both with exit code 1 and before
-    anything is written. A project name whose starter spec ID would break
-    the identifier contract (2-60 characters) MUST be rejected the same
-    way. Everything is validated before any file is written.
+    anything is written. A project name whose starter spec ID
+    specforge check would refuse, outside the identifier contract (2-60
+    characters, E014) or a reserved word (E013: a structural keyword, or
+    the keyword of a kind an extension init enables declares), MUST be
+    rejected the same way, whatever extensions are enabled. Everything is validated before any file is written.
   """
   verify unit "non-interactive init creates valid specforge.json"
   verify unit "non-interactive init skips all prompts"
@@ -240,6 +244,9 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "invalid project name is rejected with InitError::invalid_name"
   verify integration "--extensions splits a comma-separated list into its extensions"
   verify integration "a one-character project name is rejected before its starter can fail E014"
+  verify unit "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
+  verify unit "init refuses a structural keyword as the starter's spec ID, whatever it enables"
+  verify integration "a directory named after a kind init enables is refused as the project name, writing nothing"
   verify integration "non-interactive output matches interactive output for same inputs"
   verify unit "non-interactive init with --format=json prints the init document specforge.init answers"
   verify unit "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"

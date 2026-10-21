@@ -8,7 +8,7 @@
 
 use specforge_common::codes;
 use specforge_ops::registry::Registry;
-use specforge_ops_registry::{ConfiguredRegistry, configured};
+use specforge_ops_registry::{ConfiguredRegistry, User, configured};
 use specforge_package::PackageName;
 use specforge_project::testing::TestProject;
 use specforge_registry_client::testing::MemoryClient;
@@ -172,7 +172,7 @@ fn an_unscoped_name_goes_to_the_default_registry() {
 
 #[specforge_test(
     behavior = "validate_registry_credentials",
-    verify = "login stores the credential under the alias of the registry it validated against"
+    verify = "login stores the credential under the root of the registry it validated against"
 )]
 fn named_is_the_alias_given_else_the_default() {
     let found = configured_with(ACME_AND_MAIN);
@@ -208,7 +208,8 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
         ]}"#,
     );
     let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
-        .with_client(MemoryClient::new());
+        .with_client(MemoryClient::new())
+        .as_user(User::at(dir.home(), None));
     assert!(registry.reported().is_empty(), "nothing asked yet");
 
     let tool = PackageName::parse("@acme/tool").unwrap();
@@ -242,4 +243,62 @@ fn an_entry_that_cannot_be_read_serves_no_name() {
 
     assert_eq!(refused.code, "E067");
     assert!(refused.message.contains("index 0"), "{}", refused.message);
+}
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "a registry operation opens its registry once: the configuration and the credential store are read before any request, and their refusal is the operation's"
+)]
+fn opening_reads_the_configuration_and_the_store_once_before_any_request() {
+    use specforge_ops::registry::Registry as _;
+    let sdk = name("@acme/a");
+    let open = |dir: &TestProject, client: &MemoryClient| {
+        ConfiguredRegistry::for_project(&dir.project_root(), "update")
+            .as_user(User::at(dir.home(), None))
+            .with_client(client.clone())
+    };
+
+    // No registry: E063, and the same error at the first ask.
+    let client = MemoryClient::new();
+    let none = project(r#"{"name":"p","extensions":[]}"#);
+    let registry = open(&none, &client);
+    let error = registry.open().unwrap_err();
+    assert_eq!(error.code, "E063");
+    assert_eq!(registry.versions(&sdk).unwrap_err(), error);
+
+    // An entry that can't be read: E067.
+    let unreadable = project(
+        r#"{"name":"p","extensions":[],"registries":[{"alias":"main","url":"https://r.example/v1","default_registry":true}]}"#,
+    );
+    let registry = open(&unreadable, &client);
+    let error = registry.open().unwrap_err();
+    assert_eq!(error.code, "E067");
+    assert_eq!(registry.versions(&sdk).unwrap_err(), error);
+
+    // A store that can't be read: R012, read once.
+    let good = project(
+        r#"{"name":"p","extensions":[],"registries":[{"alias":"main","url":"https://r.example","default_registry":true}]}"#,
+    );
+    let store = good.home().join("credentials.json");
+    std::fs::create_dir_all(good.home()).unwrap();
+    std::fs::write(&store, "{").unwrap();
+    let registry = open(&good, &client);
+    let error = registry.open().unwrap_err();
+    assert_eq!(error.code, "R012");
+    std::fs::write(&store, r#"{"registries":{}}"#).unwrap();
+    assert_eq!(registry.versions(&sdk).unwrap_err(), error);
+
+    // Both readable: Ok, and the configuration's diagnostics are reported.
+    let twice = project(
+        r#"{"name":"p","extensions":[],"registries":[{"alias":"main","url":"https://a.example","default_registry":true},{"alias":"main","url":"https://b.example"}]}"#,
+    );
+    let registry = open(&twice, &client);
+    registry.open().unwrap();
+    assert!(
+        registry
+            .reported()
+            .iter()
+            .any(|d| d.is(specforge_common::codes::W140))
+    );
+    assert!(client.calls().is_empty(), "{:?}", client.calls());
 }

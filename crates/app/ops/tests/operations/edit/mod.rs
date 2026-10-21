@@ -9,12 +9,14 @@ mod holds;
 mod inherited;
 mod layout;
 mod links;
+mod net;
 mod obligations;
 mod paths;
 mod places;
 mod positions;
 mod replay;
 mod sides;
+mod skeleton;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};

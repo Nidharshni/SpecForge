@@ -75,7 +75,7 @@ impl Args {
         };
 
         // The shared migration: migrate, run the extensions' hooks, then check
-        // the graph kept its structure, rolling back when it didn't.
+        // the graph kept its structure, writing nothing when it didn't.
         let request = Request {
             root: &root,
             target,
@@ -99,26 +99,12 @@ impl Args {
             &notes,
         );
 
-        if let Some(failure) = outcome.failure().filter(|_| outcome.rollback.is_none()) {
+        // The document carries the hook failures and the structural differences; a person reads the W054s and then
+        // the failure's message, whatever its cause.
+        notes.carried(&outcome.structural_differences());
+        if let Some(failure) = outcome.failure() {
             notes.person(format_args!("{}", OpError::from(failure).message));
-            return Exit::of_verdict(outcome.ok());
         }
-        // The document carries the hook failures and the structural differences; the restore is a person's line.
-        for failure in &outcome.hook_failures {
-            notes.person(format_args!("migration hook failure: {failure}"));
-        }
-        let differences = outcome.structural_differences();
-        notes.carried(&differences);
-        if outcome.rollback.is_some() {
-            if outcome.hook_failures.is_empty() {
-                notes.person(format_args!(
-                    "migration changed the graph structure; files restored from backups"
-                ));
-            } else {
-                notes.person(format_args!("files restored from backups"));
-            }
-        }
-
         Exit::of_verdict(outcome.ok())
     }
 }
