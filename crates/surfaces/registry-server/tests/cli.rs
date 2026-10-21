@@ -86,6 +86,21 @@ fn scope_assign_hands_a_scope_to_an_account() {
         stdout.contains("scope @acme assigned to acme (was unclaimed)"),
         "{stdout}"
     );
+    let refused = registry(&[
+        "scope",
+        "assign",
+        "sdk",
+        "--account",
+        "acme",
+        "--data-dir",
+        data,
+    ]);
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("'sdk' is not a scope: write '@sdk'"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -100,7 +115,6 @@ fn token_create_needs_an_account() {
     behavior = "publish_to_registry",
     verify = "a token's scope filter is a scope: text that is not one is refused where the token is issued, and a token issued with none covers every scope"
 )]
-#[ignore = "flipped by T5"]
 fn token_create_refuses_a_scope_filter_that_is_no_scope() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().to_str().unwrap();
@@ -147,7 +161,6 @@ fn token_create_refuses_a_scope_filter_that_is_no_scope() {
 }
 
 #[test]
-#[ignore = "flipped by T5"]
 fn token_list_lines_each_scope_up_under_its_header() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().to_str().unwrap();

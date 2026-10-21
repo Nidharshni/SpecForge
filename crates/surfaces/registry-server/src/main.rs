@@ -1,6 +1,7 @@
 //! `specforge-registry`: the package registry server's command line, which serves the router of this crate's
 //! library.
 
+use specforge_package::Scope;
 use specforge_registry_server::ownership::Account;
 use specforge_registry_server::state::{AppState, PublishLimits, ReadAccess};
 use specforge_registry_server::{auth, db::Database, handlers};
@@ -58,7 +59,7 @@ enum ScopeAction {
     /// Hand a scope to an account (a team rename, a takedown, a lost account)
     Assign {
         /// The scope, e.g. "@acme"
-        scope: String,
+        scope: Scope,
 
         /// The account that owns it from now on; a token must already be issued to it
         #[arg(long)]
@@ -78,9 +79,9 @@ enum TokenAction {
         #[arg(long)]
         account: Account,
 
-        /// Scope filter (e.g., "@myorg") — empty means full access
+        /// The scope the token may publish and yank in (e.g. "@myorg"); omit it for every scope
         #[arg(long)]
-        scope: Option<String>,
+        scope: Option<Scope>,
 
         /// Label for the token
         #[arg(long, default_value = "default")]
@@ -204,7 +205,7 @@ async fn run(cli: Cli) -> Result<(), String> {
                 let token = auth::create_token(
                     &database,
                     &account,
-                    scope.as_deref(),
+                    scope.as_ref(),
                     &label,
                     expires_in_days,
                     admin,
@@ -212,7 +213,10 @@ async fn run(cli: Cli) -> Result<(), String> {
                 println!("Token created successfully.\n");
                 println!("  token: {}", token);
                 println!("  account: {account}{}", if known { "" } else { " (new)" });
-                println!("  scope: {}", scope.as_deref().unwrap_or("(full access)"));
+                println!(
+                    "  scope: {}",
+                    scope.as_ref().map_or("(full access)", Scope::as_str)
+                );
                 println!("  label: {}", label);
                 println!(
                     "  expires: {}",
@@ -241,7 +245,7 @@ async fn run(cli: Cli) -> Result<(), String> {
                             &t.token_hash[..8],
                             t.label,
                             t.account,
-                            t.scope.as_deref().unwrap_or("(all)"),
+                            t.scope.as_ref().map_or("(all)", Scope::as_str),
                             t.created_at,
                         );
                     }

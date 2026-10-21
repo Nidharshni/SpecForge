@@ -852,7 +852,12 @@ behavior publish_to_registry "Publish to Registry" {
     yank in it after, whichever token, so a revoked or expired token's
     replacement keeps the scope (SCOPE_OWNED otherwise). The registry's
     operator may assign a scope to another account
-    (`specforge-registry scope assign`). A publish the registry refuses (an invalid upload, a duplicate
+    (`specforge-registry scope assign`). A token's
+    scope filter (`token create --scope`, the admin request's `scope`) and an
+    assigned scope MUST be a scope (@ and one name part); text that is not one
+    is refused where it is written, naming the scope to write. A token issued
+    with no filter covers every scope; an empty filter is not one.
+    A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
     A yank is held to the same rule as a publish: only a token the scope's

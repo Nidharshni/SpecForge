@@ -107,8 +107,9 @@ new teammate, CI) holds the package to it.
   that scope to the publishing token's account.
 - **Only the owner publishes or yanks** in a claimed scope; a token issued to
   another account gets `SCOPE_OWNED`. Tokens scoped by the registry admin
-  (`@web`-style) are additionally limited to their own scope and cannot claim
-  others.
+  (`--scope @web`, a scope; `@web/ui` or `web` is refused) are additionally
+  limited to their own scope and cannot claim others. A token issued without
+  `--scope` covers every scope.
 - **Accounts**: every token is issued to an account (`specforge-registry token
   create --account`), so a rotated or expired token's replacement keeps the
   scope. `publisher` metadata is the account name the operator chose — never a

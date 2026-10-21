@@ -1,6 +1,6 @@
 use crate::ownership::{self, Account, Claim, WriteRefused};
 use rusqlite::{Connection, params};
-use specforge_package::PackageName;
+use specforge_package::{PackageName, Scope};
 use specforge_registry_wire::PackageSignature;
 use std::path::Path;
 
@@ -81,13 +81,33 @@ pub struct TokenRecord {
     pub token_hash: String,
     /// The account the token was issued to; it, not the token, owns the scopes the token claims.
     pub account: Account,
-    pub scope: Option<String>,
+    pub scope: Option<Scope>,
     pub label: String,
     pub created_at: String,
     /// RFC3339 expiry instant; `None` = never expires (--no-expiry escape).
     pub expires_at: Option<String>,
     /// Admin tokens may create/list/revoke other tokens via the admin API.
     pub admin: bool,
+}
+
+/// A `tokens` row read as `token_hash, account, scope, label, created_at, expires_at, admin`.
+fn token_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TokenRecord> {
+    let scope = row
+        .get::<_, Option<String>>(2)?
+        .map(|text| Scope::parse(&text))
+        .transpose()
+        .map_err(|why| {
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(why))
+        })?;
+    Ok(TokenRecord {
+        token_hash: row.get(0)?,
+        account: row.get(1)?,
+        scope,
+        label: row.get(3)?,
+        created_at: row.get(4)?,
+        expires_at: row.get(5)?,
+        admin: row.get::<_, i64>(6)? != 0,
+    })
 }
 
 impl Database {
@@ -406,7 +426,7 @@ impl Database {
     /// Hand `scope` to `account`; the previous owner (an operator's act, never a request's).
     pub fn assign_scope(
         &self,
-        scope: &str,
+        scope: &Scope,
         account: &Account,
     ) -> Result<Option<String>, ownership::AssignRefused> {
         ownership::assign(&self.conn(), scope, account)
@@ -469,7 +489,7 @@ impl Database {
         &self,
         token_hash: &str,
         account: &Account,
-        scope: Option<&str>,
+        scope: Option<&Scope>,
         label: &str,
         expires_at: Option<&str>,
         admin: bool,
@@ -484,7 +504,14 @@ impl Database {
         .map_err(storage)?;
         tx.execute(
             "INSERT INTO tokens (token_hash, account, scope, label, expires_at, admin) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![token_hash, account, scope, label, expires_at, admin as i64],
+            params![
+                token_hash,
+                account,
+                scope.map(Scope::as_str),
+                label,
+                expires_at,
+                admin as i64
+            ],
         )
         .map_err(storage)?;
         tx.commit().map_err(storage)
@@ -506,17 +533,7 @@ impl Database {
         conn.query_row(
             "SELECT token_hash, account, scope, label, created_at, expires_at, admin FROM tokens WHERE token_hash = ?1 AND revoked = 0",
             params![token_hash],
-            |row| {
-                Ok(TokenRecord {
-                    token_hash: row.get(0)?,
-                    account: row.get(1)?,
-                    scope: row.get(2)?,
-                    label: row.get(3)?,
-                    created_at: row.get(4)?,
-                    expires_at: row.get(5)?,
-                    admin: row.get::<_, i64>(6)? != 0,
-                })
-            },
+            token_row,
         )
         .ok()
     }
@@ -527,17 +544,7 @@ impl Database {
             .prepare("SELECT token_hash, account, scope, label, created_at, expires_at, admin FROM tokens WHERE revoked = 0 ORDER BY created_at")
             .map_err(|e| format!("token listing failed: {e}"))?;
         let rows = stmt
-            .query_map([], |row| {
-                Ok(TokenRecord {
-                    token_hash: row.get(0)?,
-                    account: row.get(1)?,
-                    scope: row.get(2)?,
-                    label: row.get(3)?,
-                    created_at: row.get(4)?,
-                    expires_at: row.get(5)?,
-                    admin: row.get::<_, i64>(6)? != 0,
-                })
-            })
+            .query_map([], token_row)
             .map_err(|e| format!("token listing failed: {e}"))?
             .filter_map(|r| r.ok())
             .collect();
