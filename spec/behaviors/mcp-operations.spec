@@ -483,7 +483,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "post-migration validation reports errors"
   verify unit "target_version selects the format version to migrate to"
   verify unit "a malformed or unsupported target_version is refused without modifying files"
-  verify unit "the result reports the hooks run, the structural differences and whether the migration was rolled back"
+  verify unit "the result reports the hooks run and the structural differences"
   verify unit "ok is the verdict specforge migrate exits by, and a failed migration's kind is the operation's"
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"

@@ -5302,43 +5302,6 @@ expression: listing
           ],
           "type": "object"
         },
-        "RollbackSummary": {
-          "additionalProperties": false,
-          "properties": {
-            "failed_count": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "restored_count": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "results": {
-              "items": {
-                "$ref": "#/$defs/MigrationResult"
-              },
-              "type": "array"
-            },
-            "skipped_count": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "warnings": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "restored_count",
-            "skipped_count",
-            "failed_count",
-            "results",
-            "warnings"
-          ],
-          "type": "object"
-        },
         "SourceSpan": {
           "additionalProperties": false,
           "properties": {
@@ -5465,12 +5428,6 @@ expression: listing
           },
           "type": "array"
         },
-        "rollback": {
-          "$ref": "#/$defs/RollbackSummary"
-        },
-        "rolled_back": {
-          "type": "boolean"
-        },
         "structural_differences": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
@@ -5498,7 +5455,6 @@ expression: listing
         "hooks_invoked",
         "hook_failures",
         "structural_differences",
-        "rolled_back",
         "post_migration_validated",
         "post_migration_errors"
       ],

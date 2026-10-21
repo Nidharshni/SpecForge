@@ -102,8 +102,6 @@ pub struct Outcome {
     pub verdict: Verdict,
     /// One E069 per problem in `specforge.json` the run went around.
     pub diagnostics: Vec<Diagnostic>,
-    /// The restore, when the migration was rolled back.
-    pub rollback: Option<RollbackSummary>,
     /// The files the run left changed: each backup, each migrated file and the record (or the removed record
     /// under `--no-backup`). Nothing for a dry run, a refused migration, with nothing pending, or when a file could
     /// not be migrated.
@@ -196,10 +194,6 @@ pub struct MigrateDocument {
     pub hook_failures: Vec<String>,
     /// How the migrated graph differs from the one before (W054).
     pub structural_differences: DiagnosticList,
-    pub rolled_back: bool,
-    /// The restore, when the migration was rolled back.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rollback: Option<RollbackSummary>,
     pub post_migration_validated: bool,
     /// The errors compiling the migrated project reported.
     pub post_migration_errors: DiagnosticList,
@@ -236,8 +230,6 @@ impl Outcome {
             hooks_invoked: self.verdict.hooks_invoked.clone(),
             hook_failures: self.verdict.hook_failures.clone(),
             structural_differences: DiagnosticList(self.structural_differences()),
-            rolled_back: self.rollback.is_some(),
-            rollback: self.rollback.clone(),
             post_migration_validated: self.verdict.compared,
             post_migration_errors: DiagnosticList(self.verdict.post_errors().cloned().collect()),
         }
@@ -454,7 +446,6 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         summary: plan,
         verdict: Verdict::default(),
         diagnostics: read.diagnostics(),
-        rollback: None,
         writes: Writes::none(),
     };
     // Nothing pending, or a file that cannot be migrated: nothing is compiled, judged or written (ADR 0171): the

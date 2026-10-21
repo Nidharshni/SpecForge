@@ -365,7 +365,7 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
 behavior rollback_failed_migration "Rollback Failed Migration" {
   invariants [migration_backup_safety, migration_atomicity, zero_domain_knowledge_core]
   category   command
-  types      [MigrationResult, MigrationSummary, MigrationBackup]
+  types      [MigrationResult, MigrationSummary, MigrationBackup, RollbackSummary]
   ports      [FileSystem]
   produces   [migration_rolled_back]
   requires {

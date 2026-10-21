@@ -948,7 +948,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   unjudged): check (no error reported), analyze (no error finding, and with a minimum the coverage
   gate met; unjudged when the gate has no figure), format (every target read and written, nothing
   left unformatted, every `specforge.json` it read used as written (no E069), and under `--check`
-  nothing that would change), migrate (no file failed, nothing rolled back, `specforge.json` used as
+  nothing that would change), migrate (no file failed, the migration not refused, `specforge.json` used as
   written), doctor (no error-level finding: an error the environment reports, E013, a binary that
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`

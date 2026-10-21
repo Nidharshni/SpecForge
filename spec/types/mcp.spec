@@ -169,7 +169,7 @@ type McpPromptArgument "Mcp Prompt Argument" {
 // ── Core tool replies ─────────────────────────────────────────────────────
 // Each core tool's reply as its structuredContent and outputSchema carry it
 // (ADRs 0048, 0051): a domain type a reply embeds from another spec file
-// (Diagnostic, MigrationResult, MigrationDiff, RollbackSummary) is one
+// (Diagnostic, MigrationResult, MigrationDiff) is one
 // $defs entry the reply's fields refer to; an optional field is absent,
 // never null; a mutation's reply
 // also carries files_written (string[], absent from a preview; each file named
@@ -865,7 +865,7 @@ type McpStrandedEntity "An entity a removal strands" {
 }
 
 type McpMigrateResult "A migration: what it ran or previewed, or that nothing was pending" {
-  /// No file failed, nothing was rolled back and specforge.json is used as written:
+  /// No file failed, the migration is not refused and specforge.json is used as written:
   /// the verdict specforge migrate exits by.
   ok                       boolean
   /// Some file was behind to_version; when false nothing else ran.
@@ -891,9 +891,6 @@ type McpMigrateResult "A migration: what it ran or previewed, or that nothing wa
   hook_failures            string[]
   /// How the migrated graph differs from the one before (W054).
   structural_differences   Diagnostic[]
-  rolled_back              boolean
-  /// The restore, when the migration was rolled back.
-  rollback                 RollbackSummary @optional
   post_migration_validated boolean
   /// What compiling the migrated project reported as errors.
   post_migration_errors    Diagnostic[]

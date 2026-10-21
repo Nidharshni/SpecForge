@@ -22,7 +22,7 @@ specforge.edit 2855
 specforge.init 434
 specforge.add_extension 2037
 specforge.remove_extension 474
-specforge.migrate 5132
+specforge.migrate 4612
 specforge.extensions 931
 specforge.providers 2922
 specforge.doctor 6084
@@ -33,4 +33,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 57459
+total 56939
