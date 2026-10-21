@@ -36,13 +36,17 @@ pub struct CredentialHealth {
 }
 
 /// [`credential_health`] of `dir` as of now.
-pub fn credential_health_now(dir: &Path) -> CredentialHealth {
-    credential_health(dir, chrono::Utc::now())
+pub fn credential_health_now(dir: &Path, signing_key: &Path) -> CredentialHealth {
+    credential_health(dir, signing_key, chrono::Utc::now())
 }
 
-/// The credential health of the credential store and the signing key in the user's directory `dir`,
-/// as of `now`.
-pub fn credential_health(dir: &Path, now: chrono::DateTime<chrono::Utc>) -> CredentialHealth {
+/// The credential health of the credential store in the user's directory `dir`, and whether the
+/// signing key at `signing_key` exists, as of `now`.
+pub fn credential_health(
+    dir: &Path,
+    signing_key: &Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> CredentialHealth {
     let mut lines = Vec::new();
     let mut failures = 0usize;
     // An unreadable store is one unusable credential: every reader refuses it (R012).
@@ -107,7 +111,7 @@ pub fn credential_health(dir: &Path, now: chrono::DateTime<chrono::Utc>) -> Cred
     CredentialHealth {
         lines,
         failures,
-        signing_key_present: dir.join("signing-key.json").exists(),
+        signing_key_present: signing_key.exists(),
     }
 }
 
@@ -177,7 +181,11 @@ mod tests {
         )
         .unwrap();
 
-        let health = credential_health(dir.path(), chrono::Utc::now());
+        let health = credential_health(
+            dir.path(),
+            &dir.path().join("signing-key.json"),
+            chrono::Utc::now(),
+        );
 
         assert_eq!(health.failures, 0, "{health:?}");
         assert_eq!(health.lines.len(), 1);
@@ -203,7 +211,11 @@ mod tests {
         )
         .unwrap();
 
-        let health = credential_health(dir.path(), chrono::Utc::now());
+        let health = credential_health(
+            dir.path(),
+            &dir.path().join("signing-key.json"),
+            chrono::Utc::now(),
+        );
 
         assert_eq!(health.failures, 1, "{health:?}");
         assert!(!health.signing_key_present);
@@ -225,7 +237,11 @@ mod tests {
 
         let other = tempfile::TempDir::new().unwrap();
         std::fs::write(other.path().join("signing-key.json"), "{}").unwrap();
-        let empty = credential_health(other.path(), chrono::Utc::now());
+        let empty = credential_health(
+            other.path(),
+            &other.path().join("signing-key.json"),
+            chrono::Utc::now(),
+        );
         assert!(empty.lines.is_empty() && empty.failures == 0);
         assert!(empty.signing_key_present);
     }
@@ -239,7 +255,11 @@ mod tests {
         )
         .unwrap();
 
-        let health = credential_health(dir.path(), chrono::Utc::now());
+        let health = credential_health(
+            dir.path(),
+            &dir.path().join("signing-key.json"),
+            chrono::Utc::now(),
+        );
 
         assert_eq!(health.failures, 1, "{health:?}");
         assert_eq!(health.lines[0].level, CredentialLevel::Error);
@@ -261,7 +281,11 @@ mod tests {
         )
         .unwrap();
 
-        let health = credential_health(dir.path(), chrono::Utc::now());
+        let health = credential_health(
+            dir.path(),
+            &dir.path().join("signing-key.json"),
+            chrono::Utc::now(),
+        );
 
         assert_eq!(health.failures, 1, "{health:?}");
         assert_eq!(health.lines.len(), 1, "{health:?}");
