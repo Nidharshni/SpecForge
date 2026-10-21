@@ -152,15 +152,16 @@ pub(crate) fn assign(
         return Err(AssignRefused::NotAScope(scope.to_string()));
     }
     let storage = |e: rusqlite::Error| AssignRefused::Storage(format!("failed to assign: {e}"));
-    let known = conn
-        .query_row(
-            "SELECT 1 FROM accounts WHERE name = ?1",
-            params![account],
-            |_| Ok(()),
-        )
-        .is_ok();
-    if !known {
-        return Err(AssignRefused::UnknownAccount(account.to_string()));
+    match conn.query_row(
+        "SELECT 1 FROM accounts WHERE name = ?1",
+        params![account],
+        |_| Ok(()),
+    ) {
+        Ok(()) => {}
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Err(AssignRefused::UnknownAccount(account.to_string()));
+        }
+        Err(e) => return Err(storage(e)),
     }
     let previous = owner(conn, scope).map_err(storage)?;
     conn.execute(

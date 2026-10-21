@@ -89,13 +89,6 @@ impl CredentialStore {
     /// Written whole to `<dir>/credentials.json`, 0600. R013.
     pub fn write(&self) -> Result<(), Diagnostic> {
         let path = self.dir.join(FILE);
-        std::fs::create_dir_all(&self.dir).map_err(|e| {
-            Diagnostic::new(
-                codes::R013,
-                format!("failed to create credentials directory: {}", e),
-            )
-        })?;
-
         let json = serde_json::to_string_pretty(self).map_err(|e| {
             Diagnostic::new(
                 codes::R013,
@@ -103,14 +96,13 @@ impl CredentialStore {
             )
         })?;
 
-        std::fs::write(&path, json).map_err(|e| {
+        write_private(&path, json.as_bytes()).map_err(|e| {
             Diagnostic::new(
                 codes::R013,
                 format!("failed to write credentials file: {}", e),
             )
             .with_suggestion(format!("check write permissions on '{}'", path.display()))
         })?;
-        restrict_permissions(&path);
         Ok(())
     }
 
@@ -232,15 +224,10 @@ impl CredentialStore {
             secret: &'a str,
         }
         let path = self.secret_path(&root);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
-        }
         let json = serde_json::to_string(&Stored { secret: &token })
             .map_err(|e| format!("failed to serialize secret: {}", e))?;
-        std::fs::write(&path, json)
+        write_private(&path, json.as_bytes())
             .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
-        restrict_permissions(&path);
         self.registries.insert(
             root,
             CredentialEntry::Token {
@@ -280,18 +267,40 @@ impl CredentialStore {
         };
         serde_json::from_str::<Stored>(&content)
             .map(|stored| Some(stored.secret))
-            .map_err(|e| format!("corrupt secret file {}: {}", path.display(), e))
+            // The parse error is not shown: serde_json echoes a wrong-shaped value, which is the token.
+            .map_err(|_| format!("corrupt secret file {}", path.display()))
     }
 }
 
-#[cfg(unix)]
-fn restrict_permissions(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+/// Writes `bytes` to `path` through a sibling temp file renamed into place, so the file is never
+/// readable by others or half written: its directories are created 0700 and the file 0600 (unix).
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)?;
+        }
+        #[cfg(not(unix))]
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    std::fs::rename(&tmp, path)
 }
-
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) {}
 
 const FILE: &str = "credentials.json";
 
@@ -336,7 +345,25 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&secret).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600, "a secret file must be 0600");
+            let dir_mode = std::fs::metadata(secret.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(
+                dir_mode & 0o777,
+                0o700,
+                "the secrets directory must be 0700"
+            );
         }
+        assert!(
+            !secret.with_extension("tmp").exists(),
+            "no temp file is left"
+        );
+
+        // A corrupt secret file is named, never quoted: serde would echo a wrong-shaped value.
+        std::fs::write(&secret, "\"sfr_super_secret\"").unwrap();
+        let refusal = loaded.credential(&root("default")).unwrap_err();
+        assert!(!refusal.message.contains("sfr_super_secret"));
 
         loaded.forget_secret(&root("default"));
         assert!(!secret.exists());

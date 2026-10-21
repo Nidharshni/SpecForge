@@ -328,7 +328,7 @@ milestone extension_ecosystem "Phase 11: Extension Ecosystem" {
     "Collectors produce specforge-report.json from test frameworks",
     "Registry search, resolve and publish work over the SpecForge HTTP package registry",
     "specforge doctor reports conflicts, cache health, and extension status",
-    "Private registry authentication: login stores a registry token in the OS keyring, logout removes it",
+    "Private registry authentication: login keeps a registry credential under its registry root, logout removes it",
     "Surface commands dispatched via cmd__{id} Wasm exports with sandbox enforcement",
     "Surface MCP tools/resources dispatched via mcp__{name} Wasm exports",
   ]
