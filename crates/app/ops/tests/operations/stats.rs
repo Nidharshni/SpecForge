@@ -341,3 +341,17 @@ fn stats_document_leaves_proof_pct_out_without_results() {
         serde_json::json!({"errors": 0, "warnings": 0, "infos": 0})
     );
 }
+
+/// 11-D1: "verified" is the glossary's word for what counts and is
+/// proven; stats must not print it for entities that only declare.
+#[test]
+#[ignore = "flipped by T4"]
+fn stats_calls_no_count_verified() {
+    let mut graph = Graph::new();
+    graph.add_node(node_with_verify("a", "behavior")); // declares, nothing proven
+    graph.add_node(node_with_verify("p", "property")); // declares, not testable
+    let stats = crate::view_support::stats_of(&graph, &["behavior"], &[]);
+    let document = serde_json::to_value(&stats).unwrap();
+    assert!(document.get("verified_count").is_none(), "{document}");
+    assert_eq!((stats.testable_count, stats.declared_count), (1, 1));
+}
