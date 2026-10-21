@@ -109,8 +109,9 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
     one specforge.json records: an extension's template writes it as
     {version} (as {project} stands for the project id), which init fills
     in. Init MUST write the starter as the
-    formatter writes it, whatever the extensions contribute, so a freshly
-    initialised project passes specforge format --check.
+    formatter writes it, with the configuration of its directory and the
+    field forms of the extensions it enables, whatever they contribute, so
+    a freshly initialised project passes specforge format --check.
   """
   verify unit "starter spec file is created alongside specforge.json"
   verify unit "starter spec file passes specforge check with zero errors"

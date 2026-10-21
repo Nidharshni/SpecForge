@@ -115,7 +115,6 @@ fn init_refuses_a_name_a_local_extensions_kind_reserves() {
     behavior = "scaffold_starter_spec_file",
     verify = "init writes the starter's values in the forms of the fields the extensions it enables declare"
 )]
-#[ignore = "flipped by T5"]
 fn init_writes_a_templates_values_in_their_fields_forms() {
     let scratch = TempDir::new().unwrap();
     let wasm = scratch.path().join("tpl.wasm");

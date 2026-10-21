@@ -18,6 +18,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
+use specforge_graph::FieldForms;
 use specforge_installed::Installed;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::Disk;
@@ -254,11 +255,12 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     };
     // Whatever the extensions contribute, the file is written as the
     // formatter writes it, so `specforge format --check` accepts it, with the
-    // configuration init's bound reads (ADR 0169).
+    // configuration init's bound reads (ADR 0169) and the field forms of the build above.
     let starter = canonical(
         &starter,
         req.dir,
         &req.caller.containment().narrowed(req.dir).disk(),
+        build.field_forms(),
     );
     let dir = req.dir;
     let files = vec![
@@ -359,12 +361,12 @@ fn sanitize_entity_id(name: &str) -> String {
         .collect()
 }
 
-/// `starter`, formatted as the project at `dir` formats its files.
-fn canonical(starter: &str, dir: &Path, disk: &dyn Disk) -> String {
+/// `starter`, formatted as the project at `dir` formats its files, its values in the field `forms` of the
+/// extensions it enables. The forms are handed over, not looked up by place: `dir` is no project yet (ADR 0189).
+fn canonical(starter: &str, dir: &Path, disk: &dyn Disk, forms: &FieldForms) -> String {
     let config =
         Configs::new(Forms::none(), disk).layout(FormatPlace::InProject { root: dir, dir });
-    specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
-        .formatted
+    specforge_formatter::format_source(starter, &config, forms).formatted
 }
 
 fn structural_starter(project_name: &str, version: &str) -> String {
