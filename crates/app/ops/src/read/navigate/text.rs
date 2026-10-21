@@ -1,11 +1,9 @@
 //! A spec file's text, addressed in `SourceSpan` positions (1-based lines,
-//! 1-based byte columns, end exclusive), and the lexemes of a range, read
-//! by the language's one lexer (`specforge_parser::lex`, ADR 0023).
+//! 1-based byte columns, end exclusive).
 
 use std::sync::Arc;
 
 use specforge_common::{SourceSpan, Sym};
-use specforge_parser::lex::{Lexeme, lex};
 
 /// A file's text and where each of its lines starts.
 #[derive(Debug)]
@@ -90,27 +88,6 @@ impl SourceText {
     pub(crate) fn spells(&self, span: &SourceSpan, word: &str) -> bool {
         self.range(span)
             .is_some_and(|range| self.text.get(range) == Some(word))
-    }
-
-    /// The lexemes of `span` (`specforge_parser::lex`: names, numbers,
-    /// strings, comments, punctuation), as byte ranges of the file.
-    pub(crate) fn tokens(&self, span: &SourceSpan) -> Vec<Lexeme> {
-        let Some(range) = self.range(span) else {
-            return Vec::new();
-        };
-        lex(&self.text[range.clone()])
-            .into_iter()
-            .map(|l| Lexeme {
-                start: l.start + range.start,
-                end: l.end + range.start,
-                kind: l.kind,
-            })
-            .collect()
-    }
-
-    /// The text of `lexeme`.
-    pub(crate) fn token_text(&self, lexeme: &Lexeme) -> &str {
-        lexeme.text(&self.text)
     }
 }
 

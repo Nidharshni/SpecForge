@@ -45,3 +45,13 @@ fn a_spec_blocks_definition_is_its_block() {
     assert_eq!(definition.precision, Precision::Entity);
     assert!(nav.occurrence_at("guide.spec", 1, 8).is_none());
 }
+
+/// Not a pin: a method name below its keyword was found by the old rule too.
+#[test]
+fn an_outline_method_name_is_where_the_parse_read_it() {
+    let port =
+        "port store \"Store\" {\n  direction inbound\n  method\n    save(x: string) -> bool\n}\n";
+    let p = compile(SOFTWARE, &[("store.spec", port)]);
+    let outline = outline(&p.navigator(), "store.spec").unwrap();
+    assert_eq!(at(&outline[0].children[0].name_span), "store.spec 4:5-4:9");
+}
