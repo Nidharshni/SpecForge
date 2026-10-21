@@ -2,6 +2,7 @@ use super::{into, of_kind, priority_rank, share, status, targets, text, MEDIUM};
 use crate::vocabulary::*;
 use serde::Serialize;
 use specforge_extension_sdk::prelude::{CommandGraph, GraphNode};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The `depends_on` references among one kind's entities, by index into
 /// `ids` (sorted, so an index orders as its id does). A reference to an
@@ -98,62 +99,21 @@ impl DepGraph {
         chain
     }
 
-    /// Whether each entity is on a dependency cycle: in a strongly
-    /// connected component of two or more, or depending on itself
-    /// (Tarjan, iterative, O(V+E)).
+    /// Whether each entity is on a dependency cycle: a member of one of
+    /// `specforge_cycles`' cycles (ADR 0196).
     fn in_cycle(&self) -> Vec<bool> {
-        const UNSEEN: usize = usize::MAX;
-        let n = self.ids.len();
-        let (mut index, mut low) = (vec![UNSEEN; n], vec![0; n]);
-        let (mut on_stack, mut cyclic) = (vec![false; n], vec![false; n]);
-        let (mut stack, mut next) = (Vec::new(), 0);
-        for root in 0..n {
-            if index[root] != UNSEEN {
-                continue;
-            }
-            index[root] = next;
-            low[root] = next;
-            next += 1;
-            stack.push(root);
-            on_stack[root] = true;
-            let mut calls: Vec<(usize, usize)> = vec![(root, 0)];
-            while let Some(&(v, i)) = calls.last() {
-                if let Some(&w) = self.succ[v].get(i) {
-                    if let Some(call) = calls.last_mut() {
-                        call.1 += 1;
-                    }
-                    if index[w] == UNSEEN {
-                        index[w] = next;
-                        low[w] = next;
-                        next += 1;
-                        stack.push(w);
-                        on_stack[w] = true;
-                        calls.push((w, 0));
-                    } else if on_stack[w] {
-                        low[v] = low[v].min(index[w]);
-                    }
-                    continue;
-                }
-                calls.pop();
-                if let Some(&(parent, _)) = calls.last() {
-                    low[parent] = low[parent].min(low[v]);
-                }
-                if low[v] == index[v] {
-                    let mut component = Vec::new();
-                    while let Some(w) = stack.pop() {
-                        on_stack[w] = false;
-                        component.push(w);
-                        if w == v {
-                            break;
-                        }
-                    }
-                    if component.len() > 1 || self.succ[v].contains(&v) {
-                        for w in component {
-                            cyclic[w] = true;
-                        }
-                    }
-                }
-            }
+        let edges: BTreeMap<usize, BTreeSet<usize>> = self
+            .succ
+            .iter()
+            .enumerate()
+            .map(|(i, succ)| (i, succ.iter().copied().collect()))
+            .collect();
+        let mut cyclic = vec![false; self.ids.len()];
+        for member in specforge_cycles::cycles(&edges)
+            .iter()
+            .flat_map(|c| &c.members)
+        {
+            cyclic[*member] = true;
         }
         cyclic
     }
