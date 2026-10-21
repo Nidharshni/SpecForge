@@ -2,7 +2,7 @@
 //! policy over the package registry client, and the publish that authenticates and signs as the user.
 //!
 //! `specforge-ops` names only the port, so a surface that never reaches a
-//! registry (the LSP) links no HTTP client, keyring or signature code
+//! registry (the LSP) links no HTTP client or signature code
 //! (ADR 0010). The CLI and MCP, whose `add` and `update` do, build a
 //! [`ConfiguredRegistry`] and pass it in. What a package passes before an
 //! operation sees it (ADR 0044) is [`ConfiguredRegistry`]'s doc.

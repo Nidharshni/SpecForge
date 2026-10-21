@@ -1684,10 +1684,10 @@ Level: error
 ```
 R-AUTH-021: Stored registry token unreadable
 
-The secret `specforge login --token` kept for this registry (in the OS keyring,
-else a file under `~/.specforge/secrets/`) is missing or can't be read, although
-the credentials file refers to it. Log in again: `specforge login --registry
-<alias> --token <NEW_TOKEN>`.
+The secret `specforge login --token` kept for this registry (a file under
+`~/.specforge/secrets/`) is missing or can't be read, although the credentials
+file refers to it. Log in again: `specforge login --registry <alias> --token
+<NEW_TOKEN>`.
 
 Owner: core
 Level: error
@@ -1710,9 +1710,8 @@ Level: error
 ```
 R-LOGIN-002: Login token not stored
 
-`specforge login` couldn't store the token in the OS keyring or in the fallback
-file `~/.specforge/credentials.json`. Check that the keyring service is
-available and that `~/.specforge` is writable.
+`specforge login` couldn't write the token's secret file under
+`~/.specforge/secrets/`. Check that `~/.specforge` is writable.
 
 Owner: core
 Level: error

@@ -1172,7 +1172,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     registry_client_available "RegistryClient port is available for authentication requests"
   }
   ensures {
-    token_resolved           "The token is resolved before any request: the secret login stored (OS keyring, else a 0600 file), an environment variable, or a token file"
+    token_resolved           "The token is resolved before any request: the secret login stored (a 0600 file), an environment variable, or a token file"
     auth_header_attached     "The resolved token is attached as an Authorization: Bearer header"
     missing_source_diagnosed "An unset variable is R010 and an unreadable token file R011, before any request"
     unauthorized_diagnosed   "A 401 is R001 naming how to log in again; a 403 is R002 with permission guidance"
@@ -1183,7 +1183,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     A registry credential is kept per registry root in
     ~/.specforge/credentials.json, never in specforge.json. Its token
     comes from one of three sources: the secret specforge login --token
-    stored (in the OS keyring, else in a 0600 file under
+    stored (in a 0600 file under
     ~/.specforge/secrets/), an environment variable (login --token-env),
     or a file whose trimmed content is the token (login --token-file).
     The system MUST resolve the token before any request: an unset or
@@ -1263,7 +1263,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
     registry_client_available "RegistryClient port is available for test authentication request"
   }
   ensures {
-    valid_credentials_stored      "--token is stored as a secret in the OS keyring (0600-file fallback); --token-env and --token-file are stored as references, never as the token"
+    valid_credentials_stored      "--token is stored as a secret in a 0600 file; --token-env and --token-file are stored as references, never as the token"
     invalid_credentials_diagnosed "Invalid credentials produce error diagnostic with guidance"
     raw_token_never_stored        "Raw token value is never stored in specforge.json"
     credentials_validated_emitted "registry_credentials_validated event fires on successful validation"
@@ -1277,8 +1277,8 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
     before any network call. login MUST take exactly one token source:
     --token, --token-env or --token-file (R-LOGIN-001 otherwise, before any
     network call). The token is resolved from it and validated; then --token
-    is kept as a secret in the OS keyring (a 0600 file under
-    ~/.specforge/secrets/ when no keyring is available) and --token-env and
+    is kept as a secret in a 0600 file under
+    ~/.specforge/secrets/ and --token-env and
     --token-file are kept as references, so the variable's or the file's
     token is read on each use. The raw token MUST never be stored in
     specforge.json or in credentials.json. A credentials.json that cannot be

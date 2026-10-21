@@ -1,6 +1,6 @@
 //! The package-registry client: talking to a SpecForge package registry
-//! over HTTP (search, resolve, publish), registry credentials in the OS
-//! keyring, publisher trust (TOFU key pinning) and ed25519 package signing.
+//! over HTTP (search, resolve, publish), registry credentials,
+//! publisher trust (TOFU key pinning) and ed25519 package signing.
 //!
 //! It is not the Registry build (`specforge-registry`), which is pure and
 //! which this crate does not depend on. It reads the extension declaration
@@ -14,7 +14,6 @@ pub mod registry_client;
 pub mod registry_config;
 pub mod registry_ops;
 pub mod retry;
-pub mod secrets;
 pub mod signing;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

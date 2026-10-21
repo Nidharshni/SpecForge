@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 
-use specforge_registry_wire::RegistryRoot;
+use specforge_registry_wire::{RegistryRoot, sha256_hex};
 
 use super::registry_config::RegistryCredential;
 
@@ -29,18 +29,14 @@ pub enum CredentialEntry {
     EnvVar { token_env: String },
     /// The trimmed content of a file (`login --token-file PATH`).
     File { token_file: PathBuf },
-    /// The secret `specforge login --token` stored: in the OS keyring (`in_keyring`), else in a 0600
-    /// file under `~/.specforge/secrets/`; `token` holds a plaintext token only in a file written by
-    /// hand (or by a test).
+    /// The secret `specforge login --token` stored: a 0600 file under `<dir>/secrets/`; `token`
+    /// holds a plaintext token only in a file written by hand (or by a test).
     Token {
-        /// The raw token. Empty when the secret lives in the OS keyring or the secrets file.
+        /// The raw token. Empty when the secret lives in the secrets file.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         token: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         expires_at: Option<String>,
-        /// Secret stored in the OS keyring, not in this file.
-        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-        in_keyring: bool,
     },
 }
 
@@ -114,12 +110,12 @@ impl CredentialStore {
             )
             .with_suggestion(format!("check write permissions on '{}'", path.display()))
         })?;
-        super::secrets::restrict_permissions(&path);
+        restrict_permissions(&path);
         Ok(())
     }
 
     /// The credential the user keeps for `root`, resolved: `None` when there is no entry. Refused:
-    /// R-AUTH-020 (the stored token expired), R-AUTH-021 (the keyring entry is unreadable), R010 (the
+    /// R-AUTH-020 (the stored token expired), R-AUTH-021 (the kept secret is missing or unreadable), R010 (the
     /// variable is unset or blank), R011 (the file can't be read, or is empty). Each refusal's
     /// suggestion names `specforge login --registry <alias>`.
     pub fn credential(
@@ -173,11 +169,7 @@ impl CredentialStore {
                     ));
                 }
             },
-            CredentialEntry::Token {
-                token,
-                expires_at,
-                in_keyring,
-            } => {
+            CredentialEntry::Token { token, expires_at } => {
                 // Expiry is known metadata: a clear re-login error beats a
                 // cryptic 401 from the server later.
                 if let Some(expires_at) = expires_at
@@ -191,27 +183,12 @@ impl CredentialStore {
                     )
                     .with_suggestion(relogin()));
                 }
-                if *in_keyring {
-                    match super::secrets::load_secret(&self.dir, root) {
-                        Ok(Some(secret)) if !secret.is_empty() => secret,
-                        Ok(_) => {
-                            return Err(Diagnostic::new(
-                                codes::R_AUTH_021,
-                                format!("keyring credential for '{root}' is unreadable or missing"),
-                            )
-                            .with_suggestion(relogin()));
-                        }
-                        Err(message) => {
-                            return Err(Diagnostic::new(codes::R_AUTH_021, message)
-                                .with_suggestion(relogin()));
-                        }
-                    }
-                } else if !token.is_empty() {
+                if !token.is_empty() {
                     // A plaintext entry written by hand.
                     token.clone()
                 } else {
                     // The secret `login --token` kept: a file, or one that is gone or corrupt.
-                    match super::secrets::load_secret(&self.dir, root) {
+                    match self.read_secret(root) {
                         Ok(Some(secret)) if !secret.is_empty() => secret,
                         Ok(_) => {
                             return Err(Diagnostic::new(
@@ -242,40 +219,33 @@ impl CredentialStore {
         self.registries.insert(root, entry);
     }
 
-    /// Store a login: the secret goes to the OS keyring when available
-    /// (fallback: 0600 file), the file keeps only metadata. Plaintext
-    /// entries migrate to the keyring on the next login through this path.
+    /// Store a login: the secret goes to a 0600 file under `<dir>/secrets/`, the entry keeps only its
+    /// expiry. Any legacy plaintext entry for `root` is replaced.
     pub fn keep_secret(
         &mut self,
         root: RegistryRoot,
         token: String,
         expires_at: Option<String>,
     ) -> Result<(), String> {
-        let dir = self.dir.clone();
-        let mut backend = super::secrets::store_secret(&dir, &root, &token)?;
-        // Self-verify the round trip. Some platform keychain domains accept a
-        // write but subsequent reads return NoEntry (observed on macOS with
-        // keyring-rs v3's data-protection domain), which would lock the user
-        // out on the next command. When the keyring claims success but the
-        // read-back fails, force the file backend.
-        if backend == super::secrets::SecretBackend::Keyring {
-            let readable = super::secrets::load_secret(&dir, &root)
-                .ok()
-                .flatten()
-                .is_some_and(|s| s == token);
-            if !readable {
-                // drop the orphaned keyring item (best-effort) and use the
-                // file backend instead
-                super::secrets::delete_secret(&dir, &root);
-                backend = super::secrets::store_secret_file(&dir, &root, &token)?;
-            }
+        #[derive(Serialize)]
+        struct Stored<'a> {
+            secret: &'a str,
         }
+        let path = self.secret_path(&root);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
+        }
+        let json = serde_json::to_string(&Stored { secret: &token })
+            .map_err(|e| format!("failed to serialize secret: {}", e))?;
+        std::fs::write(&path, json)
+            .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
+        restrict_permissions(&path);
         self.registries.insert(
             root,
             CredentialEntry::Token {
                 token: String::new(),
                 expires_at,
-                in_keyring: backend == super::secrets::SecretBackend::Keyring,
             },
         );
         Ok(())
@@ -287,11 +257,41 @@ impl CredentialStore {
         self.registries.remove(root).is_some()
     }
 
-    /// Delete the secret kept for `root`, from every backend (best-effort).
+    /// Delete the secret kept for `root` (best-effort).
     pub fn forget_secret(&self, root: &RegistryRoot) {
-        super::secrets::delete_secret(&self.dir, root);
+        let _ = std::fs::remove_file(self.secret_path(root));
+    }
+
+    /// `<dir>/secrets/<first 16 hex of SHA-256 of the root>.json`: a root is not a file name.
+    fn secret_path(&self, root: &RegistryRoot) -> PathBuf {
+        let id = sha256_hex(root.as_str().as_bytes());
+        self.dir.join("secrets").join(format!("{}.json", &id[..16]))
+    }
+
+    /// `Ok(None)` = no secret kept for `root`.
+    fn read_secret(&self, root: &RegistryRoot) -> Result<Option<String>, String> {
+        #[derive(Deserialize)]
+        struct Stored {
+            secret: String,
+        }
+        let path = self.secret_path(root);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            return Ok(None);
+        };
+        serde_json::from_str::<Stored>(&content)
+            .map(|stored| Some(stored.secret))
+            .map_err(|e| format!("corrupt secret file {}: {}", path.display(), e))
     }
 }
+
+#[cfg(unix)]
+fn restrict_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+}
+
+#[cfg(not(unix))]
+fn restrict_permissions(_path: &Path) {}
 
 const FILE: &str = "credentials.json";
 
@@ -303,27 +303,8 @@ mod tests {
         RegistryRoot::parse(&format!("https://{name}.invalid")).unwrap()
     }
 
-    fn install_mock_keyring() {
-        use std::sync::OnceLock;
-        static ONCE: OnceLock<()> = OnceLock::new();
-        ONCE.get_or_init(|| {
-            keyring::set_default_credential_builder(Box::new(crate::secrets::tests::mock::Builder));
-        });
-    }
-
-    /// The in-memory keyring mock is process-global: tests that exercise
-    /// multi-step set/read sequences on the same root must hold this lock
-    /// or they interleave and observe each other's tokens.
-    static MOCK_KEYRING_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    fn lock_mock_keyring() -> std::sync::MutexGuard<'static, ()> {
-        MOCK_KEYRING_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
     #[test]
-    fn set_token_keeps_secret_out_of_the_file() {
-        install_mock_keyring();
-        let _keyring_guard = lock_mock_keyring();
+    fn a_kept_secret_is_a_0600_file_beside_the_store() {
         let dir = tempfile::tempdir().unwrap();
 
         let mut store = CredentialStore::empty(dir.path());
@@ -336,24 +317,33 @@ mod tests {
             .unwrap();
         store.write().unwrap();
 
-        // The file on disk must not contain the token.
+        // The store on disk must not contain the token.
         let on_disk = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
         assert!(
             !on_disk.contains("sfr_super_secret"),
             "plaintext token leaked to file"
         );
-        assert!(on_disk.contains("\"in_keyring\": true"));
 
-        // The store reconstructs the credential from the keyring.
+        // The store reconstructs the credential from the secret file.
         let loaded = CredentialStore::read(dir.path()).unwrap();
         let cred = loaded.credential(&root("default")).unwrap().unwrap();
         assert_eq!(cred.token(), "sfr_super_secret");
+
+        let secret = loaded.secret_path(&root("default"));
+        assert!(secret.starts_with(dir.path().join("secrets")));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&secret).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600, "a secret file must be 0600");
+        }
+
+        loaded.forget_secret(&root("default"));
+        assert!(!secret.exists());
     }
 
     #[test]
     fn expired_token_is_refused_with_relogin_hint() {
-        install_mock_keyring();
-        let _keyring_guard = lock_mock_keyring();
         let dir = tempfile::tempdir().unwrap();
         let mut store = CredentialStore::empty(dir.path());
         store
@@ -398,7 +388,6 @@ mod tests {
             CredentialEntry::Token {
                 token: "sfr_legacy".to_string(),
                 expires_at: None,
-                in_keyring: false,
             },
         );
         let cred = store.credential(&root("default")).unwrap().unwrap();

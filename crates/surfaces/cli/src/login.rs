@@ -20,7 +20,7 @@ pub(crate) struct Args {
     #[arg(long)]
     registry: Option<String>,
 
-    /// Authentication token, kept as a secret (OS keyring, else a 0600 file).
+    /// Authentication token, kept as a secret (a 0600 file under ~/.specforge/secrets).
     /// Exactly one of --token, --token-env, --token-file
     #[arg(long)]
     token: Option<String>,
@@ -100,7 +100,7 @@ struct TokenSource<'a> {
 
 /// Validate the token `source` gives against the registry `registry_alias` names (the default
 /// registry when none is given) and keep it under that registry's root: `--token` as a secret
-/// (OS keyring, else a 0600 file), `--token-env` and `--token-file` as references.
+/// (a 0600 file), `--token-env` and `--token-file` as references.
 fn login(
     registry_alias: Option<&str>,
     source: &TokenSource<'_>,
@@ -173,7 +173,7 @@ fn login(
         Err(error) => return refuse(&specforge_ops_registry::failure(error)),
     };
 
-    // Store credentials: a secret goes into the OS keyring (0600-file fallback) and the file keeps
+    // Store credentials: a secret goes into a 0600 file and the store keeps
     // only metadata; a reference is kept as it is. Any legacy plaintext entry for this root is
     // replaced by this write.
     match reference {
@@ -198,9 +198,6 @@ fn login(
     let kept = match store.registries.get(&root) {
         Some(CredentialEntry::EnvVar { .. }) => "env",
         Some(CredentialEntry::File { .. }) => "token_file",
-        Some(CredentialEntry::Token {
-            in_keyring: true, ..
-        }) => "keyring",
         _ => "file",
     };
     match format {

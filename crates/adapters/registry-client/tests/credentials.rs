@@ -11,7 +11,6 @@ fn token(token: &str) -> CredentialEntry {
     CredentialEntry::Token {
         token: token.to_string(),
         expires_at: None,
-        in_keyring: false,
     }
 }
 

@@ -64,7 +64,6 @@ impl World {
             CredentialEntry::Token {
                 token: token.to_string(),
                 expires_at: expires_at.map(str::to_string),
-                in_keyring: false,
             },
         );
         store.write().unwrap();

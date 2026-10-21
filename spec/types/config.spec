@@ -247,14 +247,12 @@ type RegistryPublished "Registry Published" {
 // One entry of ~/.specforge/credentials.json, keyed by registry root:
 // where that registry's token comes from. Never in specforge.json. At most
 // one of token_env and token_file is set; with neither, login stored the
-// secret (in the OS keyring when in_keyring, else in a 0600 file under
-// ~/.specforge/secrets/).
+// secret (in a 0600 file under ~/.specforge/secrets/).
 type RegistryCredential "Registry Credential" {
-  root       string  @readonly @unique
-  token_env  string  @optional
-  token_file string  @optional
-  in_keyring boolean @optional
-  expires_at string  @optional
+  root       string @readonly @unique
+  token_env  string @optional
+  token_file string @optional
+  expires_at string @optional
   verify unit "RegistryCredential schema is valid"
 }
 

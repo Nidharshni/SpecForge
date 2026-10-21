@@ -23,7 +23,7 @@ pub struct CredentialLine {
 }
 
 /// The health of the user's registry credentials: expired tokens and
-/// unreadable keyring entries break add and publish, so they are worth
+/// lost secrets break add and publish, so they are worth
 /// surfacing before they bite.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CredentialHealth {

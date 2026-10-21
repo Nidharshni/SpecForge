@@ -414,13 +414,13 @@ catalog! {
         "The token `specforge login` stored for this registry expired at the reported time. Log in again with a new token: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
     R_AUTH_021 = "R-AUTH-021": Error core,
         "Stored registry token unreadable",
-        "The secret `specforge login --token` kept for this registry (in the OS keyring, else a file under `~/.specforge/secrets/`) is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
+        "The secret `specforge login --token` kept for this registry (a file under `~/.specforge/secrets/`) is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
     R_LOGIN_001 = "R-LOGIN-001": Error core,
         "No single login token source",
         "`specforge login` needs exactly one of `--token <TOKEN>`, `--token-env <VAR>` or `--token-file <PATH>`; none or several were given.";
     R_LOGIN_002 = "R-LOGIN-002": Error core,
         "Login token not stored",
-        "`specforge login` couldn't store the token in the OS keyring or in the fallback file `~/.specforge/credentials.json`. Check that the keyring service is available and that `~/.specforge` is writable.";
+        "`specforge login` couldn't write the token's secret file under `~/.specforge/secrets/`. Check that `~/.specforge` is writable.";
     R_OPS_001 = "R-OPS-001": Error core,
         "No registry for the package",
         "No configured registry serves this package: none has a scope that matches it, and none is marked as the default (or no registries are configured at all). Add a `registries` entry to `specforge.json` with a matching scope, or mark one `\"default_registry\": true`. `specforge add`, `update` and `publish` (and MCP `add_extension`) choose the registry by this one rule and ask no other registry; a refused name sends no request.";
