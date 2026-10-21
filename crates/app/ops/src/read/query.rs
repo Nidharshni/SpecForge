@@ -123,7 +123,7 @@ pub fn document_schema(defs: &mut specforge_common::shape::Definitions) -> Value
 /// Entities of one kind (or every kind) whose fields hold given values.
 #[derive(Debug, Clone, Default)]
 pub struct ListRequest<'a> {
-    /// `None` or `""`: every kind. A kind the project does not know lists
+    /// `None`: every kind. A kind the project does not know, the empty one included, lists
     /// nothing and is a notice.
     pub kind: Option<&'a str>,
     /// Field name to the value it holds, compared as the field's JSON
@@ -138,8 +138,7 @@ pub struct ListRequest<'a> {
 /// The entities `request` selects, sorted by id and paged, with I020 for a
 /// kind the project does not know.
 pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
-    let kind = request.kind.filter(|kind| !kind.is_empty());
-    let filter = view.kind_filter(kind.as_slice());
+    let filter = view.kind_filter(request.kind.as_slice());
     let entities = view
         .graph()
         .nodes()

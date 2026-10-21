@@ -817,7 +817,7 @@ behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
     specforge://entities/{kind} resource template. Both MUST return each
     matching entity's id, kind and title: the tool as an object whose
     entities are those rows, the resource as an array of them. An unknown
-    kind MUST yield an empty list, and the tool's response metadata MUST carry I020 naming
+    kind, the empty one included, MUST yield an empty list, and the tool's response metadata MUST carry I020 naming
     the closest kind. The resource's kind is one non-empty path segment:
     specforge://entities/ and a kind of more than one segment are invalid
     input naming kind. The tool MUST also accept a `where` object (field name to

@@ -92,8 +92,10 @@ fn a_depth_without_its_entity_is_one_refusal() {
     assert_eq!(exported.subject, Some(ExportField::Scope));
 }
 
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test(
+    behavior = "select_entities_over_the_view",
+    verify = "an empty kind is a kind the project does not know: it lists nothing and is an I020 notice"
+)]
 fn an_empty_kind_is_a_kind_the_project_lacks() {
     let project = project();
     let view = project.view();

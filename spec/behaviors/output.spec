@@ -406,7 +406,8 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
     E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
     kind, sorted by id, those whose fields hold every where value, from
-    offset, at most limit.
+    offset, at most limit; an empty kind is a kind the project does not
+    know, not every kind.
   """
   verify unit "text search finds entities matching by name or contract"
   verify unit "empty query returns all entities up to limit"
@@ -416,6 +417,7 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "a search returns at most limit hits, twenty when no limit is given"
   verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
   verify unit "list keeps the entities whose fields hold every where value"
+  verify unit "an empty kind is a kind the project does not know: it lists nothing and is an I020 notice"
 }
 
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
