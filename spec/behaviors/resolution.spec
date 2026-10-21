@@ -129,6 +129,7 @@ behavior detect_import_cycles "Detect Import Cycles" {
   """
   verify unit "detect direct cycle between two files"
   verify unit "detect transitive cycle across three files"
+  verify unit "W113 names every file of an import cycle, one whose cycle closes through a file already walked included"
   verify unit "non-cyclic files still process when a cycle exists"
   verify contract "Detect Import Cycles: import cycle detection holds — import_graph_available, cycles_detected, cycle_diagnostic_emitted, non_cyclic_unaffected"
   verify unit "W113 carries actionable suggestion"

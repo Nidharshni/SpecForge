@@ -216,3 +216,38 @@ fn a_cycle_rules_field_reads_as_the_default_field_and_value() {
         ]
     );
 }
+
+/// `a→b`, `a→d`, `b→c`, `c→a`, `d→b`: `d` is on the cycle `a b c a d b`, and
+/// its edge into `b` meets `b` already walked.
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "a cycle_detection rule reports an entity whose cycle closes through an entity already reported"
+)]
+#[ignore = "flipped by T3"]
+fn a_cycle_rule_reports_an_entity_whose_cycle_closes_through_a_reported_one() {
+    let built = modules(vec![cycle_rule(
+        "E007",
+        Some("module"),
+        Some("ModuleDependsOn"),
+    )]);
+    let entities: Vec<_> = ["a", "b", "c", "d"]
+        .map(|id| entity(id, "module", 0, 0))
+        .into();
+    let edges: Vec<_> = [("a", "b"), ("a", "d"), ("b", "c"), ("c", "a"), ("d", "b")]
+        .map(|(s, t)| edge(s, t, "depends_on", Some("ModuleDependsOn")))
+        .into();
+
+    let diagnostics = built
+        .rules
+        .check(&with_edges(&entities, &edges), &NoVerdicts);
+
+    assert_eq!(
+        messages(&diagnostics),
+        [
+            "module 'a' is on a dependency cycle",
+            "module 'b' is on a dependency cycle",
+            "module 'c' is on a dependency cycle",
+            "module 'd' is on a dependency cycle",
+        ]
+    );
+}

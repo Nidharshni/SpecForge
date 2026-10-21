@@ -17,6 +17,7 @@ mod coverage_corpus;
 mod coverage_gate;
 mod credential_root;
 mod credential_store;
+mod cycle_agreement;
 mod determinism;
 mod docs_relations;
 mod docs_truth;
