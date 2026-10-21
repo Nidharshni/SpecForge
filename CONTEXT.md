@@ -655,8 +655,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Noticed read**: a read view that reports what it noticed about the run beside its value: the schema notices and I020. It
   returns `specforge_ops::Noticed<T>`, whose value is reached only with its notices, and only the surfaces' envelopes
   open it: MCP's `Answer::noticed` and `ResourceText::noticed` (into `_meta.diagnostics`) and the CLI's
-  `Notes::noticed` (on stderr, before the document) (ADR 0130). export, query, list, search, the exploration, trace,
-  the schema and its publication, and the model are noticed reads; the others return their value.
+  `Notes::noticed` (on stderr, before the document) (ADR 0130). export (its I020 included, ADR 0177), query, list,
+  search, the exploration, trace, the schema and its publication, and the model are noticed reads; the others return
+  their value.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
   statement, standing and obligations (the snapshot's own, borrowed), references in both directions,
   and the reported diagnostics about it (`specforge_ops::read::inspect::EntityFacts`); its coverage is asked
@@ -818,7 +819,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Entity argument**: an argument of a request that names one entity: the subject of a read (inspect's, trace's,
   coverage's `entity_id`) or a filter (search's `references`, export's `scope`). One the graph lacks is refused by the
   operation with `view::not_found` (E003, did-you-mean) about that field, never answered as an empty result (ADR 0015
-  Q5, ADR 0101).
+  Q5, ADR 0101); the read selection checks it.
+- **Read selection**: what a read view is about, checked once by the project view (`ProjectView::select`, ADR 0177): the
+  entity a request names, with its record and standing, or `view::not_found` about the field that named it; the hops
+  from it (a depth without it is `depth_without_entity` about that field); the kinds it keeps, with I020 for each the
+  project lacks (an empty kind among them). A read of one entity asks `ProjectView::entity`; a filter by kind alone,
+  `ProjectView::kind_filter`.
 - **Remedy**: what a refusal, a finding or a diagnostic tells the caller to do (an OpError's message tail or
   suggestion, a doctor finding's remediation). Written below the surfaces, it names a whole command or the request's
   own words, never a bare flag, so it reads true on every surface; the catalog's explanations, which name each

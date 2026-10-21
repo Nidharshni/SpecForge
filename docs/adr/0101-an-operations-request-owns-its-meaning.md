@@ -1,7 +1,7 @@
 # An operation's request owns its meaning; a surface only spells it
 
 **Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
-default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag. Amended by round 14, plan 12 (D1: a relation the request's type states). Amended by round 14, plan 09 (D5: one in-process MCP harness). Amended by round 18, plan 07 (D1: an entity a request names, and a depth without its entity).
+default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag. Amended by round 14, plan 12 (D1: a relation the request's type states). Amended by round 14, plan 09 (D5: one in-process MCP harness). Amended by round 18, plan 07 (D1: an entity a request names, and a depth without its entity). Amended by [ADR 0177](0177-a-reads-selection-is-checked-by-the-project-view.md) (D1: a depth without its entity is one refusal about the entity, export's included).
 
 The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
 shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
