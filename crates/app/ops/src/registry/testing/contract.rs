@@ -35,7 +35,7 @@ pub(super) fn refuse(allow_unsigned: bool) -> TrustPolicy<'static> {
 }
 
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
-/// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed: C1–C7
+/// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed: C0 opens, C1–C7
 /// list, fetch and publish; R-S finds a package by its name and category; R-S2 lists a package once,
 /// at the version `specforge add <name>` installs from it.
 pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]) {
@@ -46,6 +46,12 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
             .unwrap_or_else(|| panic!("the contract packages hold {name}@{version}"))
     };
     let base = PackageName::parse("@contract/base").unwrap();
+
+    // C0
+    registry
+        .open()
+        .expect("C0: a registry that serves the contract packages opens");
+    registry.open().expect("C0: opening is idempotent");
 
     // C1
     let mut versions = registry.versions(&base).expect("C1: versions of base");

@@ -245,3 +245,18 @@ fn each_registry_is_asked_with_its_own_credential() {
         ]
     );
 }
+
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "a credential store that can't be read refuses the search once, before any request: it is no registry's failure"
+)]
+fn an_unreadable_credential_store_refuses_the_search_once() {
+    let world = World::with(&["one", "two"]);
+    std::fs::create_dir_all(world.project.home()).unwrap();
+    std::fs::write(world.project.home().join("credentials.json"), "{").unwrap();
+
+    let error = world.registry().search("x", None).unwrap_err();
+
+    assert_eq!(error.code, "R012");
+    assert!(world.client.calls().is_empty());
+}

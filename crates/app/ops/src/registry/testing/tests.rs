@@ -17,6 +17,33 @@ fn the_memory_registry_keeps_the_registry_contract() {
     assert_registry_contract(&registry, &published);
 }
 
+#[test]
+fn it_refuses_every_call_when_it_cannot_open() {
+    let error = crate::OpError::coded(
+        crate::OpErrorKind::SchemaMismatch,
+        codes::E067,
+        "Failed to parse registry entry at index 0",
+    );
+    let package = PackageName::parse("@acme/a").unwrap();
+    let registry = MemoryRegistry::new()
+        .serving(Published::new(
+            b"\0asm".to_vec(),
+            declaration("@acme/a", "1.0.0", &[]),
+        ))
+        .refusing_open(error.clone());
+
+    assert_eq!(registry.open().unwrap_err(), error);
+    assert_eq!(registry.versions(&package).unwrap_err(), error);
+    assert_eq!(
+        registry
+            .fetch(&package, &Version::new(1, 0, 0), refuse(false))
+            .unwrap_err(),
+        error
+    );
+    assert_eq!(registry.search("a", None).unwrap_err(), error);
+    assert!(registry.asked().is_empty());
+}
+
 #[specforge_test_macros::test(
     type = "RegistryManifest",
     verify = "RegistryManifest schema is valid"

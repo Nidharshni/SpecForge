@@ -49,14 +49,6 @@ impl User {
         CredentialStore::read(&self.dir)
     }
 
-    /// For a read of `registry`: what is kept for its root, or `None`. Never the environment's token.
-    pub(crate) fn kept_for(
-        &self,
-        registry: &RegistryConfig,
-    ) -> Result<Option<RegistryCredential>, Diagnostic> {
-        self.store()?.credential(&registry.url)
-    }
-
     pub(crate) fn signing_key(&self) -> PathBuf {
         self.dir.join("signing-key.json")
     }
@@ -72,6 +64,15 @@ impl User {
 }
 
 impl ConfiguredRegistry {
+    /// The user's credential store, read once, on the first call that needs it (ADR 0045 as amended):
+    /// never for a publish whose environment gives the token.
+    pub(crate) fn store(&self) -> Result<&CredentialStore, Diagnostic> {
+        self.store
+            .get_or_init(|| self.user.store())
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
     /// The credential the user keeps for `registry`, for a read: the stored one
     /// ([`specforge_registry_client::CredentialStore::credential`]), `None` when there is none. The
     /// environment's `SPECFORGE_REGISTRY_TOKEN` is not used: it is the token of the registry a publish
@@ -90,7 +91,7 @@ impl ConfiguredRegistry {
         &self,
         registry: &RegistryConfig,
     ) -> Result<Option<RegistryCredential>, Diagnostic> {
-        self.user.kept_for(registry)
+        self.store()?.credential(&registry.url)
     }
 
     /// The credential a publish to `registry` authenticates with: the
@@ -103,8 +104,7 @@ impl ConfiguredRegistry {
         if let Some(token) = self.user.token() {
             return Ok(RegistryCredential::new(registry.url.clone(), token));
         }
-        self.user
-            .kept_for(registry)
+        self.stored_credential(registry)
             .map_err(unusable_credential)?
             .ok_or_else(|| {
                 OpError::coded(

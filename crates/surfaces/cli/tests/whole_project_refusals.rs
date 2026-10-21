@@ -2,6 +2,7 @@
 //! operation's, given once: never once per locked package or per configured registry (plan 10).
 
 use crate::support::{Cli, TestProject};
+use specforge_test_macros::test as specforge_test;
 
 /// Two registry installs: a per-package report prints two rows.
 const TWO_LOCKED: &str = r#"{"lockfile_version":1,"entries":[
@@ -80,8 +81,10 @@ fn update_refuses_an_unreadable_credential_store_once() {
     refused_once(&Cli::on(&dir).run(&["update"]).stderr, "R012");
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "a credential store that can't be read refuses the search once, before any request: it is no registry's failure"
+)]
 fn search_refuses_an_unreadable_credential_store_once() {
     let dir = project(serde_json::json!([
         {"alias": "one", "url": UNREACHABLE, "default_registry": true},

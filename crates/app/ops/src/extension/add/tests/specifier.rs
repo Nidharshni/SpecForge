@@ -52,6 +52,10 @@ fn a_name_file_specifier_is_a_local_path_not_a_builtin() {
 struct Refusing;
 
 impl Registry for Refusing {
+    fn open(&self) -> Result<(), OpError> {
+        Ok(())
+    }
+
     fn versions(&self, _: &PackageName) -> Result<Vec<specforge_package::Version>, OpError> {
         Err(OpError::coded(
             OpErrorKind::InvalidInput,

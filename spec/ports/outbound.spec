@@ -100,7 +100,10 @@ port Registry "Registry" {
   // name. A fetch decides its publisher and writes nothing; the lock plan
   // pins what it accepted as the last step of its change. Its adapters are
   // the configured registry (production) and the in-memory registry
-  // (tests); both keep one contract suite.
+  // (tests); both keep one contract suite. It opens (the refusal of the
+  // whole project: no registry, an unreadable entry, an unreadable
+  // credential store), once.
+  method open() -> Result<void, ExtensionError>
   method versions(name: PackageName) -> Result<string[], ExtensionError>
   method published(name: PackageName, version: string) -> Result<RegistryManifest, ExtensionError>
   method fetch(name: PackageName, version: string, policy: TrustPolicy) -> Result<RegistryPackage, ExtensionError>

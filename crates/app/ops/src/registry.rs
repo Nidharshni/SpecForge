@@ -3,7 +3,7 @@
 //!
 //! SpecForge ships no registry (ADR 0004 N1): the only registries are the
 //! ones the project's `specforge.json` lists under `registries`. With none,
-//! a registry operation fails with E063 before it makes any network call.
+//! a registry operation fails with E063 before it makes any network call (its `open`).
 //!
 //! The operations name only the [`Registry`] trait. The adapter that talks
 //! HTTP, checks publisher signatures and saves the user's key pins is
@@ -327,12 +327,23 @@ pub const CONTRIBUTES: OptionTable<DeclaredCategory> = OptionTable {
 /// The registry port the extension operations use. It lists a package's versions, reads one's
 /// published manifest without its binary (what a dry run judges),
 /// fetches one, pins the publisher keys a committed install accepted and publishes one; it does not resolve a requirement (ADR 0036): ops
-/// does, with [`crate::extension::resolve`]. Each call asks the one registry that
-/// serves the name (ADR 0045).
+/// does, with [`crate::extension::resolve`]. It opens (the refusal of the whole project, once) and each
+/// call asks the one registry that serves the name (ADR 0045).
 ///
 /// Two adapters (ADR 0044): `specforge_ops_registry::ConfiguredRegistry` in production and
 /// [`testing::MemoryRegistry`] in tests, both held to [`testing::assert_registry_contract`].
 pub trait Registry {
+    /// Whether this registry can be asked at all, for the operation it was built for: the refusals that
+    /// are the whole project's, not a package's: no registry configured (E063), a `registries` entry
+    /// that can't be read (E067), the user's credential store that can't be read (R012). Asks the
+    /// registry nothing: no request is made.
+    ///
+    /// An adapter reads what it needs once. After `open` answered `Ok`, no call fails with these; after
+    /// it refused, every call fails with that same refusal, so an operation that never opens still
+    /// refuses at its first ask. An operation that will ask (update with a registry install selected,
+    /// search) opens first and gives the refusal as its own; one that may ask nothing (an add of an
+    /// installed exact version, ADR 0044 D5) need not.
+    fn open(&self) -> Result<(), OpError>;
     /// Every version `name` publishes (unparseable ones dropped);
     /// R-RES-001 when the registry has no such package.
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError>;
@@ -392,6 +403,10 @@ pub mod testing;
 pub struct Unconfigured(pub &'static str);
 
 impl Registry for Unconfigured {
+    fn open(&self) -> Result<(), OpError> {
+        Err(no_registry(self.0))
+    }
+
     fn versions(&self, _: &PackageName) -> Result<Vec<Version>, OpError> {
         Err(no_registry(self.0))
     }

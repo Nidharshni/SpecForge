@@ -784,6 +784,9 @@ behavior search_registry "Search Registry" {
     A specforge.json that is there and can't be used MUST be refused as add
     refuses it (config_invalid, naming E069), before any network call; so
     for login and publish.
+    A credentials.json that can't be read MUST refuse the search with R012
+    before any network call, as add refuses it: it is the user's store, not a
+    registry that failed.
   """
   verify unit "with no registry configured, search makes no network call and reports how to configure one"
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
@@ -792,6 +795,7 @@ behavior search_registry "Search Registry" {
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
+  verify unit "a credential store that can't be read refuses the search once, before any request: it is no registry's failure"
   verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
   verify integration "search's document writes its diagnostics as check does and carries no null"
   verify unit "deduplicates results across registries"
@@ -1139,8 +1143,10 @@ behavior configure_registries "Configure Registries" {
     configured. First-use MUST NOT require network access — registries are
     opt-in configuration, and first use is always local/offline per P8.
     An entry that can't be read (E067) refuses every registry operation
-    before any request, so no other registry serves the names its
-    scope_filter claims. The other diagnostics of reading the registries
+    before any request, once: an operation opens its registry (the registries
+    array and the user's credential store, read once) when it first needs one,
+    and a refusal there is the operation's, not a package's, so no other
+    registry serves the names its scope_filter claims. The other diagnostics of reading the registries
     array (W140, I003) are shown by an operation only once it has asked a
     registry: an add of an
     exact version already installed asks none and shows none; a dry run of
@@ -1148,6 +1154,7 @@ behavior configure_registries "Configure Registries" {
     shows them.
   """
   verify unit "registries parsed from specforge.json"
+  verify unit "a registry operation opens its registry once: the configuration and the credential store are read before any request, and their refusal is the operation's"
   verify unit "scope_filter routes to correct registry"
   verify unit "no registries configured produces I003 info diagnostic"
   verify unit "scope mismatch falls back to default registry URL"

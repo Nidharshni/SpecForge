@@ -21,9 +21,9 @@ use specforge_package::Version;
 use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::{
-    Accepted, HttpRegistryClient, KeyChange, NewPin, PinSource, PublishError, RegistryClient,
-    RegistryConfig, RegistryCredential, RegistryError, Retrying, parse_registries_from_config,
-    publish_to_registry, verify_registry_integrity,
+    Accepted, CredentialStore, HttpRegistryClient, KeyChange, NewPin, PinSource, PublishError,
+    RegistryClient, RegistryConfig, RegistryCredential, RegistryError, Retrying,
+    parse_registries_from_config, publish_to_registry, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::sync::OnceLock;
@@ -179,8 +179,8 @@ pub fn configured(
 }
 
 /// A project's package registry as the `Registry` port (ADR 0010, 0044). It reads the registries the
-/// project's `specforge.json` configures the first time an operation asks it anything, asks the one that
-/// serves a name, and hands ops only a package that passed the fetch policy:
+/// project's `specforge.json` configures and the user's credential store once: when an operation opens it
+/// ([`Registry::open`]) or first asks it anything. It asks the one that serves a name, and hands ops only a package that passed the fetch policy:
 ///
 /// 1. the reply names the package and version asked for (R-TRUST-004);
 /// 2. the binary hashes to the reply's SHA-256 (R-OPS-002);
@@ -192,12 +192,15 @@ pub fn configured(
 ///
 /// A fetch writes nothing. The policy runs over any [`RegistryClient`]: HTTP unless
 /// [`ConfiguredRegistry::with_client`] gives another. Built without reading, touching the network or
-/// failing: with no registry configured, each call fails with E063 before any request.
+/// failing. [`Registry::open`] gives the refusal of the whole project (E063, E067, R012) before any
+/// request; a call made without opening fails with the same refusal.
 pub struct ConfiguredRegistry {
     root: specforge_common::ProjectRoot,
     operation: String,
     /// Read once, on the first call that needs a registry.
     registries: OnceLock<Result<Configured, OpError>>,
+    /// The user's credential store, read once (see [`ConfiguredRegistry::store`]).
+    store: OnceLock<Result<CredentialStore, Diagnostic>>,
     client: Box<dyn RegistryClient>,
     /// Whose registry files are read (pins, credentials, signing key).
     user: User,
@@ -213,6 +216,7 @@ impl ConfiguredRegistry {
             root: root.clone(),
             operation: operation.to_string(),
             registries: OnceLock::new(),
+            store: OnceLock::new(),
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
             user: User::current(),
             reported_by_policy: PolicyReports::default(),
@@ -232,7 +236,7 @@ impl ConfiguredRegistry {
         self
     }
 
-    /// What this registry reported, once an operation has asked it anything: the registry
+    /// What this registry reported, once an operation has opened it or asked it anything: the registry
     /// configuration's diagnostics (W140 for a duplicate alias, I003 when none is the
     /// default; nothing when reading failed outright, each call then failing with
     /// that error), then the fetch policy's W155 in fetch order, then a W156 for each re-pin a
@@ -298,6 +302,13 @@ impl ConfiguredRegistry {
 }
 
 impl Registry for ConfiguredRegistry {
+    /// The configuration first (E063/E067, as publish refuses), then the user's store (R012).
+    fn open(&self) -> Result<(), OpError> {
+        self.registries()?;
+        self.store().map_err(unusable_credential)?;
+        Ok(())
+    }
+
     fn fetch(
         &self,
         name: &PackageName,
@@ -413,6 +424,7 @@ impl Registry for ConfiguredRegistry {
         query: &str,
         contributes: Option<DeclaredCategory>,
     ) -> Result<Searched, OpError> {
+        self.open()?;
         let registries = &self.registries()?.registries;
         let mut wire = SearchQuery::new(query);
         if let Some(category) = contributes {
