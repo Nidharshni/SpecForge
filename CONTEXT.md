@@ -353,7 +353,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   once: every declared peer whose dependent or peer the change touches (what it stages or appends; for a removal,
   each member the set loses or loads instead, ADR 0041). A required peer no member
   provides is E027; a peer installed from a registry is unified against the registry the install came
-  from (R-RES-006/005, ADR 0001); anything else out of range (a local install, a builtin, a `.wasm`
+  from (R-RES-006/005, R-RES-002 when it publishes none, ADR 0001); anything else out of range (a local install, a builtin, a `.wasm`
   file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads
   only after that and must declare what was published; then the plan is written as one change,
   `specforge.json` included, whose last step pins the publisher keys its fetches accepted
@@ -615,7 +615,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
   reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions:
   ops runs it for `add`, and every registry's search lists a package at what it picks for `latest`
-  (`pick_from`). The `Registry` port lists versions and fetches one; it does not resolve.
+  (`pick_from`). The `Registry` port lists versions and fetches one; it does not resolve. A registry's
+  list of a package's versions is read once (`extension::resolve::published`): an empty list is
+  R-RES-002, for `add`'s pick, `update`'s upgrade target and the lock plan's version diamond.
 - **Upgrade target**: what `update` moves a locked registry extension to: the highest published version
   newer than the locked one that the update's reach admits, `^locked` (`Reach::Compatible`) or any
   (`Reach::Major`, `--major`), a pre-release only on the locked pre-release's own `MAJOR.MINOR.PATCH`. None
