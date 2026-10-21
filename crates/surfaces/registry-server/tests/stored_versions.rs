@@ -132,3 +132,31 @@ async fn a_download_is_the_stored_version_and_nothing_else() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(status_of(&router, download).await, StatusCode::NOT_FOUND);
 }
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a name or version that is not a package name or version"
+)]
+#[tokio::test]
+async fn an_upload_past_the_body_limit_is_too_large() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path());
+    let token = issue(&state, "pub", "pub", false);
+    let router = handlers::router(Arc::clone(&state));
+    let mut wasm = b"\0asm".to_vec();
+    wasm.resize(65 * 1024 * 1024, 0);
+    let request = Request::builder()
+        .method("PUT")
+        .uri("/v1/packages/@test%2Fsigned-ext/1.0.0")
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", form::content_type("testboundary123"))
+        .body(Body::from(form::body(
+            "testboundary123",
+            MANIFEST,
+            &wasm,
+            Some(&signature()),
+        )))
+        .unwrap();
+    let status = router.oneshot(request).await.unwrap().status();
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+}
