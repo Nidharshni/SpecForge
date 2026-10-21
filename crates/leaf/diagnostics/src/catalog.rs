@@ -414,7 +414,7 @@ catalog! {
         "The token `specforge login` stored for this registry expired at the reported time. Log in again with a new token: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
     R_AUTH_021 = "R-AUTH-021": Error core,
         "Stored registry token unreadable",
-        "The secret `specforge login --token` kept for this registry (a file under `~/.specforge/secrets/`) is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`.";
+        "The secret `specforge login --token` kept for this registry (a file under `~/.specforge/secrets/`) is missing or can't be read, although the credentials file refers to it. Log in again: `specforge login --registry <alias> --token <NEW_TOKEN>`. The file is 0600 and its directory 0700 on unix only; on Windows nothing sets a mode, so the secret relies on the user profile directory's default ACL (private to the user).";
     R_LOGIN_001 = "R-LOGIN-001": Error core,
         "No single login token source",
         "`specforge login` needs exactly one of `--token <TOKEN>`, `--token-env <VAR>` or `--token-file <PATH>`; none or several were given.";

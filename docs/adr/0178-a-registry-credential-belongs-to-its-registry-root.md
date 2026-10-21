@@ -55,3 +55,9 @@
 
 A user asking for OS-protected secrets at rest is the second adapter that makes a `Secrets` seam real. A registry
 protocol that names a registry by something other than its root would change D1.
+
+## Amendment (round 20 review): platform
+
+The 0600 file and 0700 directory of D4 are unix modes. On Windows `write_private` sets nothing, so a kept secret relies on
+the user profile directory's default ACL, which is private to the user. No ACL is set; nothing here can verify one on
+Windows. Open until a Windows user asks for more.

@@ -62,19 +62,55 @@ pub enum Claim {
     Unclaimed,
 }
 
-/// An account's name as an operator gives it: 1 to 39 of `a-z`, `0-9` and `-`, not starting with `-`.
-pub fn account_name(text: &str) -> Result<&str, String> {
-    let valid = (1..=39).contains(&text.len())
-        && !text.starts_with('-')
-        && text
-            .bytes()
-            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'-'));
-    if valid {
-        Ok(text)
-    } else {
-        Err(format!(
-            "'{text}' is not an account name: 1 to 39 of a-z, 0-9 and '-', not starting with '-'"
-        ))
+/// An account's name, validated once: 1 to 39 of `a-z`, `0-9` and `-`, not starting with `-`. It is a
+/// plain string on the wire and in the database.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Account(String);
+
+impl Account {
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let valid = (1..=39).contains(&text.len())
+            && !text.starts_with('-')
+            && text
+                .bytes()
+                .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'-'));
+        if valid {
+            Ok(Self(text.to_string()))
+        } else {
+            Err(format!(
+                "'{text}' is not an account name: 1 to 39 of a-z, 0-9 and '-', not starting with '-'"
+            ))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::str::FromStr for Account {
+    type Err = String;
+    fn from_str(text: &str) -> Result<Self, String> {
+        Self::parse(text)
+    }
+}
+
+impl std::fmt::Display for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl rusqlite::ToSql for Account {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        self.0.to_sql()
+    }
+}
+
+impl rusqlite::types::FromSql for Account {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let text = value.as_str()?;
+        Self::parse(text).map_err(|why| rusqlite::types::FromSqlError::Other(why.into()))
     }
 }
 
@@ -105,7 +141,7 @@ pub(crate) fn may_write(
         .map_err(|e| WriteRefused::Storage(format!("scope query failed: {e}")))?
     {
         None => Ok(Claim::Unclaimed),
-        Some(account) if account == writer.account => Ok(Claim::Owned),
+        Some(account) if account == writer.account.as_str() => Ok(Claim::Owned),
         Some(account) => Err(WriteRefused::Owned {
             scope: scope.to_string(),
             owner: account,
@@ -143,7 +179,7 @@ pub(crate) fn owner(conn: &Connection, scope: &str) -> rusqlite::Result<Option<S
 pub(crate) fn assign(
     conn: &Connection,
     scope: &str,
-    account: &str,
+    account: &Account,
 ) -> Result<Option<String>, AssignRefused> {
     // shortcut: no Scope type in specforge-package, upgrade when one exists.
     let is_scope =

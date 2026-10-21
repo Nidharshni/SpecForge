@@ -1,6 +1,7 @@
 //! `specforge-registry`: the package registry server's command line, which serves the router of this crate's
 //! library.
 
+use specforge_registry_server::ownership::Account;
 use specforge_registry_server::state::{AppState, PublishLimits, ReadAccess};
 use specforge_registry_server::{auth, db::Database, handlers};
 
@@ -60,8 +61,8 @@ enum ScopeAction {
         scope: String,
 
         /// The account that owns it from now on; a token must already be issued to it
-        #[arg(long, value_parser = parse_account)]
-        account: String,
+        #[arg(long)]
+        account: Account,
 
         /// Data directory (must match the server's)
         #[arg(long, default_value = "./registry-data")]
@@ -74,8 +75,8 @@ enum TokenAction {
     /// Create a new token
     Create {
         /// The account the token is issued to; it owns the scopes the token claims
-        #[arg(long, value_parser = parse_account)]
-        account: String,
+        #[arg(long)]
+        account: Account,
 
         /// Scope filter (e.g., "@myorg") — empty means full access
         #[arg(long)]
@@ -281,9 +282,4 @@ fn open_database(data_dir: &Path) -> Result<Database, String> {
     let path = data_dir.join("registry.db");
     Database::open(&path)
         .map_err(|e| format!("cannot open the token database {}: {e}", path.display()))
-}
-
-/// An account name as the operator types it.
-fn parse_account(text: &str) -> Result<String, String> {
-    specforge_registry_server::ownership::account_name(text).map(str::to_string)
 }

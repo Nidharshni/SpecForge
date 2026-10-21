@@ -4,7 +4,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use specforge_registry_server::state::{AppState, PublishLimits};
-use specforge_registry_server::{auth, handlers};
+use specforge_registry_server::{auth, handlers, testing::issue_token as issue};
 use specforge_registry_wire::{
     ErrorBody, ErrorCode, PackageMetadata, PublishReceipt, SearchResults, SignedContent,
     TokenVerified, VersionList, Yanked, form, reply,
@@ -81,7 +81,7 @@ fn put_request(token: &str, name: &str, version: &str, body: Body) -> Request<Bo
 async fn unsigned_publish_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
 
     let response = app(state)
         .oneshot(put_request(
@@ -107,7 +107,7 @@ async fn unsigned_publish_is_rejected() {
 async fn name_mismatch_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
 
     // Path says 2.0.0, manifest says 1.0.0.
     let response = app(state)
@@ -134,7 +134,7 @@ async fn name_mismatch_is_rejected() {
 async fn non_wasm_bytes_are_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
 
     let response = app(state)
         .oneshot(put_request(
@@ -164,7 +164,7 @@ async fn non_wasm_bytes_are_rejected() {
 async fn invalid_manifest_schema_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
 
     // Missing required fields entirely.
     let response = app(state)
@@ -195,7 +195,7 @@ async fn invalid_manifest_schema_is_rejected() {
 async fn publish_rate_limit_returns_429() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 2); // 2 publishes per window per token
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
     let router = app(state);
 
     // Dedup prevents version reuse, so vary versions per attempt.
@@ -241,8 +241,8 @@ async fn admin_api_requires_admin_token_and_manages_lifecycle() {
     let state = app_state(dir.path(), 100);
     let router = app_clone(&state);
 
-    let publisher = auth::create_token(&state.database, "pub", None, "publisher", Some(90), false);
-    let admin = auth::create_token(&state.database, "pub", None, "admin", Some(90), true);
+    let publisher = issue(&state, "pub", "publisher", false);
+    let admin = issue(&state, "pub", "admin", true);
 
     // Publisher token: forbidden on admin endpoints.
     let response = router
@@ -360,7 +360,7 @@ async fn json_of(response: axum::response::Response) -> serde_json::Value {
 async fn a_manifest_that_is_not_a_declaration_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
     // The camelCase manifest file of before ADR 0012.
     let legacy = r#"{"name":"@test/signed-ext","version":"1.0.0","manifestVersion":2,"wasmPath":"ext.wasm"}"#;
     let response = app(state)
@@ -390,7 +390,7 @@ async fn a_manifest_that_is_not_a_declaration_is_refused() {
 async fn description_and_keywords_come_from_the_declaration() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
     let router = app_clone(&state);
     let manifest = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null,"description":"Reports over the graph","keywords":["reports","dashboards"]}}"#;
     let response = router
@@ -430,7 +430,7 @@ async fn description_and_keywords_come_from_the_declaration() {
 async fn publish_code(name: &str, version: &str) -> String {
     let dir = tempfile::tempdir().expect("a temp dir");
     let state = app_state(dir.path(), 100);
-    let raw = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let raw = issue(&state, "pub", "pub", false);
     let response = app(state)
         .oneshot(put_request(
             &raw,
@@ -545,7 +545,7 @@ async fn get_json(router: &axum::Router, uri: &str) -> (StatusCode, serde_json::
 async fn the_server_answers_in_these_json_shapes() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let token = issue(&state, "pub", "pub", false);
     let router = app_clone(&state);
 
     // publish: 201 and the receipt.
@@ -701,7 +701,7 @@ async fn metadata_status(router: &axum::Router, version: &str) -> StatusCode {
 async fn a_signature_that_is_not_one_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let token = issue(&state, "pub", "pub", false);
     let router = app_clone(&state);
     for (version, signature, reason) in [
         (
@@ -758,7 +758,7 @@ async fn a_signature_that_is_not_one_is_refused() {
 async fn a_signature_over_other_bytes_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let token = issue(&state, "pub", "pub", false);
     let router = app_clone(&state);
     let signature = signed(VALID_MANIFEST, b"\0asm-other");
     let (status, body) =
@@ -785,7 +785,7 @@ async fn a_signature_over_other_bytes_is_refused() {
 async fn a_signature_of_another_version_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let token = issue(&state, "pub", "pub", false);
     // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
     let signature = signed(VALID_MANIFEST, WASM);
     let (status, body) = publish_signed_ext(
@@ -809,7 +809,7 @@ async fn a_signature_of_another_version_is_refused() {
 async fn a_signature_over_another_manifest_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, "pub", None, "pub", Some(90), false);
+    let token = issue(&state, "pub", "pub", false);
     let described = VALID_MANIFEST.replace(
         "\"sandbox_policy\":null",
         "\"sandbox_policy\":null,\"description\":\"other\"",
@@ -842,7 +842,7 @@ async fn a_private_registry_refuses_anonymous_reads() {
         )
         .unwrap(),
     );
-    let raw = auth::create_token(&state.database, "pub", None, "reader", Some(90), false);
+    let raw = issue(&state, "pub", "reader", false);
     let reads = [
         "/v1/packages/%40acme%2Fx",
         "/v1/packages/%40acme%2Fx/1.0.0",
@@ -1028,9 +1028,9 @@ async fn revoking_takes_a_token_id() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let router = app_clone(&state);
-    let admin = auth::create_token(&state.database, "pub", None, "admin", Some(90), true);
-    let one = auth::create_token(&state.database, "pub", None, "one", Some(90), false);
-    let two = auth::create_token(&state.database, "pub", None, "two", Some(90), false);
+    let admin = issue(&state, "pub", "admin", true);
+    let one = issue(&state, "pub", "one", false);
+    let two = issue(&state, "pub", "two", false);
     let verify = |token: String| {
         let router = router.clone();
         async move {

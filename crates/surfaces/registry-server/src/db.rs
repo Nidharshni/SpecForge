@@ -1,4 +1,4 @@
-use crate::ownership::{self, Claim, WriteRefused};
+use crate::ownership::{self, Account, Claim, WriteRefused};
 use rusqlite::{Connection, params};
 use specforge_package::PackageName;
 use specforge_registry_wire::PackageSignature;
@@ -80,7 +80,7 @@ pub struct PackageVersion {
 pub struct TokenRecord {
     pub token_hash: String,
     /// The account the token was issued to; it, not the token, owns the scopes the token claims.
-    pub account: String,
+    pub account: Account,
     pub scope: Option<String>,
     pub label: String,
     pub created_at: String,
@@ -407,7 +407,7 @@ impl Database {
     pub fn assign_scope(
         &self,
         scope: &str,
-        account: &str,
+        account: &Account,
     ) -> Result<Option<String>, ownership::AssignRefused> {
         ownership::assign(&self.conn(), scope, account)
     }
@@ -468,7 +468,7 @@ impl Database {
     pub fn insert_token(
         &self,
         token_hash: &str,
-        account: &str,
+        account: &Account,
         scope: Option<&str>,
         label: &str,
         expires_at: Option<&str>,
@@ -491,7 +491,7 @@ impl Database {
     }
 
     /// Whether any token was ever issued to `account`.
-    pub fn has_account(&self, account: &str) -> bool {
+    pub fn has_account(&self, account: &Account) -> bool {
         self.conn()
             .query_row(
                 "SELECT 1 FROM accounts WHERE name = ?1",
@@ -605,7 +605,14 @@ mod tests {
     /// A token of `account`, which the database must know (the scope table references it).
     fn writer(db: &Database, account: &str) -> TokenRecord {
         let hash = format!("hash-{account}");
-        let _ = db.insert_token(&hash, account, None, "t", None, false);
+        let _ = db.insert_token(
+            &hash,
+            &Account::parse(account).unwrap(),
+            None,
+            "t",
+            None,
+            false,
+        );
         db.validate_token(&hash).unwrap()
     }
 

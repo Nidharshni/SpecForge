@@ -15,6 +15,7 @@ use specforge_registry_wire::{PackageMetadata, RegistryRoot};
 use tempfile::TempDir;
 
 use crate::db::PackageVersion;
+use crate::ownership::Account;
 use crate::state::{AppState, PublishLimits, ReadAccess};
 use crate::{auth, handlers};
 
@@ -64,7 +65,7 @@ impl LocalRegistry {
             Arc::new(AppState::open(data.path(), limits, read_access).expect("an empty registry"));
         let token = auth::create_token(
             &state.database,
-            "publisher",
+            &Account::parse("publisher").unwrap(),
             None,
             "publisher",
             Some(1),
@@ -119,7 +120,15 @@ impl LocalRegistry {
     /// A bearer token it accepts for publishing, issued to `account` (no scope, a day's expiry): a second
     /// token of the publisher's account, or another account's.
     pub fn issue(&self, account: &str) -> String {
-        auth::create_token(&self.state.database, account, None, account, Some(1), false)
+        let account = Account::parse(account).expect("a valid account name");
+        auth::create_token(
+            &self.state.database,
+            &account,
+            None,
+            account.as_str(),
+            Some(1),
+            false,
+        )
     }
 
     /// The `registries` value naming this registry as the default, alias `local`.
@@ -181,4 +190,10 @@ async fn log_request(
         .unwrap()
         .push(format!("{} {}", request.method(), request.uri().path()));
     next.run(request).await
+}
+
+/// A token of `account` (no scope, 90 days) labelled `label`, written to `state`'s database.
+pub fn issue_token(state: &AppState, account: &str, label: &str, admin: bool) -> String {
+    let account = Account::parse(account).expect("a valid account name");
+    auth::create_token(&state.database, &account, None, label, Some(90), admin)
 }

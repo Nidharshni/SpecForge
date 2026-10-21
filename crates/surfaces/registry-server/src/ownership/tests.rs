@@ -1,15 +1,20 @@
 //! The ownership rule through `Database`, its interface.
 
 use crate::db::{Database, PackageVersion, TokenRecord};
+use crate::ownership::Account;
 use crate::ownership::{AssignRefused, WriteRefused};
 use specforge_package::PackageName;
 
 /// A token of `account` (with `filter`), which the database must know.
 fn writer(db: &Database, account: &str, filter: Option<&str>) -> TokenRecord {
     let hash = format!("hash-{account}-{}", filter.unwrap_or("all"));
-    db.insert_token(&hash, account, filter, "t", None, false)
+    db.insert_token(&hash, &acct(account), filter, "t", None, false)
         .unwrap();
     db.validate_token(&hash).unwrap()
+}
+
+fn acct(text: &str) -> Account {
+    Account::parse(text).unwrap()
 }
 
 fn name(text: &str) -> PackageName {
@@ -113,10 +118,10 @@ fn a_schema_1_data_directory_is_refused() {
 #[test]
 fn account_names_are_lowercase_words() {
     for good in ["acme", "a", "team-7", &"x".repeat(39)] {
-        assert_eq!(super::account_name(good), Ok(good));
+        assert_eq!(Account::parse(good).unwrap().as_str(), good);
     }
     for bad in ["", "-a", "Acme", "a b", "a_b", &"x".repeat(40)] {
-        assert!(super::account_name(bad).is_err(), "{bad}");
+        assert!(Account::parse(bad).is_err(), "{bad}");
     }
 }
 
@@ -130,23 +135,26 @@ fn an_assigned_scope_is_written_by_its_new_account_only() {
     let new = writer(&db, "new", None);
     db.publish(&pv("@x/y"), &name("@x/y"), &old).unwrap();
 
-    assert_eq!(db.assign_scope("@x", "new"), Ok(Some("old".to_string())));
+    assert_eq!(
+        db.assign_scope("@x", &acct("new")),
+        Ok(Some("old".to_string()))
+    );
     assert_eq!(db.may_write(&new, &name("@x/z")), Ok(()));
     assert!(db.may_write(&old, &name("@x/z")).is_err());
     // An unclaimed scope is assigned too.
-    assert_eq!(db.assign_scope("@free", "old"), Ok(None));
+    assert_eq!(db.assign_scope("@free", &acct("old")), Ok(None));
 }
 
 #[test]
 fn assigning_to_an_unknown_account_is_refused() {
     let (_dir, db) = database();
     assert_eq!(
-        db.assign_scope("@x", "ghost"),
+        db.assign_scope("@x", &acct("ghost")),
         Err(AssignRefused::UnknownAccount("ghost".to_string()))
     );
     writer(&db, "real", None);
     assert!(matches!(
-        db.assign_scope("x", "real"),
+        db.assign_scope("x", &acct("real")),
         Err(AssignRefused::NotAScope(_))
     ));
     assert_eq!(db.scope_owner("@x"), None);

@@ -80,7 +80,7 @@ pub(super) async fn publish_package(
         .scope()
         .expect("publish_target refuses unscoped names")
         .to_string();
-    let publisher_account = token_record.account.clone();
+    let publisher_account = token_record.account.to_string();
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.
