@@ -181,3 +181,45 @@ fn token_list_lines_each_scope_up_under_its_header() {
         assert_eq!(line.find(cell), Some(column), "{stdout}");
     }
 }
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "a stored token scope that is not a scope authenticates nothing, and the token listing names the token to revoke"
+)]
+fn a_stored_scope_that_is_no_scope_is_named_for_revocation() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+    let created = registry(&[
+        "token",
+        "create",
+        "--account",
+        "acme",
+        "--no-expiry",
+        "--data-dir",
+        data,
+    ]);
+    assert_eq!(created.status.code(), Some(0), "{created:?}");
+    rusqlite::Connection::open(dir.path().join("registry.db"))
+        .unwrap()
+        .execute("UPDATE tokens SET scope = 'sdk'", [])
+        .unwrap();
+
+    let listed = registry(&["token", "list", "--data-dir", data]);
+    let stderr = String::from_utf8_lossy(&listed.stderr);
+    assert_eq!(listed.status.code(), Some(1), "{stderr}");
+    let id = stderr
+        .split("token revoke ")
+        .nth(1)
+        .and_then(|rest| rest.get(..8))
+        .unwrap_or_else(|| panic!("no revoke command in: {stderr}"));
+    assert!(
+        stderr.contains("'sdk'") && stderr.contains(&format!("token {id} ")),
+        "{stderr}"
+    );
+
+    let revoked = registry(&["token", "revoke", id, "--data-dir", data]);
+    assert_eq!(revoked.status.code(), Some(0), "{revoked:?}");
+    let listed = registry(&["token", "list", "--data-dir", data]);
+    assert_eq!(listed.status.code(), Some(0), "{listed:?}");
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("No tokens found."));
+}

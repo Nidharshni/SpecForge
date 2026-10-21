@@ -912,6 +912,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
   verify integration "a token's scope filter is a scope: text that is not one is refused where the token is issued, and a token issued with none covers every scope"
+  verify integration "a stored token scope that is not a scope authenticates nothing, and the token listing names the token to revoke"
   verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, scope_owned_by_account, yank_held_to_owner"
 }
 

@@ -83,6 +83,22 @@ mod tests {
     }
 
     #[test]
+    fn a_token_whose_stored_scope_is_no_scope_authenticates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.db");
+        let db = Database::open(&path).unwrap();
+        let raw = create_token(&db, &acct("a"), None, "ci", Some(90), false);
+        assert!(validate_bearer(&db, &format!("Bearer {raw}")).is_some());
+
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute("UPDATE tokens SET scope = 'sdk'", [])
+            .unwrap();
+
+        assert!(validate_bearer(&db, &format!("Bearer {raw}")).is_none());
+    }
+
+    #[test]
     fn expired_token_fails_validation() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();

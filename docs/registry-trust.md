@@ -110,6 +110,9 @@ new teammate, CI) holds the package to it.
   (`--scope @web`, a scope; `@web/ui` or `web` is refused) are additionally
   limited to their own scope and cannot claim others. A token issued without
   `--scope` covers every scope.
+  A token stored with a scope filter that is not a scope (issued before the
+  filter was checked) authenticates nothing, and `specforge-registry token list`
+  refuses naming it and the `token revoke` command that removes it.
 - **Accounts**: every token is issued to an account (`specforge-registry token
   create --account`), so a rotated or expired token's replacement keeps the
   scope. `publisher` metadata is the account name the operator chose — never a

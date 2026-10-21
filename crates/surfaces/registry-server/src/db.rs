@@ -92,15 +92,20 @@ pub struct TokenRecord {
 
 /// A `tokens` row read as `token_hash, account, scope, label, created_at, expires_at, admin`.
 fn token_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TokenRecord> {
+    let token_hash: String = row.get(0)?;
     let scope = row
         .get::<_, Option<String>>(2)?
         .map(|text| Scope::parse(&text))
         .transpose()
         .map_err(|why| {
-            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(why))
+            let id = &token_hash[..TOKEN_ID_LEN.min(token_hash.len())];
+            let message = format!(
+                "token {id} holds a scope filter that is not a scope ({why}); revoke it with: specforge-registry token revoke {id}"
+            );
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, message.into())
         })?;
     Ok(TokenRecord {
-        token_hash: row.get(0)?,
+        token_hash,
         account: row.get(1)?,
         scope,
         label: row.get(3)?,
@@ -546,8 +551,11 @@ impl Database {
         let rows = stmt
             .query_map([], token_row)
             .map_err(|e| format!("token listing failed: {e}"))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| match e {
+                rusqlite::Error::FromSqlConversionFailure(_, _, why) => why.to_string(),
+                e => format!("token listing failed: {e}"),
+            })?;
         Ok(rows)
     }
 
