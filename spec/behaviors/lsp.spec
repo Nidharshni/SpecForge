@@ -826,8 +826,9 @@ behavior complete_field_names "Complete Field Names" {
     the FieldRegistry for valid field names for the current entity kind
     and suggest them as completions. Suggestions MUST be filtered to
     fields registered for the entity kind by its extension manifest.
-    Field types from the registry MUST inform the completion snippet
-    (e.g., reference fields offer bracket-list scaffolding). The cursor is
+    A field's snippet MUST be the member a set of it writes, in the form
+    its field's type decides, laid out relative to its line (the client
+    adjusts the lead). The cursor is
     in an entity body when the document's lexemes put it there: brackets,
     braces and quotes inside strings and comments do not count. Inside a
     string, a comment or a nested block nothing is suggested. A field's
@@ -843,6 +844,7 @@ behavior complete_field_names "Complete Field Names" {
   verify unit "an enum field's value suggests its declared values"
   verify unit "a builtin vocabulary's field completes its values"
   verify unit "a boolean field's value suggests true and false"
+  verify unit "a field snippet is the member set writes, laid out with the file's indent"
   verify contract "Complete Field Names: field name completion holds — field_registry_available, cursor_inside_entity, fields_suggested, snippets_informed"
 }
 
@@ -870,9 +872,12 @@ behavior complete_keywords "Complete Keywords" {
     The structural keyword use MUST always be included in addition to
     extension-defined keywords; define MUST NOT be suggested: it is a
     reserved word whose blocks register nothing (W143, ADR 0005). Each
-    suggestion SHOULD include a snippet template for block scaffolding
-    based on the kind's field definitions from the FieldRegistry. The
-    detail string MUST show the source extension name for each keyword.
+    kind's suggestion MUST be a snippet of the block a create of that kind
+    writes in the document's file, its skeleton (ADR 0191): the required
+    fields in the order, indent and alignment `specforge new` writes them
+    with the file's format configuration, each value in its field's form, a
+    tabstop where each value goes in text order, and the final cursor on an
+    empty member line. The detail string MUST show the source extension name for each keyword.
     Each kind's item MUST document the kind with its description and its
     inference guide (compute_inference_guide), as markdown; use has no
     documentation.
@@ -891,6 +896,8 @@ behavior complete_keywords "Complete Keywords" {
   verify unit "keywords are suggested after a top-level form that follows an unclosed body"
   verify unit "no keyword suggestions inside entity blocks"
   verify unit "snippet templates based on kind field definitions"
+  verify unit "a filled keyword snippet is the block new writes"
+  verify unit "a keyword snippet's tabstops follow its text"
   verify contract "Complete Keywords: keyword completion holds — kind_registry_available, cursor_at_top_level, keywords_delegated, structural_keywords_included"
 }
 

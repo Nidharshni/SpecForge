@@ -178,11 +178,16 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
 /// What completes at the cursor (ADR 0023 D6).
 pub fn completion(state: &LspState, uri: &Url, position: Position) -> Option<CompletionResponse> {
     let cursor = state.document(uri)?.at(position)?;
+    let file = crate::uri::file_path(uri);
+    let place = file
+        .as_deref()
+        .map_or(format::Place::Detached, format::Place::File);
     let items = crate::completion::items(
         &cursor.completion(),
         &cursor.word_edit(),
         state.client().insert_replace,
         &state.view(),
+        place,
     );
     Some(CompletionResponse::Array(items))
 }

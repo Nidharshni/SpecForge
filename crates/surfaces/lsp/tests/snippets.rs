@@ -2,6 +2,10 @@
 
 use crate::session::Session;
 use serde_json::Value;
+use specforge_ops::authoring::format::Place;
+use specforge_ops::view::ProjectView;
+use specforge_project::testing::TestProject;
+use specforge_test_macros::test as spec;
 
 /// A keyword, the id and title to fill it with, its fields' values, and the block `new` writes for them.
 type Row<'a> = (&'a str, &'a str, &'a str, &'a [(&'a str, &'a str)], &'a str);
@@ -68,8 +72,11 @@ fn filled(snippet: &str, id: &str, title: &str, values: &[(&str, &str)]) -> Stri
     out.join("\n")
 }
 
+#[spec(
+    behavior = "complete_keywords",
+    verify = "a filled keyword snippet is the block new writes"
+)]
 #[tokio::test]
-#[ignore = "flipped by T6"]
 async fn a_filled_keyword_snippet_is_the_block_new_writes() {
     let rows: [Row; 3] = [
         (
@@ -105,8 +112,11 @@ async fn a_filled_keyword_snippet_is_the_block_new_writes() {
     }
 }
 
+#[spec(
+    behavior = "complete_field_names",
+    verify = "a field snippet is the member set writes, laid out with the file's indent"
+)]
 #[tokio::test]
-#[ignore = "flipped by T6"]
 async fn a_field_snippet_is_the_member_set_writes() {
     let text = "failure_mode disk_full \"Disk full\" {\n    severity high\n    cause    \"c\"\n    effect   \"e\"\n    \n}\n\nprocess p1 \"P\" {\n    alphabet      [\"a\"]\n    initial_state \"s\"\n    \n}\n";
     let found = items_at(text, &[(4, 4), (10, 4)]).await;
@@ -123,4 +133,36 @@ async fn a_field_snippet_is_the_member_set_writes() {
         item(&found[1], "alphabet")["insertText"],
         "alphabet [\"$1\"]"
     );
+}
+
+#[spec(
+    behavior = "complete_keywords",
+    verify = "a keyword snippet's tabstops follow its text"
+)]
+fn tabstops_follow_the_text_order() {
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "snippets".into())
+        .enabling(&["@specforge/software", "@specforge/governance"])
+        .files(&[
+            ("test.spec", "\n"),
+            (".specforgefmt.toml", "indent_width = 4\n"),
+        ]);
+    let project = dir.loaded();
+    let view = ProjectView::of(&project);
+    let place = dir.root().join("test.spec");
+    let found = crate::completion::complete_at("\n", 0, 0, &view, Place::File(&place)).1;
+    let decision = item_of(&found, "decision");
+    assert_eq!(
+        decision.insert_text.as_deref(),
+        Some(
+            "decision ${1:id} \"${2:Title}\" {\n    status   $3\n    context  \"$4\"\n    decision \"$5\"\n    $0\n}"
+        )
+    );
+}
+
+fn item_of<'a>(
+    items: &'a [tower_lsp::lsp_types::CompletionItem],
+    label: &str,
+) -> &'a tower_lsp::lsp_types::CompletionItem {
+    items.iter().find(|i| i.label == label).unwrap()
 }

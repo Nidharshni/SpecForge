@@ -490,11 +490,8 @@ fn complete_field_names_contract() {
     let (_dir, project) = crate::completion::compiled(&[("test.spec", text)]);
     let view = specforge_ops::view::ProjectView::of(&project);
     let labels_at = |line: u32| -> Vec<String> {
-        let doc = specforge_lsp::Document::new(text.into());
-        let cursor = doc
-            .at(tower_lsp::lsp_types::Position::new(line, 2))
-            .unwrap();
-        specforge_lsp::completion::items(&cursor.completion(), &cursor.word_edit(), false, &view)
+        crate::completion::complete(text, line, 2, &view)
+            .1
             .into_iter()
             .map(|item| item.label)
             .collect()
@@ -527,13 +524,11 @@ fn complete_keywords_contract() {
     // Ensures: all registered kinds + structural keywords returned, no duplicates
     let (_dir, project) = crate::completion::compiled(&[("test.spec", "\n")]);
     let view = specforge_ops::view::ProjectView::of(&project);
-    let doc = specforge_lsp::Document::new("\n".into());
-    let cursor = doc.at(tower_lsp::lsp_types::Position::new(0, 0)).unwrap();
-    let keywords: Vec<String> =
-        specforge_lsp::completion::items(&cursor.completion(), &cursor.word_edit(), false, &view)
-            .into_iter()
-            .map(|item| item.label)
-            .collect();
+    let keywords: Vec<String> = crate::completion::complete("\n", 0, 0, &view)
+        .1
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
 
     assert!(
         keywords.contains(&"behavior".to_string()),

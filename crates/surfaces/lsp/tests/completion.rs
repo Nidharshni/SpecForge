@@ -8,6 +8,7 @@ use specforge_extension_sdk::prelude::{FieldType, Vocabulary};
 use specforge_graph::{Graph, Node};
 use specforge_lsp::completion::items;
 use specforge_lsp::{CompletionSite, Document};
+use specforge_ops::authoring::format::Place;
 use specforge_ops::view::ProjectView;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::CompiledProject;
@@ -31,17 +32,28 @@ pub fn compiled(files: &[(&str, &str)]) -> (TestProject, CompiledProject) {
     (dir, project)
 }
 
-/// The site and items at (`line`, `character`) of `text`, over `view`.
-fn complete<'v>(
+/// The site and items at (`line`, `character`) of `text`, over `view`, for a buffer outside any project.
+pub fn complete<'v>(
     text: &str,
     line: u32,
     character: u32,
     view: &ProjectView<'v>,
 ) -> (String, Vec<CompletionItem>) {
+    complete_at(text, line, character, view, Place::Detached)
+}
+
+/// [`complete`] for a document at `place`.
+pub fn complete_at<'v>(
+    text: &str,
+    line: u32,
+    character: u32,
+    view: &ProjectView<'v>,
+    place: Place<'_>,
+) -> (String, Vec<CompletionItem>) {
     let doc = Document::new(text.into());
     let cursor = doc.at(Position::new(line, character)).expect("a position");
     let site = cursor.completion();
-    let found = items(&site, &cursor.word_edit(), false, view);
+    let found = items(&site, &cursor.word_edit(), false, view, place);
     (format!("{site:?}"), found)
 }
 
