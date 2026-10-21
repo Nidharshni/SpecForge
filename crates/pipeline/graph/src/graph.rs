@@ -5,8 +5,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod degree;
 mod link;
 mod reach;
+mod select;
 pub use degree::Degree;
 pub use reach::Direction;
+pub use select::Selected;
 
 #[derive(Debug, Clone)]
 pub struct Node {
