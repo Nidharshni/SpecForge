@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Per file under the spec root: the text it was planned on (`None`: the file is new) and the text it will hold. A
-/// file whose after text is its planned-on text is not in it.
+/// file whose after text is its planned-on text is not in it; a new file reads as empty, so one left empty is not in
+/// it either.
 ///
 /// Each planned-on text is the text the project was compiled from; `new` is `pub(crate)`, so only ops' planners make
 /// one. Files, edits and the diff are in key order.
@@ -24,7 +25,8 @@ pub struct PlannedChange {
 }
 
 impl PlannedChange {
-    /// `files`: (path relative to the spec root, planned-on text, after text); an unchanged one is dropped.
+    /// `files`: (path relative to the spec root, planned-on text, after text); an unchanged one is dropped, and a new
+    /// one whose after text is empty is unchanged.
     pub(crate) fn new(
         spec_root: PathBuf,
         doing: impl Into<String>,
@@ -32,7 +34,7 @@ impl PlannedChange {
     ) -> Self {
         let files = files
             .into_iter()
-            .filter(|(_, before, after)| before.as_deref() != Some(after.as_str()))
+            .filter(|(_, before, after)| before.as_deref().unwrap_or("") != after.as_str())
             .map(|(key, before, after)| (key, (before, after)))
             .collect();
         PlannedChange {
@@ -157,7 +159,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flipped by T2"]
     fn a_new_file_left_empty_is_not_in_the_change() {
         let c = change(vec![("a.spec", None, ""), ("b.spec", None, "b\n")]);
         assert_eq!(c.affected_files().collect::<Vec<_>>(), ["b.spec"]);

@@ -37,7 +37,6 @@ fn tasks() -> crate::navigate::Compiled {
     behavior = "create_entity",
     verify = "a file new creates is not written when the later edits leave it empty"
 )]
-#[ignore = "flipped by T2"]
 fn a_new_file_the_edits_leave_empty_is_not_written() {
     let c = tasks();
     let edits = [

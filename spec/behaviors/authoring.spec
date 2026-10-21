@@ -16,7 +16,8 @@ behavior create_entity "Create an Entity" {
     A create edit names a kind, an id, a title and a file relative to the spec
     root. The block is written in the canonical form, after the last block of
     its kind in the file, or at the end of the file; a file that does not exist
-    is created. The id MUST be an identifier of 2 to 60 characters that is not a
+    is created, unless the later edits of the list leave it empty: a file that does not
+    exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
