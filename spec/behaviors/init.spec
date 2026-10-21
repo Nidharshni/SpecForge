@@ -70,6 +70,7 @@ behavior scaffold_new_project "Scaffold New Project" {
   verify unit "init refuses a directory whose files the enclosing project reads as its sources, naming them, writing nothing"
   verify unit "init refuses the directory the enclosing project reads its sources from, which would read the new starter as its own"
   verify unit "init in a directory whose files the enclosing project reads is refused, and that project keeps them"
+  verify unit "init names the project it is created inside, and creates a separate one beside its sources"
   verify performance "full init-check-export cycle completes in under 60 seconds"
   verify integration "scaffold in non-empty directory preserves existing files"
   verify integration "scaffolded project passes init-check-export cycle"

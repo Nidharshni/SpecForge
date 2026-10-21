@@ -87,3 +87,19 @@ fn init_refuses_the_enclosing_projects_spec_root() {
     );
     assert!(!root.join("spec/specforge.json").exists());
 }
+
+#[specforge_test_macros::test(
+    behavior = "scaffold_new_project",
+    verify = "init names the project it is created inside, and creates a separate one beside its sources"
+)]
+fn init_names_the_project_it_is_created_inside() {
+    let scratch = TempDir::new().unwrap();
+    let root = scratch.path();
+    enclosing(root, &[("spec/a.spec", OUTER)]);
+
+    let outcome = init_at(&root.join("other")).unwrap();
+    assert_eq!(outcome.enclosing, Some(root.canonicalize().unwrap()));
+
+    let alone = TempDir::new().unwrap();
+    assert_eq!(init_at(&alone.path().join("p")).unwrap().enclosing, None);
+}

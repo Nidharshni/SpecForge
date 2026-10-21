@@ -25,6 +25,8 @@ use specforge_registry::Disk;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
+mod enclosing;
+
 /// The code an init refused with because the directory is already a project.
 pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
@@ -89,6 +91,8 @@ pub struct Outcome {
     /// The files init wrote: `specforge.json`, the starter, `.gitignore`
     /// when it lacked an entry, and each local install's module and lock.
     pub writes: Writes,
+    /// The project the new one was created inside (its root, canonical), when there is one (ADR 0197).
+    pub enclosing: Option<PathBuf>,
 }
 
 impl Outcome {
@@ -147,6 +151,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     if req.dir.join(STARTER_FILE).exists() {
         return Err(starter_exists(req.dir).about(InitField::Dir));
     }
+    let enclosing = enclosing::enclosing(&crate::containment::landing(req.dir));
 
     let name = match req.name {
         Some(name) => name.to_string(),
@@ -298,6 +303,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         version,
         extensions,
         writes: done.writes,
+        enclosing,
     })
 }
 

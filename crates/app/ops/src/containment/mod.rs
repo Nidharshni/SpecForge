@@ -175,7 +175,7 @@ fn steps(path: &Path) -> impl Iterator<Item = Step> {
 /// canonical form; a symlink whose target does not exist is replaced by its target (read against
 /// the link's directory) and the walk goes on, at most [`MAX_LINKS`] times (then the name lands at
 /// itself and the open fails). A missing tail is joined on.
-fn landing(path: &Path) -> PathBuf {
+pub(crate) fn landing(path: &Path) -> PathBuf {
     let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     let mut pending: VecDeque<Step> = steps(&path).collect();
     let mut landed = PathBuf::new();
