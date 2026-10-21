@@ -228,3 +228,39 @@ fn set_of_a_new_entry_writes_its_annotations() {
         assert!(line.ends_with("@since \"1.2\""), "{id}: {text}");
     }
 }
+#[test]
+#[ignore = "flipped by T8"]
+fn new_writes_an_equal_obligation_once() {
+    let c = project(&[("tasks.spec", TASKS)]);
+    let Edit::Create {
+        kind,
+        id,
+        title,
+        file,
+        fields,
+        ..
+    } = create(
+        "behavior",
+        "archive_task",
+        "tasks.spec",
+        &[("category", one("command")), ("contract", one(FIELDS[0].1))],
+    )
+    else {
+        unreachable!()
+    };
+    let edit = Edit::Create {
+        kind,
+        id,
+        title,
+        file,
+        fields,
+        verify: vec![obligation(), obligation()],
+    };
+    let text = after(&c, "tasks.spec", &[edit]);
+    assert_eq!(
+        text.matches("verify unit \"archiving an unknown task fails\"")
+            .count(),
+        1,
+        "{text}"
+    );
+}
