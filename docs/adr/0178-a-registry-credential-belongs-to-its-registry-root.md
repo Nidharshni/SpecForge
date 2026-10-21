@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-21, architecture round 20, plan 01). Amends [ADR 0045](0045-publish-is-one-operation-and-one-registry-serves-a-name.md) (D5 and the round-5 and round-16 amendments' credential sentences: a credential is kept under its registry's root, and login and logout go through `specforge_ops_registry::User`), [ADR 0010](0010-operations-reach-the-registry-through-a-port.md) (credential health is read through `User`; the store holds no OS keyring) and [ADR 0075](0075-a-registry-is-named-by-its-root.md) (the root also keys the user's credential).
 
+**Amended by [ADR 0193](0193-the-users-registry-files-are-written-privately-and-atomically.md) (round 21):** D3 (the signing key's name is spelled by User, which hands doctor its path), D4 and the platform amendment (every file of the user's registry directory is 0600 in a 0700 directory, written by replace_private).
+
 ## Context
 
 - `~/.specforge/credentials.json` was keyed by a registry alias, and a project's `specforge.json` picks its aliases. A

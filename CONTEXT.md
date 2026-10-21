@@ -200,6 +200,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   hands a session to read its sources through (ADR 0145); it refuses a regular file with more than one name (ADR 0146), and the disk a bounded caller's format configuration is read through (ADR 0169).
 - **Replace file**: how a project file is written (`specforge_common::fresh::replace_file`, ADR 0144): a new file beside the name,
   renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
+- **Private replace**: how a file of the user's registry directory is written (`specforge_common::fresh::replace_private`, ADR 0193): missing directories 0700, a temporary created new at 0600, synced, renamed onto the name; a link at either name is replaced, never followed, and the file is 0600 whatever was there. A signing key that is there is never replaced.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the call's one containment (the view's; init: the request's bound) and nobody. Every request
@@ -571,7 +572,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011, and R-AUTH-021 for a lost secret). The client sends it only to the registry root it was kept for (ADR 0178). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable, update and search refuse it once, when they open their registry (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **User's registry files**: the directory `specforge_ops_registry::User` reads and writes: `credentials.json` (keyed by
-  registry root), `secrets/`, `signing-key.json` and `known-keys.json`. `User::current()` is `~/.specforge`,
+  registry root), `secrets/`, `signing-key.json` and `known-keys.json`, each written by **private replace**. `User::current()` is `~/.specforge`,
   `User::at(dir)` any other; nothing else reads them, and login, logout, doctor, fetch, search and publish ask it (ADR 0178).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
