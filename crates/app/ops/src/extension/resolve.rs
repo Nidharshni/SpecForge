@@ -5,9 +5,12 @@
 use crate::OpError;
 use crate::registry::Registry;
 use specforge_common::codes;
-#[cfg(doc)]
-use specforge_package::VersionRequirement;
-use specforge_package::{LockedVersion, PackageName, PackageRef, Reach, Version, upgrade_target};
+use specforge_package::{
+    LockedVersion, PackageName, PackageRef, Reach, Version, VersionRequirement, upgrade_target,
+};
+use specforge_wasm::WasmRuntime;
+
+use super::builtin_declaration;
 
 /// The version `package` asks for. An exact version asks nothing of the
 /// registry; anything else lists the package's versions and picks.
@@ -20,18 +23,51 @@ pub fn resolve(registry: &dyn Registry, package: &PackageRef) -> Result<Version,
         return Ok(exact.clone());
     }
     let published = published(registry, name)?;
-    requirement.pick(&published).cloned().ok_or_else(|| {
-        let available: Vec<String> = published.iter().map(Version::to_string).collect();
-        OpError::coded(
-            crate::OpErrorKind::InvalidInput,
-            codes::R_RES_004,
-            format!(
-                "no version of '{name}' satisfies '{requirement}'. Available: {}",
-                available.join(", ")
-            ),
-        )
-        .with_suggestion("try a different version requirement or check available versions")
-    })
+    requirement
+        .pick(&published)
+        .cloned()
+        .ok_or_else(|| unsatisfied(name, requirement, &published))
+}
+
+/// R-RES-004: nothing in `available` satisfies `requirement`.
+fn unsatisfied(
+    name: impl std::fmt::Display,
+    requirement: &VersionRequirement,
+    available: &[Version],
+) -> OpError {
+    let available: Vec<String> = available.iter().map(Version::to_string).collect();
+    OpError::coded(
+        crate::OpErrorKind::InvalidInput,
+        codes::R_RES_004,
+        format!(
+            "no version of '{name}' satisfies '{requirement}'. Available: {}",
+            available.join(", ")
+        ),
+    )
+    .with_suggestion("try a different version requirement or check available versions")
+}
+
+/// A builtin asked at `requirement`: the one this specforge embeds must meet it (`latest` always does, and reads
+/// nothing). R-RES-004 otherwise, naming the embedded version; E028 when the builtin does not load.
+pub(crate) fn embedded(
+    runtime: &dyn WasmRuntime,
+    name: &str,
+    requirement: &VersionRequirement,
+) -> Result<(), OpError> {
+    if *requirement == VersionRequirement::Latest {
+        return Ok(());
+    }
+    let loaded = builtin_declaration(runtime, name)?;
+    // A builtin's version is SemVer by construction; one that is not meets nothing.
+    let embedded: Vec<Version> = Version::parse(loaded.declaration.version())
+        .into_iter()
+        .collect();
+    match requirement.pick(&embedded) {
+        Some(_) => Ok(()),
+        None => Err(unsatisfied(name, requirement, &embedded).with_suggestion(
+            "builtins are part of specforge: drop the version, or use the specforge release that embeds the one you need",
+        )),
+    }
 }
 
 /// The version `name`, locked at `locked`, is updated to within `reach`, or `None` when it is up

@@ -79,7 +79,7 @@ fn a_refused_specifier_writes_nothing_and_is_named() {
 
     for extensions in [
         vec![
-            Source::Builtin("@specforge/product").into(),
+            Source::builtin("@specforge/product").into(),
             Source::Local(missing.clone()).into(),
         ],
         vec![

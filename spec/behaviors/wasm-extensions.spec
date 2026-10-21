@@ -767,7 +767,8 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   }
   contract   """
     The system MUST read an add argument once into one source: a builtin's
-    name, a git+ URL, a package reference @scope/name[@requirement] (it
+    name, with an optional @requirement read as a package reference's
+    (R-RES-003, E054), a git+ URL, a package reference @scope/name[@requirement] (it
     starts with @ and does not end in .wasm), where the name is a
     PackageName and the requirement a VersionRequirement (latest when
     absent), or else a local path (a .wasm file or an extension's crate

@@ -34,7 +34,7 @@ fn write_greet(path: &Path) {
 fn parse_names_each_source() {
     assert_eq!(
         parse("@specforge/product"),
-        Ok(Source::Builtin("@specforge/product"))
+        Ok(Source::builtin("@specforge/product"))
     );
     assert_eq!(
         parse("ext/greet.wasm"),
@@ -105,15 +105,24 @@ fn parse_reads_each_input() {
         ("@scope", Err("E054".into())),                         // I22
         (
             "@specforge/software",
-            Ok(Source::Builtin("@specforge/software")),
+            Ok(Source::builtin("@specforge/software")),
         ), // I24
+        ("@specforge/software@banana", Err("R-RES-003".into())),
+        ("@specforge/software@", Err("E054".into())),
+        (
+            "@specforge/software@^1",
+            Ok(Source::Builtin {
+                name: "@specforge/software",
+                requirement: specforge_package::VersionRequirement::parse("^1").unwrap(),
+            }),
+        ),
         (
             "git+https://h/r#v",
             Ok(Source::Git {
                 url: "https://h/r".into(),
             }),
         ), // I25
-        (" @acme/tool ", registry("@acme/tool")),               // I26
+        (" @acme/tool ", registry("@acme/tool")), // I26
     ];
     for (input, want) in cases {
         let got = parse(input).map_err(|error| error.code.to_string());
@@ -137,7 +146,7 @@ fn each_string_is_read_in_order_and_refused_named_among_several() {
         [
             Specified {
                 specifier: "@specforge/product".into(),
-                source: Source::Builtin("@specforge/product"),
+                source: Source::builtin("@specforge/product"),
             },
             Specified {
                 specifier: "@acme/tool@^1".into(),

@@ -6,7 +6,7 @@ fn builtin_request<'a>(
 ) -> AddRequest<'a> {
     AddRequest {
         root,
-        extensions: vec![Source::Builtin(name).into()],
+        extensions: vec![Source::builtin(name).into()],
         base: None,
         allow_unsigned: false,
         dry_run: false,
@@ -298,8 +298,10 @@ fn a_failed_builtin_edit_enables_no_peer() {
     assert_eq!(std::fs::read(&config).unwrap(), before);
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a builtin asked at a version this specforge does not embed is refused with R-RES-004 before anything is written"
+)]
 fn a_builtin_asked_at_a_version_this_specforge_does_not_embed_is_refused() {
     use crate::config::testing::files_under;
     let dir = project_with(EMPTY_PROJECT);
@@ -345,7 +347,7 @@ fn a_builtin_asked_at_a_version_this_specforge_does_not_embed_is_refused() {
         "@specforge/product@latest",
     ] {
         let added = add(
-            &several(&root, vec![specifier.into()], true),
+            &several(&root, vec![specifier.into()], false),
             &registry,
             &runtime,
         )

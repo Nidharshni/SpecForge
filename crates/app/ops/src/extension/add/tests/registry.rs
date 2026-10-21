@@ -179,7 +179,7 @@ fn enabling_a_builtin_an_enabled_extension_rejects_is_refused() {
 
     let error = add_one(
         dir.path(),
-        Source::Builtin("@specforge/software"),
+        Source::builtin("@specforge/software"),
         &crate::registry::Unconfigured("add"),
     )
     .unwrap_err();

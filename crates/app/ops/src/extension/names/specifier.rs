@@ -3,15 +3,19 @@
 use super::super::builtin_name;
 use crate::OpError;
 use specforge_common::codes;
-use specforge_package::PackageRef;
 use specforge_package::SpecifierError;
+use specforge_package::{PackageRef, VersionRequirement};
 use std::path::PathBuf;
 
 /// Where an extension to add comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Source {
-    /// A builtin, embedded in the binary.
-    Builtin(&'static str),
+    /// A builtin, embedded in the binary, and the version asked for (`latest` when none): the one embedded
+    /// meets it or the add is refused (R-RES-004).
+    Builtin {
+        name: &'static str,
+        requirement: VersionRequirement,
+    },
     /// A `.wasm` file on disk.
     Local(PathBuf),
     /// A registry package and the version asked for (`latest` when none).
@@ -20,7 +24,8 @@ pub(crate) enum Source {
     Git { url: String },
 }
 
-/// Read an `add` argument once (ADR 0036): a builtin name, a `git+<url>`, a
+/// Read an `add` argument once (ADR 0036): a builtin name (with an optional `@requirement`, read as a package
+/// reference's), a `git+<url>`, a
 /// package reference `@scope/name[@requirement]` (it starts with `@` and does
 /// not end in `.wasm`), or else a local path (a `.wasm` file or an extension's
 /// crate directory, with or without `./`). A package reference that is not one
@@ -38,7 +43,11 @@ pub(crate) fn parse(specifier: &str) -> Result<Source, OpError> {
         .with_suggestion(SPECIFIER_FORMS));
     }
     if let Some(builtin) = builtin_name(specifier) {
-        return Ok(Source::Builtin(builtin));
+        let PackageRef { requirement, .. } = PackageRef::parse(specifier)?;
+        return Ok(Source::Builtin {
+            name: builtin,
+            requirement,
+        });
     }
     if let Some(url) = specifier.strip_prefix("git+") {
         // A `#rev` names a revision; a git source is not installable yet.
@@ -102,10 +111,25 @@ impl From<Source> for String {
     }
 }
 
+/// A builtin asked at no version in particular.
+#[cfg(test)]
+impl Source {
+    pub(crate) fn builtin(name: &'static str) -> Source {
+        Source::Builtin {
+            name,
+            requirement: VersionRequirement::Latest,
+        }
+    }
+}
+
 impl std::fmt::Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Source::Builtin(name) => f.write_str(name),
+            Source::Builtin {
+                name,
+                requirement: VersionRequirement::Latest,
+            } => f.write_str(name),
+            Source::Builtin { name, requirement } => write!(f, "{name}@{requirement}"),
             Source::Local(path) => write!(f, "{}", path.display()),
             Source::Registry(package) => write!(f, "{package}"),
             Source::Git { url } => write!(f, "git+{url}"),

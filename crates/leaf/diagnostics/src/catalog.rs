@@ -444,7 +444,7 @@ catalog! {
         "The version after `@` isn't `latest`, a full version or valid SemVer requirement syntax, so no registry was asked. Use a version such as `1.2.0`, a requirement such as `^1.0`, `~2.3`, `1.x` or `>=1.0.0, <2.0.0`, or `latest`.";
     R_RES_004 = "R-RES-004": Error core,
         "No version satisfies the range",
-        "The registry has versions of the package, but none inside the requested range; the message lists the available ones. Widen the range, or pick one of the listed versions.";
+        "The registry has versions of the package, but none inside the requested range; the message lists the available ones (for a builtin, the one version this specforge embeds). Widen the range, or pick one of the listed versions; for a builtin, drop the version or use the specforge release that embeds the one you need.";
     R_RES_005 = "R-RES-005": Error core,
         "Unresolvable version diamond",
         "Several extensions require this package in ranges that no single published version satisfies (see ADR 0001). Upgrade the requirer with the narrowest range, or pin a compatible version manually.";

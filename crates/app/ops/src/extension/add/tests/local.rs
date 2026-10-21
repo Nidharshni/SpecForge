@@ -15,7 +15,7 @@ fn an_unusable_config_is_refused_before_anything_is_installed() {
         let refused = crate::config::refusal(&read.problems[0]);
 
         for source in [
-            Source::Builtin("@specforge/product"),
+            Source::builtin("@specforge/product"),
             // A file that is not there: the config is refused first.
             Source::Local(dir.path().join("missing.wasm")),
             Source::Registry(PackageRef::parse("@acme/tool").unwrap()),
@@ -357,7 +357,7 @@ fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
     let dir = tempfile::tempdir().unwrap();
     let request = AddRequest {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        extensions: vec![Source::Builtin("@specforge/product").into()],
+        extensions: vec![Source::builtin("@specforge/product").into()],
         base: None,
         allow_unsigned: false,
         dry_run: false,
@@ -438,7 +438,7 @@ fn an_add_whose_installs_are_all_present_writes_no_lock_and_is_not_bounded_by_it
         &AddRequest {
             extensions: vec![
                 Source::Local(wasm.clone()).into(),
-                Source::Builtin("@specforge/product").into(),
+                Source::builtin("@specforge/product").into(),
             ],
             caller: crate::testing::bounded(&wide),
             ..local_request(&root, &wasm)

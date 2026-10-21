@@ -1823,8 +1823,10 @@ Level: error
 R-RES-004: No version satisfies the range
 
 The registry has versions of the package, but none inside the requested range;
-the message lists the available ones. Widen the range, or pick one of the listed
-versions.
+the message lists the available ones (for a builtin, the one version this
+specforge embeds). Widen the range, or pick one of the listed versions; for a
+builtin, drop the version or use the specforge release that embeds the one you
+need.
 
 Owner: core
 Level: error
