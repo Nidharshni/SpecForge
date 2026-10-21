@@ -189,22 +189,11 @@ fn select<'g>(graph: &'g Graph, options: &EmitOptions<'_>) -> Result<Cow<'g, Gra
     if options.kind_filter.is_empty() {
         return Ok(scoped);
     }
-    let mut filtered = Graph::new();
-    for node in scoped.nodes() {
-        if Some(node.id.raw.as_str()) == options.scope
+    let kept = scoped.nodes().into_iter().filter(|node| {
+        Some(node.id.raw.as_str()) == options.scope
             || options.kind_filter.contains(&node.kind.raw.as_str())
-        {
-            filtered.add_node(node.clone());
-        }
-    }
-    for edge in scoped.edges() {
-        if filtered.node(edge.source.as_str()).is_some()
-            && filtered.node(edge.target.as_str()).is_some()
-        {
-            filtered.add_edge(*edge);
-        }
-    }
-    Ok(Cow::Owned(filtered))
+    });
+    Ok(Cow::Owned(scoped.induced(kept.map(|node| node.id.raw))))
 }
 
 /// How one export is written: its format, its schema and how it is attached,

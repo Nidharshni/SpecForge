@@ -2,7 +2,6 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use specforge_graph::{Graph, Node};
-use std::collections::HashSet;
 
 use crate::error::EmitterError;
 
@@ -52,21 +51,6 @@ fn nodes_by_priority(graph: &Graph) -> Vec<&Node> {
     nodes
 }
 
-/// `graph` reduced to `kept`: those nodes and the edges between them.
-fn keeping(graph: &Graph, kept: &[&Node]) -> Graph {
-    let ids: HashSet<&str> = kept.iter().map(|n| n.id.raw.as_str()).collect();
-    let mut reduced = Graph::new();
-    for node in kept {
-        reduced.add_node((*node).clone());
-    }
-    for edge in graph.edges() {
-        if ids.contains(edge.source.as_str()) && ids.contains(edge.target.as_str()) {
-            reduced.add_edge(*edge);
-        }
-    }
-    reduced
-}
-
 /// `render`'s export of `graph` fitted to `max_tokens` by the `prioritize`
 /// strategy.
 ///
@@ -103,7 +87,7 @@ pub(crate) fn fit(
     // The export with the `cut` least central entities dropped, and its cost.
     let priority = nodes_by_priority(graph);
     let with_cut = |cut: usize| -> Result<(String, usize), EmitterError> {
-        let kept = keeping(graph, &priority[cut..]);
+        let kept = graph.induced(priority[cut..].iter().map(|n| n.id.raw));
         let marker = |estimated_tokens| TokenBudget {
             strategy: "prioritize",
             budget_tokens: max_tokens,
