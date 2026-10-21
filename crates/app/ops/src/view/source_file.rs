@@ -13,7 +13,8 @@ pub const NOT_A_SOURCE: &str = "not_a_source";
 const FILE_NOT_FOUND: &str = "file_not_found";
 
 /// `named`'s source key under `spec_root`, with `.` and doubled separators gone; `None` when it leaves the spec root
-/// (a `..`, or an absolute path elsewhere).
+/// (a `..`, or an absolute path elsewhere). A project with no spec root (one assembled in memory) keys its sources
+/// by whatever path they were given, so an absolute path is a key there.
 fn key_of(spec_root: &Path, named: &str) -> Option<String> {
     let key = specforge_project::source_key(spec_root, &spec_root.join(named));
     let mut rebuilt = PathBuf::new();
@@ -21,6 +22,9 @@ fn key_of(spec_root: &Path, named: &str) -> Option<String> {
         match component {
             Component::Normal(name) => rebuilt.push(name),
             Component::CurDir => {}
+            Component::RootDir | Component::Prefix(_) if spec_root.as_os_str().is_empty() => {
+                rebuilt.push(component.as_os_str());
+            }
             _ => return None,
         }
     }

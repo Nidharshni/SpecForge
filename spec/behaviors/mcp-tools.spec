@@ -666,7 +666,9 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
     not exist, a directory, specforge.json or any file that is not a .spec
     source, one an exclude entry leaves out) MUST be refused as
     file_not_found, naming it; a source with no entity has an empty outline.
-    With no project served, no
+    The file is read into its source key (ADR 0195): every spelling of a source
+    under the spec root is that source; one that leaves the spec root is
+    invalid_input. With no project served, no
     file is a project's: the tool MUST return the no-project refusal
     (precondition_failed), whatever the server's working directory holds.
   """
@@ -679,6 +681,7 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "with no project served, outline is the no-project refusal"
   verify unit "sorted by line number"
   verify unit "a file that is not one of the project's sources is file_not_found, though it exists"
+  verify unit "outline reads every spelling of a source under the spec root as that source"
 }
 
 behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {

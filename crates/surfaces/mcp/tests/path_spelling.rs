@@ -127,8 +127,10 @@ fn edit_reads_two_spellings_of_one_new_file_as_one_file() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "provide_mcp_outline_tool",
+    verify = "outline reads every spelling of a source under the spec root as that source"
+)]
 fn outline_reads_an_absolute_spelling_of_a_source() {
     let mut server = named_files();
     let absolute = server.root().join("spec/login.spec");
