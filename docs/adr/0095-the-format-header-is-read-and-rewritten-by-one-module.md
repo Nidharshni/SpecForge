@@ -1,6 +1,6 @@
 # The format header is read and rewritten by one module
 
-**Status:** accepted (2026-10-15, round 10, plan 03).
+**Status:** accepted (2026-10-15, round 10, plan 03). D3 restored by [ADR 0202](0202-a-blocks-doc-comment-is-where-the-parse-read-it.md) after ADR 0148 widened it: `header_row` is private.
 
 The parser read the `// specforge-format: MAJOR.MINOR` header from the file's first non-blank line, but
 `specforge migrate` rewrote it only when it was on line 1 and otherwise put a new header above the file. A file

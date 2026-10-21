@@ -66,13 +66,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
   parser diagnostic; `specforge migrate` reads and rewrites it through the same module
   (`with_format_version`), so a rewritten header stands where the parser reads it. It is
-  distinct from the Graph Protocol's schema version.
+  distinct from the Graph Protocol's schema version; it is never a block's doc comment.
 - **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
   b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
   `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
   migrate` lifts a block's doc comment into a missing title. Where it is written is the parse's
   (`Entity::title_span`): a typed retitle replaces it there, and the titles step writes a missing one after the name
   (ADR 0187, amended).
+- **Doc comment**: the whole-line `//` comments directly above a block's first line, no blank line between; a
+  comment ending the line of the item above trails it, and the format header is never one. Where it is written is
+  the parse's (`specforge_parser::Entity::doc_span`): a typed delete removes it with its block, `specforge migrate`'s
+  titles step lifts it into a missing title, and the defaults hoist writes its block above it. It never reaches the
+  graph (ADR 0148, ADR 0202).
 - **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
   version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
   changes the steps declare: for `titles`, a title where the block had none.
