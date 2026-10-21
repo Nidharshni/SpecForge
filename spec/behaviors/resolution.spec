@@ -115,15 +115,15 @@ behavior detect_import_cycles "Detect Import Cycles" {
     import_graph_available "File dependency graph from use imports has been constructed"
   }
   ensures {
-    cycles_detected          "All circular import chains are identified via topological sort"
+    cycles_detected          "Every file on an import cycle is identified, whichever file the cycle closes through"
     cycle_diagnostic_emitted "Each detected cycle produces a W113 warning naming all participating files"
     non_cyclic_unaffected    "Files not involved in any cycle continue processing normally"
   }
   contract """
-    The resolver MUST detect circular use imports using topological sort.
-    When a cycle is detected, the compiler MUST emit a W113 warning that
-    names all files participating in the cycle, starting from the
-    lexicographically smallest path, with the cycles in sorted order.
+    The resolver MUST detect circular use imports: the files of each
+    strongly connected set of imports are one W113 warning that names every
+    one of them, walking from the lexicographically smallest path, with the
+    W113s in sorted order.
     Files involved in a cycle MUST NOT prevent processing of non-cyclic
     files, and are compiled themselves.
   """

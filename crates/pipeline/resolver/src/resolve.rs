@@ -1,3 +1,4 @@
+use specforge_common::cycles::cycles;
 use specforge_common::{Diagnostic, DiagnosticData, codes, find_close_match};
 use specforge_parser::{ImportBinding, SpecFile};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -22,8 +23,9 @@ enum Named<'s> {
 /// The import diagnostics of a compile's sources, in this order: per parsed
 /// source in key order, each import's E025 (it names no source: no key by
 /// that path, or a path that leaves the spec root or is absolute) or I004
-/// (`@scope/name`, an extension import); then one W113 per import cycle,
-/// named from its smallest key, in sorted order; then the W027s of
+/// (`@scope/name`, an extension import); then one W113 per strongly
+/// connected set of imports, walking every file from its smallest key, in
+/// sorted order; then the W027s of
 /// selective re-exports (a file exports what it declares plus what its
 /// `pub use` re-exports, transitively; a re-export through an import-cycle
 /// participant uses only that file's declared set).
@@ -110,13 +112,19 @@ pub fn resolve_imports(parsed: &[(&str, &SpecFile)], unreadable: &[&str]) -> Vec
         import_graph.insert(path.to_string(), deps);
     }
 
-    // Import cycles: each named from its smallest path, in sorted order.
-    let cycles = detect_cycles(&import_graph);
+    // Import cycles (ADR 0196): one per strongly connected set of files,
+    // walked from its smallest path, in sorted order.
+    let imports: BTreeMap<String, BTreeSet<String>> = import_graph
+        .iter()
+        .map(|(file, deps)| (file.clone(), deps.iter().cloned().collect()))
+        .collect();
+    let cycles = cycles(&imports);
     for cycle in &cycles {
+        let walk = &cycle.path[..cycle.path.len() - 1];
         diagnostics.push(
             Diagnostic::new(
                 codes::W113,
-                format!("circular import detected: {}", cycle.join(" -> ")),
+                format!("circular import detected: {}", walk.join(" -> ")),
             )
             .with_suggestion(
                 "break the cycle by removing one of the `use` imports or extracting shared entities into a separate file".to_string(),
@@ -126,7 +134,10 @@ pub fn resolve_imports(parsed: &[(&str, &SpecFile)], unreadable: &[&str]) -> Vec
 
     // File scopes (declared + re-exported entities per file), computed in
     // topological order with the cyclic files last.
-    let cyclic: BTreeSet<&str> = cycles.iter().flatten().map(String::as_str).collect();
+    let cyclic: BTreeSet<&str> = cycles
+        .iter()
+        .flat_map(|cycle| cycle.members.iter().map(String::as_str))
+        .collect();
     let mut order = topological_sort(&import_graph, &cyclic);
     order.extend(cyclic.iter().copied());
     let by_path: HashMap<&str, &SpecFile> = files.iter().copied().collect();
@@ -220,66 +231,6 @@ fn candidates(base: &Path) -> Vec<PathBuf> {
     }
     out.push(base.join("index.spec"));
     out
-}
-
-/// Every import cycle found by a depth-first walk in path order, each
-/// rotated to start at its smallest path, sorted and without repeats.
-fn detect_cycles(graph: &BTreeMap<String, Vec<String>>) -> Vec<Vec<String>> {
-    let mut cycles = BTreeSet::new();
-    let mut visited = HashSet::new();
-    let mut on_stack = HashSet::new();
-    let mut stack = Vec::new();
-
-    for node in graph.keys() {
-        if !visited.contains(node.as_str()) {
-            dfs_cycle(
-                node,
-                graph,
-                &mut visited,
-                &mut on_stack,
-                &mut stack,
-                &mut cycles,
-            );
-        }
-    }
-    cycles.into_iter().collect()
-}
-
-fn dfs_cycle<'a>(
-    node: &'a str,
-    graph: &'a BTreeMap<String, Vec<String>>,
-    visited: &mut HashSet<&'a str>,
-    on_stack: &mut HashSet<&'a str>,
-    stack: &mut Vec<&'a str>,
-    cycles: &mut BTreeSet<Vec<String>>,
-) {
-    visited.insert(node);
-    on_stack.insert(node);
-    stack.push(node);
-
-    if let Some(deps) = graph.get(node) {
-        for dep in deps {
-            if !visited.contains(dep.as_str()) {
-                if graph.contains_key(dep) {
-                    dfs_cycle(dep, graph, visited, on_stack, stack, cycles);
-                }
-            } else if on_stack.contains(dep.as_str()) {
-                // Found a cycle: extract it from the stack and start it at
-                // its smallest path.
-                let start = stack
-                    .iter()
-                    .position(|n| *n == dep)
-                    .expect("a dependency on the stack is in the path");
-                let mut cycle: Vec<String> = stack[start..].iter().map(|s| s.to_string()).collect();
-                let smallest = (0..cycle.len()).min_by_key(|&i| &cycle[i]).unwrap_or(0);
-                cycle.rotate_left(smallest);
-                cycles.insert(cycle);
-            }
-        }
-    }
-
-    stack.pop();
-    on_stack.remove(node);
 }
 
 /// The non-cyclic files, each after the files it imports (Kahn's
