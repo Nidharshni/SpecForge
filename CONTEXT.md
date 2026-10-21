@@ -48,6 +48,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
   never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
   and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
+- **Enclosing project**: the project a directory lies inside, the nearest directory above it holding
+  `specforge.json`. `init` judges it before writing: a directory whose files it reads as sources, or from which it
+  reads them, is refused (`inside_project_sources`, ADR 0197), since a nested project ends its sources (ADR 0080).
 - **Project path**: how a surface document names a file an operation opened or wrote: relative to the project root
   with `/` between components, absolute and canonical outside it (`specforge_common::ProjectPath`, ADR 0102). A
   declaration's location (a span, a navigation result) is not one: it is named by its source key, relative to the spec
