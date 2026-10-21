@@ -1,7 +1,6 @@
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
-use specforge_common::ProjectRoot;
 use specforge_ops::authoring::init;
 use std::path::{Path, PathBuf};
 
@@ -49,8 +48,6 @@ fn init_at(
     format: OutputFormat,
     terminal: &Terminal,
 ) -> Exit {
-    // A project further up doesn't block init: the new one is separate, and
-    // commands run inside it resolve to it (the nearest wins).
     let request = init::Request {
         dir: path,
         name,
@@ -64,11 +61,11 @@ fn init_at(
         Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    if let Some(enclosing) = path.parent().and_then(ProjectRoot::enclosing) {
+    if let Some(enclosing) = &outcome.enclosing {
         notes.person(format_args!(
             "note: {} is inside the project at {}; the new project is separate",
             path.display(),
-            enclosing.dir().display()
+            enclosing.display()
         ));
     }
 

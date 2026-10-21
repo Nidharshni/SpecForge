@@ -1,6 +1,6 @@
 # The project a path is in is one value, located by one rule
 
-**Status:** accepted (2026-10-12). Amends ADR 0029 D6, ADR 0014 D5 and D6, ADR 0025 D1.
+**Status:** accepted (2026-10-12). Amends ADR 0029 D6, ADR 0014 D5 and D6, ADR 0025 D1. D6 amended by [ADR 0197](0197-init-judges-the-project-it-is-created-inside.md): init takes its directory as given and judges the project it lies inside.
 
 A path became a project four ways. Seventeen CLI commands, `check`, `watch`, the extension commands and the
 completions compiled the path as given; format, collect and migrate (three more times inside

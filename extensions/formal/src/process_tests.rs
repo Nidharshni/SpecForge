@@ -126,3 +126,58 @@ fn layering_parallel_edges_report_once() {
     let e041 = findings.iter().filter(|f| f.code == "E041").count();
     assert_eq!(e041, 1, "parallel edges yield one cycle diagnostic");
 }
+
+#[test]
+fn cycle_e042_names_every_process_of_a_tangle_of_cycles() {
+    // delta -> beta closes a cycle through beta, which the walk had finished.
+    let input = PassInput {
+        entities: ["alpha", "beta", "gamma", "delta"]
+            .map(|id| entity(id, "process"))
+            .into(),
+        edges: [
+            ("alpha", "beta"),
+            ("alpha", "delta"),
+            ("beta", "gamma"),
+            ("gamma", "alpha"),
+            ("delta", "beta"),
+        ]
+        .map(|(s, t)| edge(s, t, "sub_processes"))
+        .into(),
+        ..Default::default()
+    };
+
+    let findings = pass_event_graph_analyze(&input);
+
+    let e042: Vec<&str> = findings
+        .iter()
+        .filter(|f| f.code == "E042")
+        .map(|f| f.message.as_str())
+        .collect();
+    assert_eq!(
+        e042,
+        ["process composition cycle: alpha -> beta -> gamma -> alpha -> delta -> beta -> gamma -> alpha"]
+    );
+}
+
+#[test]
+fn cycle_e041_names_the_same_behavior_on_every_run() {
+    let input = PassInput {
+        entities: ["alpha", "beta"].map(|id| entity(id, "behavior")).into(),
+        edges: vec![
+            edge("alpha", "beta", crate::layering::REFINES_FIELD),
+            edge("beta", "alpha", crate::layering::REFINES_FIELD),
+        ],
+        ..Default::default()
+    };
+
+    // `refines` is a fresh HashMap with new random keys on each call.
+    for _ in 0..32 {
+        let findings = pass_layering_verify(&input);
+        let e041: Vec<&str> = findings
+            .iter()
+            .filter(|f| f.code == "E041")
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(e041, ["refinement chain cycle through 'alpha'"]);
+    }
+}

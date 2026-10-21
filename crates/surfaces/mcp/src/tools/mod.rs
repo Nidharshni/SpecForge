@@ -44,7 +44,6 @@ use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ToolEntry;
 use crate::target::{Call, TargetSpec};
 use crate::tool::{Category, McpError, ToolOutcome, ToolSpec, envelope, spec};
-use specforge_ops::view::ProjectView;
 
 /// The core tools, in listing order (ADR 0017 D8): each its own module
 /// implementing [`CoreTool`](crate::tool::CoreTool), its declarations
@@ -86,13 +85,6 @@ pub static CORE_TOOLS: &[&dyn ToolSpec] = &[
     spec(&find_implementation::Tool),
     spec(&find_spec_for_source::Tool),
 ];
-
-/// Where the `.spec` files of the project `view` reads are keyed from: its
-/// spec root, when it has a root (the empty session has none, so no file is
-/// a project's, ADR 0025).
-pub(crate) fn spec_root<'v>(view: &ProjectView<'v>) -> Option<&'v std::path::Path> {
-    view.root().map(|_| view.env().spec_root())
-}
 
 /// The core tool named `name`.
 pub fn core_tool(name: &str) -> Option<&'static dyn ToolSpec> {

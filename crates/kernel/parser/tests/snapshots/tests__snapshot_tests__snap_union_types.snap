@@ -11,6 +11,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             raw: Sym("FieldValue"),
         },
         title: None,
+        title_span: None,
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -83,6 +84,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
         ),
         methods: [],
         obligations: [],
+        obligation_spans: [],
     },
     Entity {
         kind: EntityKind {
@@ -92,6 +94,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             raw: Sym("McpErrorCode"),
         },
         title: None,
+        title_span: None,
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -164,6 +167,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
         ),
         methods: [],
         obligations: [],
+        obligation_spans: [],
     },
     Entity {
         kind: EntityKind {
@@ -173,6 +177,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             raw: Sym("JsonRpcErrorCode"),
         },
         title: None,
+        title_span: None,
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -245,5 +250,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
         ),
         methods: [],
         obligations: [],
+        obligation_spans: [],
     },
 ]

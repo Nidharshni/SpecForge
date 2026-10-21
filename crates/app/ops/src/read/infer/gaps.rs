@@ -1,8 +1,8 @@
-//! Inference gaps: the public items of the project's source files that no
-//! graph entity names (`specforge infer-status --gaps-detail`, the MCP
+//! Inference gaps: the public items of the project's source files that
+//! nothing covers (`specforge infer-status --gaps-detail`, the MCP
 //! `specforge.infer_gaps` tool).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +15,7 @@ use super::sources::InferenceSources;
 use crate::OpError;
 use crate::view::ProjectView;
 
-/// Public source items no graph entity names, by directory.
+/// Public source items nothing covers, by directory.
 #[derive(Debug, Clone)]
 pub struct Gaps {
     pub total_pub_items: usize,
@@ -40,22 +40,20 @@ pub struct SourceItem {
     pub scanner: Option<String>,
 }
 
-/// The public items of the view's source files that no entity of its
-/// graph names, scanned through its extensions' scanners in the view's
+/// The public items of the view's source files that nothing covers (the
+/// anchors read view's covered items, ADR 0199), scanned through its extensions' scanners in the view's
 /// runtime. Without a root: `no_project`.
 pub fn gaps(view: &ProjectView) -> Result<Gaps, OpError> {
     let root = view.project_root()?;
     let declarations = view.registries().declarations();
     let sources = InferenceSources::of(root, declarations, &InferenceManifest::at(root)?);
+    // Before the scan: an anchors manifest that cannot be used costs no scan.
+    let covered = crate::read::navigate::CoveredItems::of(view)?;
     let scanned =
         crate::read::infer::scan::scan_source_files(view.runtime().map(|r| r.as_ref()), &sources);
-    let named: HashSet<&str> = view
-        .graph()
-        .nodes()
-        .into_iter()
-        .map(|n| n.id.raw.as_str())
-        .collect();
-    Ok(Gaps::of(scanned, &named))
+    Ok(Gaps::of(scanned, |item| {
+        covered.covers(&item.file, &item.name)
+    }))
 }
 
 /// The directory part of a project-relative path, `.` at the root.
@@ -64,14 +62,14 @@ pub fn directory_of(path: &str) -> &str {
 }
 
 impl Gaps {
-    /// What `scanned` found, less the items whose name some entity bears (`named`), by
-    /// directory. Approximate when a scanner failed on a file.
-    pub fn of(scanned: ScanOutcome, named: &HashSet<&str>) -> Gaps {
+    /// What `scanned` found, less the items `covered` keeps out, by directory. Approximate when a
+    /// scanner failed on a file.
+    pub fn of(scanned: ScanOutcome, covered: impl Fn(&SourceItem) -> bool) -> Gaps {
         let total_pub_items = scanned.items.len();
         let mut by_directory: BTreeMap<String, Vec<SourceItem>> = BTreeMap::new();
         let mut uncovered = 0;
         for item in scanned.items {
-            if named.contains(item.name.as_str()) {
+            if covered(&item) {
                 continue;
             }
             uncovered += 1;
@@ -90,7 +88,7 @@ impl Gaps {
         }
     }
 
-    /// How many items no entity names.
+    /// How many items nothing covers.
     pub fn gap_count(&self) -> usize {
         self.by_directory.values().map(Vec::len).sum()
     }
@@ -166,7 +164,7 @@ pub struct DirectoryGaps {
     pub items: Vec<GapItem>,
 }
 
-/// One public item no entity names.
+/// One public item nothing covers.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct GapItem {
     pub name: String,
@@ -203,7 +201,7 @@ mod tests {
             item("hello", "function", 1),
             item("config", "struct", 2),
         ]);
-        let gaps = Gaps::of(scanned, &HashSet::from(["hello"]));
+        let gaps = Gaps::of(scanned, |item: &SourceItem| item.name == "hello");
         assert_eq!(gaps.total_pub_items, 2);
         assert_eq!(gaps.covered_items, 1);
         assert_eq!(gaps.by_directory["src"].len(), 1);
@@ -216,7 +214,7 @@ mod tests {
     fn gaps_of_covered_items_are_empty() {
         let gaps = Gaps::of(
             scanned(vec![item("hello", "function", 1)]),
-            &HashSet::from(["hello"]),
+            |item: &SourceItem| item.name == "hello",
         );
         assert_eq!(gaps.gap_count(), 0);
         assert_eq!(gaps.covered_items, 1);
@@ -224,7 +222,9 @@ mod tests {
 
     #[test]
     fn gaps_of_no_items_count_nothing() {
-        let gaps = Gaps::of(ScanOutcome::default(), &HashSet::from(["hello"]));
+        let gaps = Gaps::of(ScanOutcome::default(), |item: &SourceItem| {
+            item.name == "hello"
+        });
         assert_eq!(gaps.total_pub_items, 0);
         assert_eq!(gaps.gap_count(), 0);
     }
@@ -241,7 +241,7 @@ mod tests {
                 specforge_wasm::CallFailure::NotLoaded,
             ),
         });
-        assert!(Gaps::of(outcome, &HashSet::new()).approximate);
+        assert!(Gaps::of(outcome, |_: &SourceItem| false).approximate);
     }
 
     #[test]

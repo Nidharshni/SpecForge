@@ -1,6 +1,6 @@
 use crate::notes::Notes;
 use crate::options;
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::read::export::Format;
 use specforge_ops::read::query::{QueryRequest, query};
@@ -55,15 +55,15 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         match query(&ProjectView::of(&project), &self.request()) {
             Ok(document) => {
-                let document = Notes::new(terminal, OutputFormat::Human).noticed(document);
+                let document = Notes::fixed(terminal).noticed(document);
                 outln!(terminal, "{}", document);
                 Exit::Passed
             }
-            Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => Refusal::fixed().report(terminal, &error),
         }
     }
 }

@@ -16,5 +16,6 @@ mod parse_test;
 mod ref_components;
 mod robustness;
 mod snapshot_tests;
+mod statement_spans;
 mod structural_keywords;
 mod union_title;

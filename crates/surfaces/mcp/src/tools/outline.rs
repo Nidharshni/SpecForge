@@ -6,12 +6,10 @@ use specforge_common::shape::Shape;
 use specforge_ops::read::navigate::{Navigator, OutlineEntry, outline};
 
 use crate::args::Arguments;
-use crate::containment;
 use crate::reply::Answered;
-use crate::tool::file_not_found;
-use specforge_ops::Containment;
+use crate::tool::{McpError, file_not_found};
+use specforge_ops::OpErrorKind;
 use specforge_ops::view::ProjectView;
-use std::path::Path;
 
 /// `specforge.outline`'s arguments.
 #[derive(Debug, Arguments)]
@@ -102,17 +100,14 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let file = args.file.as_str();
-        // A file of the project is under its spec root, as spans name it:
-        // one that leaves it is refused before anything is read (ADR 0092).
-        let spec_root = super::spec_root(&view);
-        if let Some(spec_root) = spec_root {
-            Containment::within(spec_root)
-                .resolve(Path::new(file))
-                .map_err(|outside| Box::new(containment::refusal(&outside, "file")))?;
-        }
-        // Only a source the compile read has an outline. With nothing served no file is the
-        // project's (the dispatcher makes the refusal the no-project one, ADR 0025).
-        let entries = outline(&Navigator::new(view), file).ok_or_else(|| file_not_found(file))?;
+        // The view reads the file into its source key (ADR 0195): one that leaves the spec root is refused, and only a
+        // source the compile read has an outline. With nothing served no file is the project's (the dispatcher makes
+        // the refusal the no-project one, ADR 0025).
+        let entries =
+            outline(&Navigator::new(view), file).map_err(|refused| match refused.kind {
+                OpErrorKind::FileNotFound => file_not_found(file),
+                _ => McpError::from(refused).with_argument("file"),
+            })?;
         Ok(Reply {
             entries: entries.iter().map(Entry::of).collect(),
         }

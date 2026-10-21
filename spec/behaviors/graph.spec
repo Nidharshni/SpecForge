@@ -29,7 +29,12 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     becomes a typed edge. The graph builder materializes the pending
     edges recorded by link_entity_references. The graph MUST contain
     exactly one node per declared entity and one edge per resolved
-    reference.
+    reference. Every set of entities that reach one another through
+    references MUST be one W061, whose data path walks every entity of the
+    set from the smallest id and back; it depends only on the references,
+    never on the order they are written in. A declared single reference is
+    in none (ADR 0093 D7). W061 has no span: it is about its entities
+    (ADR 0016 D7).
   """
   verify unit "graph contains one node per entity"
   verify unit "graph contains one edge per resolved reference"
@@ -41,6 +46,8 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "W061 carries actionable suggestion"
   verify unit "build_graph emits W061 for reference cycles"
   verify unit "W061 names the cycle's entities in its data"
+  verify unit "W061 names every entity of a cycle, one whose cycle closes through an entity already walked included"
+  verify unit "W061 is the same whatever order the references are written in"
   verify unit "build_graph no W061 for acyclic refs"
   verify unit "detects cycles in directed graph"
   verify unit "detects self-referencing cycle"

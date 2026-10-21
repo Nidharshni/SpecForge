@@ -93,7 +93,9 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     value predicate (non-empty, matches regex, or is one of an allowed set).
     cycle_detection MUST report each entity of the target kind (every
     entity when no target kind is set) that sits on a cycle of the edges
-    of its edge type, whichever fields write them.
+    of its edge type, whichever fields write them (every entity of a
+    strongly connected set of those edges, whichever entity the cycle
+    closes through).
     file_exists MUST check that file-reference fields point to existing
     files, a relative path resolved against the spec root (never the
     working directory). A list field's items are each a path, a scalar's text is one; an empty
@@ -114,6 +116,7 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
   verify unit "a cycle_detection rule without a target_kind reports every entity on a cycle of its edge type"
   verify unit "cycle_detection follows every field that writes its edge type"
   verify unit "a cycle_detection rule follows only the edges of its edge type, never another kind's field of the same name"
+  verify unit "a cycle_detection rule reports an entity whose cycle closes through an entity already reported"
   verify unit "an edge rule no loaded field can satisfy at its target kind is inert"
   verify unit "the builtin extensions' rules register with no W112, W147 or W021"
   verify unit "file_exists reports missing file-reference field targets"

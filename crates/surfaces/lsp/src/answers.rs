@@ -438,7 +438,9 @@ pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeA
 /// flat otherwise.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
-    let entries = outline(&compiled.navigator(), &state.key_of(uri)).filter(|e| !e.is_empty())?;
+    let entries = outline(&compiled.navigator(), &state.key_of(uri))
+        .ok()
+        .filter(|e| !e.is_empty())?;
     Some(outline_to_document_symbols(
         &compiled,
         entries,

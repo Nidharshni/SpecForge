@@ -46,7 +46,7 @@ fn owns(layer: &str) -> Option<&'static str> {
             "The .spec language and what every host crate shares: the grammar, the lexer and parser, the diagnostic, spans, symbols and the project root."
         }
         "leaf" => {
-            "Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, package names and the repository root. Guests build from some of them (ADR 0050)."
+            "Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, the cycle answer, package names and the repository root. Guests build from some of them (ADR 0050)."
         }
         _ => return None,
     })

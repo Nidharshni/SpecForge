@@ -725,13 +725,14 @@ mod tests {
     }
 
     /// The crates a builtin blob compiles besides its own sources: the guest wire, the SDK and its
-    /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
+    /// macros, the coverage rule and the cycle answer (ADR 0039, 0050, 0196). A host-only module in one of them, or a new
     /// path dependency of a guest, shows here as an input outside this list.
     const GUEST_CRATES: &[&str] = &[
         "crates/leaf/protocol-types/",
         "crates/runtime/extension-sdk/",
         "crates/runtime/extension-sdk-macros/",
         "crates/leaf/coverage/",
+        "crates/leaf/cycles/",
     ];
 
     #[test]

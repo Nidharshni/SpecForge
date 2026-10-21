@@ -46,18 +46,35 @@ impl SigningKey {
     }
 }
 
-/// Load the signing key at `path`, generating and persisting one on first use.
+/// Load the signing key at `path`, generating one when there is none. A key file that is there and
+/// can't be read, or is not a key, is an error and is left as it is: a replaced key is a changed key
+/// for whoever pinned it.
 ///
 /// Returns the key and whether it was newly created.
 pub fn load_or_create_signing_key_at(path: &Path) -> Result<(SigningKey, bool), String> {
-    if let Ok(content) = std::fs::read_to_string(path) {
+    let read = match std::fs::read_to_string(path) {
+        Ok(content) => Some(content),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            return Err(format!(
+                "cannot read signing key file {}: {e}",
+                path.display()
+            ));
+        }
+    };
+    if let Some(content) = read {
         #[derive(Deserialize)]
         struct StoredKey {
             #[serde(rename = "secretKey")]
             secret_key: String,
         }
-        let stored: StoredKey = serde_json::from_str(&content)
-            .map_err(|e| format!("corrupt signing key file {}: {}", path.display(), e))?;
+        // The parse error is not shown: serde_json echoes a wrong-shaped value, which can be the key.
+        let stored: StoredKey = serde_json::from_str(&content).map_err(|_| {
+            format!(
+                "corrupt signing key file {}: not a signing key",
+                path.display()
+            )
+        })?;
         let secret: [u8; 32] = hex::decode(stored.secret_key.trim())
             .ok()
             .and_then(|b| b.try_into().ok())
@@ -82,26 +99,12 @@ pub fn load_or_create_signing_key_at(path: &Path) -> Result<(SigningKey, bool), 
         secret_key: hex::encode(key.inner.to_bytes()),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
-    }
     let json = serde_json::to_string_pretty(&stored)
         .map_err(|e| format!("failed to encode signing key: {e}"))?;
-    std::fs::write(path, json)
+    specforge_common::fresh::replace_private(path, json.as_bytes())
         .map_err(|e| format!("failed to write signing key {}: {}", path.display(), e))?;
-    restrict_permissions(path);
     Ok((key, true))
 }
-
-#[cfg(unix)]
-fn restrict_permissions(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-}
-
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) {}
 
 #[cfg(test)]
 mod tests {

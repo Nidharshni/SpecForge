@@ -116,8 +116,8 @@ constraint product_cycle_detection_correctness "Product Cycle Detection Correctn
     detect_deliverable_cycles,
   ]
   protects    [module_dag, milestone_dag, feature_dag, deliverable_dag]
-  verify property "cycle detection has zero false negatives on random graphs"
-  verify property "cycle detection has zero false positives on acyclic random graphs"
+  verify property "cycle detection has zero false negatives on every directed graph of four nodes"
+  verify property "cycle detection has zero false positives on every directed graph of four nodes"
 }
 
 constraint product_unreferenced_detection_correctness "Product Unreferenced Detection Correctness" {

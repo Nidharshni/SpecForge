@@ -160,6 +160,38 @@ pub fn compute_graph_delta(old: &Graph, new: &Graph) -> GraphDelta {
     diff(&ids, &old_nodes, &edge_keys(old), new)
 }
 
+/// The delta from `old` to `new` where only the sources `files` changed: what [`compute_graph_delta`] answers for
+/// such a pair, read from those files' nodes and the edges that touch them through the graphs' edge indexes. An
+/// edge neither of whose ends is declared in `files`, before or after, cannot change: a node's content comes from
+/// its own file and an edge resolves to an ID (the invariant `GraphBuild::apply`'s restricted delta rests on, and
+/// its verification checks). A file left out hides its changes.
+pub fn compute_graph_delta_over<'f>(
+    old: &Graph,
+    new: &Graph,
+    files: impl IntoIterator<Item = &'f str>,
+) -> GraphDelta {
+    let mut ids = BTreeSet::new();
+    for file in files {
+        for graph in [old, new] {
+            ids.extend(graph.nodes_in_file(file).into_iter().map(|n| n.id.raw));
+        }
+    }
+    let touching = |graph: &Graph| -> BTreeSet<EdgeKey> {
+        ids.iter()
+            .flat_map(|id| {
+                let (from, to) = (graph.edges_from(id.as_str()), graph.edges_to(id.as_str()));
+                from.into_iter().chain(to)
+            })
+            .map(|e| (e.source, e.target, e.label))
+            .collect()
+    };
+    let old_nodes = ids
+        .iter()
+        .filter_map(|id| Some((*id, old.node(id.as_str())?)))
+        .collect();
+    diff_edges(&ids, &old_nodes, &touching(old), &touching(new), new)
+}
+
 /// The nodes among `ids` that are in both graphs and whose declared place
 /// (file, start line) differs, where each is now, sorted by ID. Only these
 /// IDs can have moved: a node outside the changed files keeps its span.
@@ -196,9 +228,19 @@ pub(crate) fn diff(
     old_edges: &BTreeSet<EdgeKey>,
     new: &Graph,
 ) -> GraphDelta {
-    let new_edges = edge_keys(new);
+    diff_edges(ids, old_nodes, old_edges, &edge_keys(new), new)
+}
+
+/// [`diff`] over given edge sets: `old_edges` and `new_edges` need hold only the edges that touch `ids`.
+fn diff_edges(
+    ids: &BTreeSet<Sym>,
+    old_nodes: &BTreeMap<Sym, &Node>,
+    old_edges: &BTreeSet<EdgeKey>,
+    new_edges: &BTreeSet<EdgeKey>,
+    new: &Graph,
+) -> GraphDelta {
     let old_out = outgoing(old_edges);
-    let new_out = outgoing(&new_edges);
+    let new_out = outgoing(new_edges);
     let no_edges = BTreeSet::new();
     let out = |map: &BTreeMap<Sym, BTreeSet<(Sym, Sym)>>, id: &Sym| -> BTreeSet<(Sym, Sym)> {
         map.get(id).unwrap_or(&no_edges).clone()
@@ -230,7 +272,7 @@ pub(crate) fn diff(
     // Outside `ids`, a node is the one the old graph had: only its
     // outgoing edges can differ.
     let sources: BTreeSet<Sym> = old_edges
-        .symmetric_difference(&new_edges)
+        .symmetric_difference(new_edges)
         .map(|(source, _, _)| *source)
         .filter(|source| !ids.contains(source))
         .collect();
@@ -249,7 +291,7 @@ pub(crate) fn diff(
     delta.modified_nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
     let mut added: Vec<EdgeChange> = new_edges.difference(old_edges).map(edge_change).collect();
-    let mut removed: Vec<EdgeChange> = old_edges.difference(&new_edges).map(edge_change).collect();
+    let mut removed: Vec<EdgeChange> = old_edges.difference(new_edges).map(edge_change).collect();
     added.sort();
     removed.sort();
     delta.added_edges = added;

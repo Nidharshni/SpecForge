@@ -1,6 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
+use specforge_cycles::Cycle;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 mod degree;
 mod link;
@@ -276,93 +277,15 @@ impl Graph {
     }
 }
 
-/// Canonical key for a cycle: the sorted member list, so rotations and
-/// parallel-edge re-reports collapse to one entry (C5-02).
-fn canonical_cycle_key(cycle: &[Sym]) -> Vec<String> {
-    let mut members: Vec<String> = cycle.iter().map(|s| s.as_str().to_string()).collect();
-    members.sort_unstable();
-    members.dedup();
-    members
-}
-
 impl Graph {
-    /// Detect all cycles in the directed edge set using DFS.
-    /// Returns a list of cycles, where each cycle is a Vec of node IDs forming the path.
-    ///
-    /// Two-hop cycles that consist entirely of known bidirectional edge pairs
-    /// (e.g., `invariants`/`enforced_by`) are excluded, since they represent
-    /// complementary relationships rather than real circular dependencies.
-    pub fn detect_cycles(&self) -> Vec<Vec<Sym>> {
-        #[derive(Clone, Copy, PartialEq)]
-        enum Color {
-            White,
-            Gray,
-            Black,
+    /// The cycles among the graph's edges (ADR 0196): every strongly
+    /// connected set of entities with a cycle, and a closed walk through all
+    /// of them. Any edge label counts; the order edges were added in does not.
+    pub fn cycles(&self) -> Vec<Cycle<Sym>> {
+        let mut edges: BTreeMap<Sym, BTreeSet<Sym>> = BTreeMap::new();
+        for edge in &self.edges {
+            edges.entry(edge.source).or_default().insert(edge.target);
         }
-
-        let mut color: HashMap<Sym, Color> =
-            self.nodes.keys().map(|&k| (k, Color::White)).collect();
-        let mut path: Vec<Sym> = Vec::new();
-        let mut cycles: Vec<Vec<Sym>> = Vec::new();
-
-        fn dfs(
-            node: Sym,
-            color: &mut HashMap<Sym, Color>,
-            path: &mut Vec<Sym>,
-            cycles: &mut Vec<Vec<Sym>>,
-            source_index: &HashMap<Sym, Vec<usize>>,
-            edges: &[Edge],
-        ) {
-            color.insert(node, Color::Gray);
-            path.push(node);
-
-            if let Some(indices) = source_index.get(&node) {
-                for &idx in indices {
-                    let target = edges[idx].target;
-                    match color.get(&target).copied().unwrap_or(Color::White) {
-                        Color::Gray => {
-                            // Found a cycle -- extract the cycle path from the stack
-                            if let Some(pos) = path.iter().position(|&n| n == target) {
-                                let mut cycle: Vec<Sym> = path[pos..].to_vec();
-                                cycle.push(target); // close the loop
-                                cycles.push(cycle);
-                            }
-                        }
-                        Color::White => {
-                            dfs(target, color, path, cycles, source_index, edges);
-                        }
-                        Color::Black => {}
-                    }
-                }
-            }
-
-            path.pop();
-            color.insert(node, Color::Black);
-        }
-
-        // C5-12: BTreeMap iteration is string-sorted — which node a cycle
-        // is reported from (and thus its rendered rotation) must not depend
-        // on HashMap seeding (R-6).
-        let node_ids: Vec<Sym> = self.nodes.keys().copied().collect();
-        for &node in &node_ids {
-            if color.get(&node).copied() == Some(Color::White) {
-                dfs(
-                    node,
-                    &mut color,
-                    &mut path,
-                    &mut cycles,
-                    &self.source_index,
-                    &self.edges,
-                );
-            }
-        }
-
-        // C5-02: dedupe by canonical member set. Parallel edges used to
-        // report the same cycle once per duplicate edge, and the DFS reports
-        // each cycle from whichever seed entered it first.
-        cycles.sort_by_cached_key(|c| canonical_cycle_key(c));
-        cycles.dedup_by(|a, b| canonical_cycle_key(a) == canonical_cycle_key(b));
-
-        cycles
+        specforge_cycles::cycles(&edges)
     }
 }

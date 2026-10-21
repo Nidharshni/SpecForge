@@ -1,13 +1,17 @@
 //! The anchors read view: which source items `<root>/specforge-anchors.json` (written by inference
-//! tooling) anchors to an entity, and which entities it anchors to a source file. The manifest is read
+//! tooling) anchors to an entity, which entities it anchors to a source file, and which source items
+//! it covers (inference gaps, ADR 0199). The manifest is read
 //! once per question through the one manifest reader (`read::infer::read_manifest`, ADR 0112 D3) and is
 //! private to this module; MCP's `specforge.find_implementation`, `specforge.find_spec_for_source` and
 //! the infer prompt's file scope render these documents (ADR 0140).
+
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use specforge_common::shape::Shape;
 
 use super::{FileMatch, match_file};
+use crate::read::infer::SourceKey;
 use crate::view::{EntityField, ProjectView, not_found};
 use crate::{OpError, Refusal};
 
@@ -94,6 +98,62 @@ fn manifest(view: &ProjectView<'_>) -> Result<AnchorManifest, OpError> {
         crate::read::infer::read_manifest::<AnchorManifest>(root, ANCHORS_FILENAME)?
             .unwrap_or_default(),
     )
+}
+
+/// Which public source items the project covers (CONTEXT.md "Covered source item", ADR 0199): an item
+/// an anchor names, by its file and its name, for an entity the view's graph declares; else an item
+/// whose name is the id of a declared entity no anchor names. What inference gaps leave out.
+pub(crate) struct CoveredItems<'a> {
+    /// Every id the graph declares.
+    declared: HashSet<&'a str>,
+    /// Source key to the symbol names anchored there to a declared entity.
+    anchored: HashMap<String, HashSet<String>>,
+    /// The declared entities with at least one such anchor: they cover only where they are anchored.
+    anchored_entities: HashSet<&'a str>,
+}
+
+impl<'a> CoveredItems<'a> {
+    /// The view's covered items: `no_project` without a root, E071 when the anchors manifest cannot
+    /// be used, the name rule alone when there is none.
+    pub(crate) fn of(view: &ProjectView<'a>) -> Result<Self, OpError> {
+        let manifest = manifest(view)?;
+        let declared: HashSet<&str> = view
+            .graph()
+            .nodes()
+            .into_iter()
+            .map(|n| n.id.raw.as_str())
+            .collect();
+        let mut anchored: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut anchored_entities = HashSet::new();
+        for anchor in &manifest.anchors {
+            // A stale anchor (an id the graph lacks) and an anchor outside the root cover nothing;
+            // navigation still lists them (ADR 0140 D3).
+            let Some(&entity) = declared.get(anchor.entity_id.as_str()) else {
+                continue;
+            };
+            let Ok(key) = SourceKey::of(&anchor.file) else {
+                continue;
+            };
+            anchored
+                .entry(key.as_str().to_string())
+                .or_default()
+                .insert(anchor.symbol_name.clone());
+            anchored_entities.insert(entity);
+        }
+        Ok(CoveredItems {
+            declared,
+            anchored,
+            anchored_entities,
+        })
+    }
+
+    /// Whether the item `name` in the source `file` (a source key, as a scan reports it) is covered.
+    pub(crate) fn covers(&self, file: &str, name: &str) -> bool {
+        self.anchored
+            .get(file)
+            .is_some_and(|names| names.contains(name))
+            || (self.declared.contains(name) && !self.anchored_entities.contains(name))
+    }
 }
 
 /// Which entities belong to the source files `file_path` names: the manifest's anchors in them, under
@@ -240,5 +300,83 @@ mod tests {
                 .message
                 .starts_with("failed to read specforge-anchors.json")
         );
+    }
+
+    /// A project declaring three behaviors, with `anchors` as its anchors manifest.
+    fn covering(anchors: Option<&str>) -> Assembled {
+        let fixture = Assembled::over(specforge_registry::RegistryBuild::default()).source(
+            "behavior compiled_project \"C\" {\n}\nbehavior compile_project \"P\" {\n}\nbehavior helper \"H\" {\n}\n",
+        );
+        if let Some(anchors) = anchors {
+            fixture.write(ANCHORS_FILENAME, anchors);
+        }
+        fixture
+    }
+
+    fn anchor(entity: &str, file: &str, symbol: &str) -> String {
+        format!(
+            r#"{{"entity_id":"{entity}","file":"{file}","line":1,"symbol_name":"{symbol}","item_kind":"fn","scanner":"s"}}"#
+        )
+    }
+
+    fn manifest_of(rows: &[String]) -> String {
+        format!(r#"{{"version":1,"anchors":[{}]}}"#, rows.join(","))
+    }
+
+    #[test]
+    fn an_anchor_covers_its_file_and_symbol_and_nothing_else() {
+        let fixture = covering(Some(&manifest_of(&[anchor(
+            "compiled_project",
+            "src/lib.rs",
+            "CompiledProject",
+        )])));
+        let covered = CoveredItems::of(&fixture.view()).unwrap();
+        assert!(covered.covers("src/lib.rs", "CompiledProject"));
+        assert!(!covered.covers("src/other.rs", "CompiledProject"));
+        assert!(!covered.covers("src/lib.rs", "Other"));
+    }
+
+    #[test]
+    fn an_anchored_entity_no_longer_covers_by_name() {
+        let fixture = covering(Some(&manifest_of(&[anchor(
+            "compile_project",
+            "src/lib.rs",
+            "compile_project",
+        )])));
+        let covered = CoveredItems::of(&fixture.view()).unwrap();
+        assert!(covered.covers("src/lib.rs", "compile_project"));
+        assert!(!covered.covers("src/other.rs", "compile_project"));
+    }
+
+    #[test]
+    fn an_unanchored_entity_covers_by_name_and_without_a_manifest_names_decide() {
+        let fixture = covering(Some(&manifest_of(&[anchor(
+            "compile_project",
+            "src/lib.rs",
+            "compile_project",
+        )])));
+        assert!(
+            CoveredItems::of(&fixture.view())
+                .unwrap()
+                .covers("any/x.rs", "helper")
+        );
+        let bare = covering(None);
+        let covered = CoveredItems::of(&bare.view()).unwrap();
+        assert!(covered.covers("x.rs", "compile_project"));
+        assert!(!covered.covers("x.rs", "undeclared"));
+    }
+
+    #[test]
+    fn a_stale_or_outside_anchor_covers_nothing_and_a_dotted_file_is_its_key() {
+        let fixture = covering(Some(&manifest_of(&[
+            anchor("ghost", "src/a.rs", "Other"),
+            anchor("compiled_project", "../x.rs", "CompiledProject"),
+            anchor("compile_project", "./src/lib.rs", "compile_project"),
+        ])));
+        let covered = CoveredItems::of(&fixture.view()).unwrap();
+        assert!(!covered.covers("src/a.rs", "Other"));
+        // `compiled_project` has no valid anchor, so it covers by name.
+        assert!(covered.covers("y.rs", "compiled_project"));
+        assert!(covered.covers("src/lib.rs", "compile_project"));
     }
 }

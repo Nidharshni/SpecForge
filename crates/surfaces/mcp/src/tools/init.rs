@@ -73,7 +73,8 @@ impl CoreTool for Tool {
         // relative local extension path from it, wherever the server runs (ADR 0098).
         let extensions = &args.extensions;
         // The scaffold `specforge init` writes. The call target refused a
-        // directory inside the served project before this ran.
+        // directory inside the served project before this ran; the operation
+        // refuses a directory whose files an enclosing project reads (ADR 0197).
         let request = init::Request {
             dir: path,
             name: args.name.as_deref(),

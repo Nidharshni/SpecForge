@@ -279,6 +279,42 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
     assert!(world.client.calls().is_empty());
 }
 
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "publish_to_registry",
+    verify = "a signing key that can't be read is refused with E074 before any network call"
+)]
+fn an_unreadable_signing_key_is_e074_and_left_as_it_was() {
+    use std::os::unix::fs::PermissionsExt;
+    let world = World::acme();
+    world
+        .registry(Some("t"))
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
+        .unwrap();
+    let kept = std::fs::read(world.signing_key()).unwrap();
+    std::fs::set_permissions(world.signing_key(), std::fs::Permissions::from_mode(0o200)).unwrap();
+    // A process that may read anyway (root) cannot show the refusal.
+    if std::fs::read(world.signing_key()).is_ok() {
+        return;
+    }
+    let error = world
+        .registry(Some("t"))
+        .publish(&pkg("@acme/x", "1.0.1").package(), WASM)
+        .unwrap_err();
+    std::fs::set_permissions(world.signing_key(), std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(error.code, "E074", "{error:?}");
+    assert_eq!(
+        world.client.calls().len(),
+        1,
+        "only the first publish was sent"
+    );
+    assert_eq!(
+        std::fs::read(world.signing_key()).unwrap(),
+        kept,
+        "the key is left as it was"
+    );
+}
+
 #[test]
 fn the_e074_suggestion_reads_as_one_sentence() {
     let world = World::acme();

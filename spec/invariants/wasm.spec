@@ -201,12 +201,21 @@ invariant credential_secrecy "Registry Credential Secrecy" {
   guarantee """
     Raw authentication tokens MUST never be logged, stored in
     specforge.json, or included in diagnostic output. Only token
-    presence/absence and validity status may be reported.
+    presence/absence and validity status may be reported. The user's
+    registry files (the credential store, the kept secrets, the publisher
+    signing key and the known keys) MUST be created owner-only, 0600 files
+    in a 0700 directory on unix, before a byte is written, and replaced
+    whole through a temporary created new: never readable by another user,
+    never left half written, never written through a link. A signing key
+    file is named in a diagnostic, never quoted.
   """
   risk      high
   verify unit "registry token is not included in log output"
   verify unit "diagnostic messages report credential presence not value"
   verify property "no log line contains raw token string"
+  verify unit "every file in the user's registry directory is created 0600 in a 0700 directory"
+  verify unit "a user's registry file is never written through a link at its temporary name"
+  verify unit "a corrupt signing key file is named, never quoted"
 }
 
 invariant surface_schema_validity "Surface Schema Validity" {

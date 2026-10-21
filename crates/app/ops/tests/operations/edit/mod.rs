@@ -2,6 +2,7 @@
 
 mod apply;
 mod create;
+mod declared;
 mod defaults;
 mod delete;
 mod fields;
@@ -17,6 +18,7 @@ mod positions;
 mod replay;
 mod sides;
 mod skeleton;
+mod statements;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};

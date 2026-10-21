@@ -175,3 +175,14 @@ fn beyond_steps_drops_only_titles_the_step_added() {
     let ids: Vec<&str> = delta.modified_nodes.iter().map(|n| n.id.as_str()).collect();
     assert_eq!(ids, ["B", "C"], "{delta:?}");
 }
+
+#[specforge_test(
+    behavior = "add_missing_titles",
+    verify = "a header whose name is on its second line takes its title after the name"
+)]
+fn a_header_whose_name_is_on_its_second_line_takes_its_title_after_the_name() {
+    assert_eq!(
+        migrated("feature\n  second_auth {\n  status proposed\n}\n"),
+        "feature\n  second_auth \"Second Auth\" {\n  status proposed\n}\n"
+    );
+}

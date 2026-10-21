@@ -48,10 +48,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
   never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
   and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
+- **Enclosing project**: the project a directory lies inside, the nearest directory above it holding
+  `specforge.json`. `init` judges it before writing: a directory whose files it reads as sources, or from which it
+  reads them, is refused (`inside_project_sources`, ADR 0197), since a nested project ends its sources (ADR 0080).
 - **Project path**: how a surface document names a file an operation opened or wrote: relative to the project root
   with `/` between components, absolute and canonical outside it (`specforge_common::ProjectPath`, ADR 0102). A
   declaration's location (a span, a navigation result) is not one: it is named by its source key, relative to the spec
   root (ADR 0055). The CLI's human output names files as typed.
+- **Named spec file**: a spec file a request names (a typed create's `file`, `new --in`, outline's `file`, the fixes'
+  `file_path`): read by the project view into its source key, relative to the spec root, every spelling of one file
+  being that file, or refused once (`not_a_source` outside the spec root or where no source can be, `file_not_found`
+  for a read of no source) (`ProjectView::source`, ADR 0195).
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing (migration steps still run on it). The parser reads it with the file
@@ -63,7 +70,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
   b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
   `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
-  migrate` lifts a block's doc comment into a missing title.
+  migrate` lifts a block's doc comment into a missing title. Where it is written is the parse's
+  (`Entity::title_span`): a typed retitle replaces it there, and the titles step writes a missing one after the name
+  (ADR 0187, amended).
 - **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
   version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
   changes the steps declare: for `titles`, a title where the block had none.
@@ -200,6 +209,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   hands a session to read its sources through (ADR 0145); it refuses a regular file with more than one name (ADR 0146), and the disk a bounded caller's format configuration is read through (ADR 0169).
 - **Replace file**: how a project file is written (`specforge_common::fresh::replace_file`, ADR 0144): a new file beside the name,
   renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
+- **Private replace**: how a file of the user's registry directory is written (`specforge_common::fresh::replace_private`, ADR 0193): missing directories 0700, a temporary created new at 0600, synced, renamed onto the name; a link at either name is replaced, never followed, and the file is 0600 whatever was there. A signing key that is there is never replaced.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the call's one containment (the view's; init: the request's bound) and nobody. Every request
@@ -243,7 +253,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
   before it to the graph after is empty, and reports each change as W054. A node that only moved is no change; the
   update lists it apart (**moved node**, `Update::moved`), so what writes positions (MCP's `specforge://graph`) is
-  notified.
+  notified. A typed edit reads it over the files it changes (`compute_graph_delta_over`).
 - **Moved node**: a node in both graphs declared at another file or start line, where it is now
   (`specforge_graph::NodeChange` in `Applied::moved` / `Update::moved`). Not part of the graph delta; MCP notifies
   the resources that write positions (`Watched::Graph`, what a resource declares with
@@ -266,6 +276,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   node of its first declaration that is not a `define` block. A compile applies every file at once; a session
   applies each update's files to its own, and is then exactly the build of the same files at once; with
   verification on (every debug build) each update is checked against that (ADR 0032).
+- **Cycle**: a set of entities (or files) that reach one another through references (or imports), with one closed
+  walk through all of them, from the smallest id. W061, W113, E041, E042 and the cycle rules each read the one answer
+  (`specforge_cycles::cycles`, ADR 0196); which entity the walk starts from never depends on the written order.
 - **Extension declaration**: everything one extension declares — its handshake and every describe
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
@@ -435,7 +448,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
   fields and E016 rules for file-reference fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
-  write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
+  write it). An edge rule counts the edges of its edge type; a cycle rule follows them and reports every member of a cycle (ADR 0196). It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
@@ -571,7 +584,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011, and R-AUTH-021 for a lost secret). The client sends it only to the registry root it was kept for (ADR 0178). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable, update and search refuse it once, when they open their registry (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **User's registry files**: the directory `specforge_ops_registry::User` reads and writes: `credentials.json` (keyed by
-  registry root), `secrets/`, `signing-key.json` and `known-keys.json`. `User::current()` is `~/.specforge`,
+  registry root), `secrets/`, `signing-key.json` and `known-keys.json`, each written by **private replace**. `User::current()` is `~/.specforge`,
   `User::at(dir)` any other; nothing else reads them, and login, logout, doctor, fetch, search and publish ask it (ADR 0178).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
@@ -796,11 +809,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Read only by navigation's anchors read view (`specforge_ops::read::navigate::{anchors_of_file,
-  anchors_of_entity}`): the entities anchored to a source file, each with its kind, and the anchors of an entity;
+  anchors_of_entity}`, and the covered source items inference gaps leave out): the entities anchored to a source file, each with its kind, and the anchors of an entity;
   E071 when it cannot be used, `no_project` without a project, E003 for an id neither the graph nor the manifest
   knows (ADR 0140).
+- **Covered source item**: a public item a scanner found that the anchors manifest anchors, by its file and its
+  name, to an entity the graph declares; or, when no anchor names that entity, whose name is the entity's id
+  (`specforge_ops::read::navigate` `CoveredItems`, ADR 0199). Inference gaps are the items that are not covered. An
+  anchor to an entity the graph does not declare covers nothing.
 - **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
-  exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
+  exact text, or a formal claim discharges it. Who owes obligations is the entity's standing. Where each is written is the parse's
+  (`Entity::obligation_spans`), never the graph's; an entry named `verify` inside a block field is a field, not an
+  obligation (ADR 0187, amended).
 - **Unverified**: an entity that counts toward coverage and is not proven
   (its standing counts and its verdict is not proven; `ProjectCoverage::is_unverified`).
 - **Delivery evidence**: what the recorded test report proves of a feature, beside the `status`
@@ -986,6 +1005,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
   note is never written, and a notice is written once, in the document when the document carries it, else on stderr
   before the document. A read's notices go through `Notes::noticed` (ADR 0130).
+- **Fixed-format command**: a core CLI command whose stdout is a document in a format a reader parses (export,
+  schema, model, query, outline; `completions`, `format --stdin`), rather than a human or `--format json`
+  rendering of an outcome. It takes no `--format human|json`. Its notices are on stderr (ADR 0120 D1), and its
+  refusal is `error[CODE]` on stderr under every format, JSON documents included, with nothing on stdout (ADR
+  0029 D5c, `Refusal::fixed`).
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command, inside its **Caller**, which add,
@@ -1194,7 +1218,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a method's, `MethodDecl::name_span`): an entity's identifier on whichever line of its header, a scheme ref's ID, a
   spec block's quoted string. Navigation reads it from the compile's parses to answer a definition, an outline, a
   rename's declaration edit and the token at a position; it is token-precise when the compiled text spells the id there
-  (ADR 0187, ADR 0116).
+  (ADR 0187, ADR 0116); a title and each verify statement are read the same way (ADR 0187, amended).
 - **Derived name**: a type name a derived field links from one block, other than the block's own id, naming an entity of
   the field's target kind: `specforge_graph`'s `derive::derived_names`, which the linker makes an edge and the finder a
   token (ADR 0127 D3, ADR 0163).
@@ -1223,12 +1247,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   rename plan answer them; `navigate::apply_edits` applies a file's edits whole or not at all; the LSP converts
   their spans to UTF-16 ranges and MCP returns them as the spec's `TextEdit`. The formatter's edits are byte ranges
   of one buffer instead (ADR 0021 D8, ADR 0164).
+- **Declared change**: what a typed edit may change in the graph: set, unset, link and unlink their field, retitle
+  the title, add-verify and remove-verify the obligations, create and delete their entity whole, a delete with
+  `unlink_references` each referrer's field; an edge by a declared field of its source or a created or deleted end
+  (`specforge_ops::authoring::edit`, ADR 0198). The plan's graph delta over the files it changes, less the declared
+  changes, must be empty, as a migration's less its steps' (ADR 0186).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151). Its report names the net change of the list: the entities and the files its planned change answers (ADR 0184, amended).
+  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151). It is also refused (`undeclared_change`) when the edited graph changes what its edits do not declare (a **declared change**, ADR 0198). Its report names the net change of the list: the entities and the files its planned change answers (ADR 0184, amended).
   A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).

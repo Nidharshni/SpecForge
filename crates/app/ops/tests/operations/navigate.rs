@@ -795,7 +795,7 @@ fn the_outline_lists_the_files_entities() {
     assert_eq!(ids, ["b", "a"], "in line order, other files left out");
     assert_eq!(outline(&p.navigator(), "./test.spec").unwrap().len(), 2);
     assert!(
-        outline(&p.navigator(), "est.spec").is_none(),
+        outline(&p.navigator(), "est.spec").is_err(),
         "a file is a file"
     );
 }

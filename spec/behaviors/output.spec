@@ -430,6 +430,31 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "an empty kind is a kind the project does not know: it lists nothing and is an I020 notice"
 }
 
+// A spec file a request names (specforge_ops::view::ProjectView::source and source_place, ADR 0195).
+behavior read_a_named_spec_file "Read a Spec File a Request Names" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  contract   """
+    A spec file a request names (a typed create's file, outline's file, the
+    fixes' file_path) MUST be read into its source key, the path relative to
+    the spec root that the compile and the editor name it by: every spelling
+    of one file is that file (a leading or inner ., a doubled separator, its
+    absolute path under the spec root). A spelling that leaves the spec root
+    (a .. or an absolute path elsewhere) MUST be refused as not_a_source. A
+    read of a file that is none of the compiled sources MUST be
+    file_not_found; a create MUST be refused as not_a_source unless the file
+    is one discovery would keep. A spelling from the project root of an
+    existing source MUST be refused naming its spec-root spelling.
+  """
+  verify unit "every spelling of a spec file under the spec root reads as its source key"
+  verify unit "a spelling that leaves the spec root is not_a_source"
+  verify unit "a read of a file that is no compiled source is file_not_found"
+  verify unit "a spec file named from the project root is refused naming its spec-root spelling"
+}
+
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
 // the context prompt and the LSP hover render them.
 behavior inspect_entity_facts "Inspect an Entity's Facts" {
@@ -717,7 +742,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
     operation_ran "the command's operation returned its outcome or refused"
   }
   ensures {
-    one_refusal_shape "a refusal is error[CODE]: message with its hint, or the error document under --format json"
+    one_refusal_shape "a refusal is error[CODE]: message with its hint on stderr, or the error document under --format json; a fixed-format command's is always on stderr"
     one_exit_table    "the exit code is the run's verdict, the refusal, or that the command could not judge"
     surfaces_agree    "the CLI's exit code and MCP's ok are one verdict"
   }
@@ -733,10 +758,13 @@ behavior report_command_outcome "Report a Command's Outcome" {
     exit 2. A refusal MUST be printed on stderr
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
-    written; under --format json it MUST instead be the
+    written; under --format json (the human|json flag) it MUST instead be the
     error document {error, code}, with suggestion when the refusal has one
     and files_written when files were left written, on stdout, with
-    nothing on stderr. Under --format json a command that changes project
+    nothing on stderr. A fixed-format command (export, schema, model,
+    query, outline) prints a document a reader parses or nothing: its
+    refusal MUST be on stderr whatever its --format names, JSON documents
+    included, with nothing on stdout. Under --format json a command that changes project
     files prints files_written beside its document: absent from a preview
     (--dry-run, format --check or --diff), and otherwise every file it
     wrote, [] when it wrote none, as specforge's MCP reply does (ADR 0022,
@@ -770,6 +798,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "under --format json a refusal is the error document on stdout and nothing on stderr"
   verify unit "a passed run exits 0, a failed verdict or a refusal 1, a refusal of a measuring command 2"
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
+  verify unit "a fixed-format command (export, schema, model, query, outline) refuses on stderr whatever its --format names, with nothing on stdout"
   verify unit "a command run outside any project refuses with no_project"
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
   verify unit "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"

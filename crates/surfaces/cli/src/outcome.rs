@@ -93,6 +93,13 @@ impl<'a> Refusal<'a> {
         }
     }
 
+    /// A fixed-format command's refusal (ADR 0120 D1, ADR 0029 D5c): export, schema, model, query, outline,
+    /// completions and `format --stdin` print a document a reader parses, or nothing. Their refusal is
+    /// `error[CODE]` on stderr whatever format the document is in, and stdout stays empty. [`Exit::Failed`].
+    pub(crate) fn fixed() -> Self {
+        Self::of(OutputFormat::Human)
+    }
+
     /// A measuring command's refusal (`stats`, `analyze`):
     /// [`Exit::Unjudged`].
     pub(crate) fn measuring(format: OutputFormat) -> Self {
@@ -230,6 +237,22 @@ mod tests {
             Refusal::of(OutputFormat::Human).report(&terminal, &error),
             Exit::Failed
         );
+        assert_eq!(capture.stdout(), "");
+        assert_eq!(capture.stderr(), "error[E003]: gone\n");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "a fixed-format command (export, schema, model, query, outline) refuses on stderr whatever its --format names, with nothing on stdout"
+    )]
+    fn a_fixed_refusal_is_on_stderr() {
+        let error = OpError::coded(
+            specforge_ops::OpErrorKind::EntityNotFound,
+            codes::E003,
+            "gone",
+        );
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        assert_eq!(Refusal::fixed().report(&terminal, &error), Exit::Failed);
         assert_eq!(capture.stdout(), "");
         assert_eq!(capture.stderr(), "error[E003]: gone\n");
     }

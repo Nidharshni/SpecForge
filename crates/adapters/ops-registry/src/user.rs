@@ -193,7 +193,10 @@ impl User {
 
     /// What doctor reports about these files.
     pub fn credential_health(&self) -> CredentialHealth {
-        specforge_registry_client::credential_health::credential_health_now(&self.dir)
+        specforge_registry_client::credential_health::credential_health_now(
+            &self.dir,
+            &self.signing_key(),
+        )
     }
 }
 

@@ -666,7 +666,9 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
     not exist, a directory, specforge.json or any file that is not a .spec
     source, one an exclude entry leaves out) MUST be refused as
     file_not_found, naming it; a source with no entity has an empty outline.
-    With no project served, no
+    The file is read into its source key (ADR 0195): every spelling of a source
+    under the spec root is that source; one that leaves the spec root is
+    invalid_input. With no project served, no
     file is a project's: the tool MUST return the no-project refusal
     (precondition_failed), whatever the server's working directory holds.
   """
@@ -679,6 +681,7 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "with no project served, outline is the no-project refusal"
   verify unit "sorted by line number"
   verify unit "a file that is not one of the project's sources is file_not_found, though it exists"
+  verify unit "outline reads every spelling of a source under the spec root as that source"
 }
 
 behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
@@ -704,7 +707,9 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   contract   """
     In MCP server mode, the system MUST register a specforge.suggest_fixes tool
     that accepts entity_id? (optional; one the graph lacks is an entity_not_found
-    error on entity_id, E003), file_path? (optional), and
+    error on entity_id, E003), file_path? (optional; a spec file relative to the spec
+    root, read as outline reads its file (ADR 0195); one that names no source is
+    refused on file_path), and
     diagnostic_code? (optional). When all three parameters are omitted, the
     system MUST return all fix suggestions for the current project. The tool
     MUST return an object whose fixes are the applicable fix suggestions, McpFixSuggestion items, each
@@ -722,6 +727,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   verify unit "the result is an object holding the fixes"
   verify unit "clean entity with no diagnostics returns empty list"
   verify unit "diagnostic_code filter restricts to matching diagnostics"
+  verify unit "file_path reads every spelling of a source as that source"
+  verify unit "a file_path that names no source is refused on file_path"
   verify integration "every suggestion carries the edits the LSP's code action applies"
   verify contract "Provide MCP Suggest Fixes Tool: MCP suggest fixes tool holds — graph_available, fixes_returned, empty_for_clean, tool_invoked_emitted"
 }

@@ -185,7 +185,7 @@ fn completions(shell: Shell, project: &project::ProjectArg, terminal: &Terminal)
     let root = match project.root() {
         Ok(root) => root,
         Err(error) => {
-            return outcome::Refusal::of(outcome::OutputFormat::Human).report(terminal, &error);
+            return outcome::Refusal::fixed().report(terminal, &error);
         }
     };
     let mut cmd = extension_command::with_extension_commands(Cli::command(), &root);

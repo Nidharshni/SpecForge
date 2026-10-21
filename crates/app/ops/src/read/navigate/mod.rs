@@ -27,6 +27,7 @@ use specforge_common::{SourceSpan, Sym};
 
 use crate::view::ProjectView;
 
+pub(crate) use anchors::CoveredItems;
 pub use anchors::{
     AnchoredEntity, EntityAnchors, FileAnchors, Implementation, anchors_of_entity, anchors_of_file,
 };

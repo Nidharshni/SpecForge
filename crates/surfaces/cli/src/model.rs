@@ -1,6 +1,6 @@
 use crate::notes::Notes;
 use crate::options;
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::read::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions};
 use specforge_ops::view::ProjectView;
@@ -74,19 +74,19 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         let options = match self.options() {
             Ok(options) => options,
-            Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
+            Err(refusal) => return Refusal::fixed().report(terminal, &refusal),
         };
         match specforge_ops::read::model::model(&ProjectView::of(&project), &options) {
             Ok(document) => {
-                let document = Notes::new(terminal, OutputFormat::Human).noticed(document);
+                let document = Notes::fixed(terminal).noticed(document);
                 out!(terminal, "{}", document);
                 Exit::Passed
             }
-            Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => Refusal::fixed().report(terminal, &error),
         }
     }
 }

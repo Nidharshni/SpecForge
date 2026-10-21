@@ -14,7 +14,7 @@ behavior create_entity "Create an Entity" {
   category   mutation
   contract   """
     A create edit names a kind, an id, a title and a file relative to the spec
-    root. The block is written in the canonical form, after the last block of
+    root; every spelling of the file under the spec root is that file (its source key; ADR 0195). The block is written in the canonical form, after the last block of
     its kind in the file, or at the end of the file; a file that does not exist
     is created, unless the later edits of the list leave it empty: a file that does not
     exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
@@ -30,6 +30,8 @@ behavior create_entity "Create an Entity" {
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
   verify unit "new refuses a file that is not a project source"
+  verify unit "new reads every spelling of a file under the spec root as that file"
+  verify unit "two spellings of one new file in one list are one file"
   verify unit "new refuses an id that is taken"
   verify unit "new refuses a reserved id before the edited project is compiled"
   verify unit "new compares what it writes with the default, not what it was given"
@@ -42,6 +44,8 @@ behavior create_entity "Create an Entity" {
   verify unit "a member's skeleton is written in its field's form"
   verify unit "a file new creates is not written when the later edits leave it empty"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
+  verify integration "new --in reads a spelling of an existing file as that file"
+  verify integration "new refuses a file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
 }
@@ -68,7 +72,9 @@ behavior edit_entity_field "Edit an Entity Field" {
     writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
     included; a block field left with no entry over a default is written `{}`. An unset of an
     entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
-    replaces the header title; a spec block's title is its name, and a retitle of it is
+    replaces the header title where the parse read it, or writes one after
+    the name when the header has none; a union's string variant is never its
+    title; a spec block's title is its name, and a retitle of it is
     refused not_editable. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """
@@ -88,6 +94,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
   verify unit "retitle of a spec block is refused: its title is its name"
+  verify unit "retitle of an untitled union writes the title after its name, never over a variant"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {
@@ -123,12 +130,16 @@ behavior edit_entity_obligation "Edit an Entity Obligation" {
   invariants [typed_edit_canonical_form]
   category   mutation
   contract   """
-    An add-verify edit inserts a verify line after the last one, or before the
-    closing brace. A remove-verify edit removes the line with that kind and
-    text. An equal line is not added twice.
+    An add-verify edit inserts a verify line after the last verify statement,
+    or before the closing brace. A remove-verify edit removes the statement
+    with that kind and text. Where each statement is written is read from the
+    block's parse: an entry named verify inside a block field is a field, never
+    a statement (ADR 0187, amended). An equal line is not added twice.
   """
   verify unit "a verify line is added after the last one"
   verify unit "a verify line is removed by kind and text"
+  verify unit "remove-verify removes the statement, never a block field's entry named verify"
+  verify unit "add-verify writes after the last statement, never inside a block field"
 }
 
 behavior delete_entity "Delete an Entity" {
@@ -165,7 +176,14 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     the project could not read; an edit that leaves an error-severity
     diagnostic the project did not have, with every check run (after an
     editor update that skipped the checks they are run for the comparison),
-    is refused with E080 and writes nothing. Warnings and infos it adds are written and reported. A preview
+    is refused with E080 and writes nothing. Each edit declares what it may
+    change in the graph: set and unset their field (a field.entry path's
+    field), link and unlink their field, retitle the title, add-verify and
+    remove-verify the obligations, create and delete their entity, a delete
+    with unlink_references each referrer's field; an edge is declared by its
+    source's declared field or by a created or deleted end. An edit whose
+    edited graph changes anything else is refused as undeclared_change and
+    writes nothing; E080 is judged first. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project
     change: a file changed since the compile refuses the whole plan, and a
     failed write puts every file already written back. The report names the net
@@ -173,6 +191,8 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     files whose text it changes; an entity a later edit puts back as it was is not named, and a
     block that only moves within its file is not either.
   """
+  verify unit "a graph change no edit declares is beyond the declaration"
+  verify unit "every verb's graph change is what it declares"
   verify unit "an edit that adds an error is E080 and writes nothing"
   verify unit "an edit that adds a warning is written and reports it"
   verify unit "a preview refuses what the write would"

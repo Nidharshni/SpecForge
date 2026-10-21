@@ -249,7 +249,7 @@ impl SourceRoot {
 
     /// Whether `key`, a path relative to the spec root, is one [`Self::files`]
     /// lists once the file exists:
-    /// - a `.spec` path inside the spec root (no `..`, not absolute);
+    /// - a `.spec` path inside the spec root (a key: no `.`, no `..`, not absolute);
     /// - under no [`SKIP_DIRS`] directory;
     /// - in no directory below the spec root that is a symlink or holds
     ///   `specforge.json` now (it reads whether each directory on the way is
@@ -267,7 +267,7 @@ impl SourceRoot {
                     Component::Normal(name) => {
                         !name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n))
                     }
-                    Component::CurDir => true,
+                    Component::CurDir => false,
                     _ => false,
                 })
             })
@@ -343,6 +343,7 @@ mod tests {
         assert!(!exclude.holds("src/node_modules/x.spec"));
         assert!(!exclude.holds("drafts/a.spec"));
         assert!(!exclude.holds("../outside.spec"));
+        assert!(!exclude.holds("./a.spec"));
         // A file merely named like a skipped directory is still found.
         assert!(exclude.holds("build.spec"));
     }

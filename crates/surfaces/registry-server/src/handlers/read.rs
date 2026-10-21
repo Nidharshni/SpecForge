@@ -95,15 +95,25 @@ pub(super) async fn download_package(
     Path((name, version)): Path<(String, String)>,
 ) -> Result<Response, ApiError> {
     let name = read_name(&name)?.to_string();
+    // A version that is not one names no stored binary; the segment never reaches a file path.
+    let version = Version::parse(&version)
+        .map_err(|_| ApiError::not_found(format!("{name}@{version} not found")))?
+        .to_string();
+    let not_found = || ApiError::not_found(format!("binary not found for {name}@{version}"));
 
-    // Storage reads are blocking file I/O: run them on the blocking pool.
-    let storage_state = Arc::clone(&state);
-    let storage_name = name.clone();
-    let storage_version = version.clone();
+    // The row comes first: no row (never published, or yanked) means no binary is read, and the
+    // recorded digest is what every served blob is held to (C8-09).
+    // Storage reads and the (up to 64 MB) hash are blocking work: run them on the blocking pool.
+    let st = state.clone();
+    let (n, v) = (name.clone(), version.clone());
     let data = tokio::task::spawn_blocking(move || {
-        storage_state
-            .storage
-            .read_wasm(&storage_name, &storage_version)
+        let row = st.database.get_package_version(&n, &v)?;
+        let data = st.storage.read_wasm(&n, &v)?;
+        let actual = {
+            use sha2::{Digest, Sha256};
+            hex::encode(Sha256::digest(&data))
+        };
+        Some((actual == row.sha256).then_some(data))
     })
     .await
     .map_err(|e| {
@@ -113,55 +123,18 @@ pub(super) async fn download_package(
         )
     })?;
 
-    // C8-09 hardening: serve only blobs whose bytes hash to the DB's
-    // recorded sha256 — torn or corrupted files are never handed out.
-    // The DB lookup and the (up to 64 MB) hash run on the blocking pool.
-    if let Some(data) = &data {
-        let (expected, actual) = {
-            let st = state.clone();
-            let name = name.clone();
-            let version = version.clone();
-            let data = data.clone();
-            tokio::task::spawn_blocking(move || {
-                let expected = st
-                    .database
-                    .get_package_version(&name, &version)
-                    .map(|row| row.sha256)
-                    .unwrap_or_default();
-                let actual = {
-                    use sha2::{Digest, Sha256};
-                    let mut hasher = Sha256::new();
-                    hasher.update(&data);
-                    hex::encode(hasher.finalize())
-                };
-                (expected, actual)
-            })
-            .await
-            .map_err(|e| {
-                ApiError::internal(
-                    ErrorCode::IntegrityTask,
-                    format!("integrity check task failed: {e}"),
-                )
-            })?
-        };
-        if !expected.is_empty() && actual != expected {
-            return Err(ApiError::internal(
-                ErrorCode::IntegrityViolation,
-                "stored blob does not match its recorded digest",
-            ));
-        }
-    }
-
     match data {
-        Some(data) => Ok((
+        None => Err(not_found()),
+        Some(None) => Err(ApiError::internal(
+            ErrorCode::IntegrityViolation,
+            "stored blob does not match its recorded digest",
+        )),
+        Some(Some(data)) => Ok((
             StatusCode::OK,
             [(axum::http::header::CONTENT_TYPE, "application/wasm")],
             data,
         )
             .into_response()),
-        None => Err(ApiError::not_found(format!(
-            "binary not found for {name}@{version}"
-        ))),
     }
 }
 

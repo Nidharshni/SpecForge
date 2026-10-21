@@ -4,6 +4,7 @@ exclude = ["extensions", "fixtures"]
 members = [
     # leaf
     "crates/leaf/coverage",
+    "crates/leaf/cycles",
     "crates/leaf/diagnostics",
     "crates/leaf/package",
     "crates/leaf/protocol-types",

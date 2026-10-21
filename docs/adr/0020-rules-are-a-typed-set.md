@@ -84,7 +84,7 @@ a guarantee validate already gives).
 - Dead cycle rules surface as W112; undeclared edge types are inert, not over-firing; failing custom
   functions are visible (W148); a `file_exists` file appearing clears its warning in a session.
 - Tests are descriptor in, diagnostics out: `build_registries(vec![declaration]).rules.check(&RuleInput { … }, …)`.
-- The cycle walker lives in `specforge_common::cycles`; `specforge-graph` re-exports it.
+- The cycle walker lives in `specforge_common::cycles`; `specforge-graph` re-exports it. (Moved: it is `specforge-cycles`, one answer for every cycle diagnostic, [ADR 0196](0196-which-entities-lie-on-a-cycle-is-one-answer.md).)
 - New codes W147, W148; W112's and W021's explanations widen (W021 covers a rule's target kind).
 - The decisions land in steps (plan 02): the module and D1–D3 first, then each fix of D4–D5 in its
   own change.

@@ -13,6 +13,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
         title: Some(
             "Parse Spec File",
         ),
+        title_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 2,
+                start_col: 26,
+                end_line: 2,
+                end_col: 43,
+            },
+        ),
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -108,6 +117,22 @@ expression: "parse_ok(source, \"test.spec\").entities"
             VerifyStatement {
                 kind: "integration",
                 description: "parses all .spec files in project",
+            },
+        ],
+        obligation_spans: [
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 5,
+                start_col: 5,
+                end_line: 5,
+                end_col: 54,
+            },
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 6,
+                start_col: 5,
+                end_line: 6,
+                end_col: 59,
             },
         ],
     },

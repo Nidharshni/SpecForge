@@ -83,6 +83,13 @@ pub struct FixQuery<'q> {
     pub within: Option<&'q SourceSpan>,
 }
 
+/// The field of a fixes request a refusal is about (ADR 0072): the entity or the spec file it names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixField {
+    EntityId,
+    FilePath,
+}
+
 /// A fix chosen for a diagnostic or an entity, its edits not yet made: a
 /// replacement carries its token edit, a stub its typed edit. Choosing costs
 /// what choosing a replacement costs; making a stub's edits costs one compile
@@ -130,16 +137,32 @@ impl Offer {
 /// data names no fix offers none. A stub is planned (one compile of the
 /// edited project, E080): one whose plan is refused is not offered. A
 /// `query.entity` the graph lacks is [`crate::view::not_found`] (E003),
-/// refused before any stub is planned.
+/// refused before any stub is planned. A `query.file` is read into its source key by
+/// [`ProjectView::source`](crate::view::ProjectView::source) (ADR 0195): every spelling of a source is that
+/// source, and one that is no source is refused (`file_not_found`, or `not_a_source` outside the spec root).
 pub fn fixes(
     navigator: &Navigator<'_>,
     diagnostics: &[Diagnostic],
     query: &FixQuery,
-) -> Result<Vec<Fix>, Refusal<EntityField>> {
+) -> Result<Vec<Fix>, Refusal<FixField>> {
     if let Some(id) = query.entity {
-        navigator.view().entity(id, EntityField::EntityId)?;
+        navigator
+            .view()
+            .entity(id, EntityField::EntityId)
+            .map_err(|refusal| {
+                refusal.map_subject(|EntityField::EntityId| Some(FixField::EntityId))
+            })?;
     }
-    Ok(offers(navigator, diagnostics, query)
+    let key = query
+        .file
+        .map(|file| navigator.view().source(file))
+        .transpose()
+        .map_err(|error| error.about(FixField::FilePath))?;
+    let query = FixQuery {
+        file: key.as_deref(),
+        ..*query
+    };
+    Ok(offers(navigator, diagnostics, &query)
         .into_iter()
         .filter_map(|offer| offer.fix(navigator).ok())
         .collect())

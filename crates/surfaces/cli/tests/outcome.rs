@@ -357,3 +357,50 @@ fn collect_from_a_sub_path_finds_its_project() {
     assert!(run.stderr.contains("E058"), "{}", run.stderr);
     assert!(!run.stderr.contains("no_project"), "{}", run.stderr);
 }
+
+/// A fixed-format command's stdout is its document or nothing (output.spec, report_command_outcome).
+#[specforge_test_macros::test(
+    behavior = "report_command_outcome",
+    verify = "a fixed-format command (export, schema, model, query, outline) refuses on stderr whatever its --format names, with nothing on stdout"
+)]
+fn a_fixed_format_refusal_is_on_stderr_under_every_format() {
+    let project = rv1(None);
+    let rows: [(&[&str], &str); 11] = [
+        (&["export", "--scope", "nope"], "E003"),
+        (&["export", "--format", "json", "--scope", "nope"], "E003"),
+        (
+            &["export", "--format", "context", "--scope", "nope"],
+            "E003",
+        ),
+        (&["export", "--format", "brief", "--scope", "nope"], "E003"),
+        (&["export", "--format", "dot", "--scope", "nope"], "E003"),
+        (
+            &["export", "--format", "markdown", "--scope", "nope"],
+            "E003",
+        ),
+        (&["query", "nope", "--format", "json"], "E003"),
+        (&["schema", "--kind", "nope"], "unknown_kind"),
+        (
+            &["model", "--format", "json", "--root", "nope"],
+            "unknown_kind",
+        ),
+        (
+            &["model", "--format", "json", "--extension", "nope"],
+            "extension_not_found",
+        ),
+        (
+            &["outline", "--format", "json", "--path", "nope"],
+            "file_not_found",
+        ),
+    ];
+    for (args, code) in rows {
+        let run = run_in(&project, args, None);
+        assert_eq!(run.code, 1, "{args:?}: {}", run.stderr);
+        assert_eq!(run.stdout, "", "{args:?}: nothing on stdout");
+        assert!(
+            run.stderr.starts_with(&format!("error[{code}]")),
+            "{args:?}: {}",
+            run.stderr
+        );
+    }
+}

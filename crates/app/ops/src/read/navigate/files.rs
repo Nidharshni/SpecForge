@@ -1,5 +1,4 @@
-//! Which entities belong to a file: the file rule (`match_file`) prompts
-//! and tools share, and the outline of a spec file the LSP's document
+//! Which entities belong to a file: the file rule (`match_file`) the anchors use, and the outline of a spec file the LSP's document
 //! symbols and MCP's `specforge.outline` both answer.
 
 use serde::Serialize;
@@ -8,6 +7,7 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_graph::Node;
 
 use super::Navigator;
+use crate::OpError;
 
 /// How a query path matches a file; also the spelling of a match mode on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
@@ -80,26 +80,18 @@ pub struct OutlineMethod {
 /// entities in line order, each with its method members, each entry
 /// selecting its name. The LSP's document symbols and MCP's outline.
 ///
-/// `None` when `file` names none of the compile's sources
-/// ([`CompiledProject::source_keys`](specforge_project::CompiledProject::source_keys), under
-/// [`match_file`]'s rule: `./a.spec` is `a.spec`): a file that does not exist, a directory,
-/// `specforge.json` or any non-`.spec` file, one `exclude` leaves out. A source with no entity,
-/// or one that could not be read (E025), has an empty outline (ADR 0116).
-pub fn outline(nav: &Navigator<'_>, file: &str) -> Option<Vec<OutlineEntry>> {
-    let is_source = nav
-        .view
-        .project()
-        .source_keys()
-        .iter()
-        .any(|key| match_file(file, key) == FileMatch::Exact);
-    if !is_source {
-        return None;
-    }
+/// `file` is read into its source key by [`ProjectView::source`](crate::view::ProjectView::source)
+/// (ADR 0195): `./a.spec` is `a.spec`. A refusal when `file` names none of the compile's sources (a file
+/// that does not exist, a directory, `specforge.json` or any non-`.spec` file, one `exclude` leaves out:
+/// `file_not_found`) or leaves the spec root (`not_a_source`). A source with no entity, or one that could
+/// not be read (E025), has an empty outline (ADR 0116).
+pub fn outline(nav: &Navigator<'_>, file: &str) -> Result<Vec<OutlineEntry>, OpError> {
+    let key = nav.view.source(file)?;
     let graph = nav.view.graph();
     let mut nodes: Vec<&Node> = graph
         .nodes()
         .into_iter()
-        .filter(|n| match_file(file, n.source_span.file.as_str()) == FileMatch::Exact)
+        .filter(|n| n.source_span.file.as_str() == key)
         .collect();
     nodes.sort_by_key(|n| {
         let s = &n.source_span;
@@ -149,5 +141,5 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Option<Vec<OutlineEntry>> {
             }
         })
         .collect();
-    Some(entries)
+    Ok(entries)
 }

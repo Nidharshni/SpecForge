@@ -1,7 +1,7 @@
 # A project's sources end at a nested project
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 11). Amends ADR 0021 D3; completes ADR 0053 D1
-and ADR 0055 D1. D1 extended by ADR 0113 (inference sources end at a nested project).
+and ADR 0055 D1. D1 extended by ADR 0113 (inference sources end at a nested project). D1 and D2 applied at creation by [ADR 0197](0197-init-judges-the-project-it-is-created-inside.md): init refuses a directory that would end this walk before some sources, or be read through D2.
 
 A directory below a project's spec root that held its own `specforge.json` was two projects' at once. The outer
 project's compile read its files as outer sources, under the outer configuration's extensions and with keys

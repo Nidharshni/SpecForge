@@ -40,7 +40,7 @@ add one.
 | `runtime` | Extensions: the host side of the protocol, the wasmtime component runtime, the installed extensions, and the SDK guests are written with (ADR 0013, ADR 0028). | [`component`](crates/runtime/component/) [`extension-sdk`](crates/runtime/extension-sdk/) [`extension-sdk-macros`](crates/runtime/extension-sdk-macros/) [`installed`](crates/runtime/installed/) [`wasm`](crates/runtime/wasm/) |
 | `pipeline` | From parsed files to output: import resolution, the graph build, the Registry build and its checks, formatting, migration and the export formats. | [`emitter`](crates/pipeline/emitter/) [`formatter`](crates/pipeline/formatter/) [`graph`](crates/pipeline/graph/) [`migrate`](crates/pipeline/migrate/) [`registry`](crates/pipeline/registry/) [`resolver`](crates/pipeline/resolver/) |
 | `kernel` | The .spec language and what every host crate shares: the grammar, the lexer and parser, the diagnostic, spans, symbols and the project root. | [`common`](crates/kernel/common/) [`parser`](crates/kernel/parser/) [`shape-macros`](crates/kernel/shape-macros/) [`tree-sitter`](crates/kernel/tree-sitter/) |
-| `leaf` | Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, package names and the repository root. Guests build from some of them (ADR 0050). | [`coverage`](crates/leaf/coverage/) [`diagnostics`](crates/leaf/diagnostics/) [`package`](crates/leaf/package/) [`protocol-types`](crates/leaf/protocol-types/) [`repo-root`](crates/leaf/repo-root/) |
+| `leaf` | Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, the cycle answer, package names and the repository root. Guests build from some of them (ADR 0050). | [`coverage`](crates/leaf/coverage/) [`cycles`](crates/leaf/cycles/) [`diagnostics`](crates/leaf/diagnostics/) [`package`](crates/leaf/package/) [`protocol-types`](crates/leaf/protocol-types/) [`repo-root`](crates/leaf/repo-root/) |
 
 <!-- crate-map:end -->
 
@@ -57,7 +57,7 @@ Within the rule:
   session itself ([ADR 0046](docs/adr/0046-the-project-session-holds-the-editor-buffers.md)). It links no package
   registry client because `specforge-ops` names only the Registry port, whose adapter is in `adapters`
   ([ADR 0010](docs/adr/0010-operations-reach-the-registry-through-a-port.md)); the `layers` check also keeps the two apart.
-- What a guest compiles is kept small. Every builtin blob is built from the guest wire, the coverage rule and the SDK,
+- What a guest compiles is kept small. Every builtin blob is built from the guest wire, the coverage rule, the cycle answer and the SDK,
   so a change there means a re-vendor. The host's reading of package names lives in `package`, where no guest compiles
   it ([ADR 0050](docs/adr/0050-the-guest-wire-carries-only-what-guests-compile.md)).
 - `common` depends on leaf crates and on the shape derive only, and each of those edges carries its reason as a comment

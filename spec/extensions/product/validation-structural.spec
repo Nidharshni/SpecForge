@@ -113,6 +113,7 @@ behavior detect_module_cycles "Detect Module Cycles" {
   }
   verify unit "module cycle produces E007"
   verify unit "acyclic module graph passes"
+  verify integration "E007, W061 and module-depth name the same modules on a cycle"
 }
 
 behavior detect_milestone_cycles "Detect Milestone Cycles" {

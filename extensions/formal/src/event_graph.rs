@@ -44,87 +44,28 @@ pub(crate) fn pass_event_graph_analyze(input: &PassInput) -> Vec<PassDiagnostic>
         }
     }
 
-    // Process composition cycles (E042): exact-membership DFS over the
-    // composition graph, deterministic order (sorted seeds + sorted edges).
-    {
-        let mut seeds: Vec<&str> = process_edges.keys().copied().collect();
-        seeds.sort();
-        let mut color: HashMap<&str, u8> = process_edges.keys().map(|&k| (k, 0u8)).collect();
-        let mut path: Vec<&str> = Vec::new();
-        fn dfs<'a>(
-            node: &'a str,
-            adj: &std::collections::BTreeMap<&'a str, std::collections::BTreeSet<&'a str>>,
-            color: &mut HashMap<&'a str, u8>,
-            path: &mut Vec<&'a str>,
-            by_id: &HashMap<&'a str, &'a PassEntity>,
-            findings: &mut Vec<PassDiagnostic>,
-        ) {
-            color.insert(node, 1);
-            path.push(node);
-            if let Some(neighbors) = adj.get(node) {
-                for &next in neighbors {
-                    match color.get(next).copied().unwrap_or(0) {
-                        1 => {
-                            if let Some(pos) = path.iter().position(|&n| n == next) {
-                                let cycle: Vec<&str> = path[pos..].to_vec();
-                                let rendered = cycle.join(" -> ");
-                                let first = by_id.get(cycle[0]).copied();
-                                findings.push(
-                                    PassDiagnostic::new(
-                                        "E042",
-                                        PassSeverity::Error,
-                                        format!(
-                                            "process composition cycle: {rendered} -> {next}"
-                                        ),
-                                    )
-                                    .with_span(PassSpan {
-                                        file: first
-                                            .and_then(|e| e.span.as_ref())
-                                            .map(|s| s.file.clone())
-                                            .unwrap_or_default(),
-                                        start_line: first
-                                            .and_then(|e| e.span.as_ref())
-                                            .map(|s| s.start_line)
-                                            .unwrap_or(0),
-                                        start_col: first
-                                            .and_then(|e| e.span.as_ref())
-                                            .map(|s| s.start_col)
-                                            .unwrap_or(0),
-                                        end_line: first
-                                            .and_then(|e| e.span.as_ref())
-                                            .map(|s| s.end_line)
-                                            .unwrap_or(0),
-                                        end_col: first
-                                            .and_then(|e| e.span.as_ref())
-                                            .map(|s| s.end_col)
-                                            .unwrap_or(0),
-                                    })
-                                    .with_suggestion(
-                                        "break the composition cycle — a process cannot compose (transitively) with itself",
-                                    ),
-                                );
-                            }
-                        }
-                        0 => dfs(next, adj, color, path, by_id, findings),
-                        _ => {}
-                    }
-                }
-            }
-            path.pop();
-            color.insert(node, 2);
-        }
-        for &seed in &seeds {
-            if color.get(&seed).copied() == Some(0) {
-                dfs(
-                    seed,
-                    &process_edges,
-                    &mut color,
-                    &mut path,
-                    &by_id,
-                    &mut findings,
-                );
-            }
-        }
+    // Process composition cycles (E042): one per strongly connected set of
+    // processes, walking every one of them from the smallest (ADR 0196).
+    for cycle in specforge_cycles::cycles(&process_edges) {
+        let first = by_id.get(cycle.members[0]).copied();
+        let span = first.and_then(|e| e.span.as_ref());
+        findings.push(
+            PassDiagnostic::new(
+                "E042",
+                PassSeverity::Error,
+                format!("process composition cycle: {}", cycle.path.join(" -> ")),
+            )
+            .with_span(PassSpan {
+                file: span.map(|s| s.file.clone()).unwrap_or_default(),
+                start_line: span.map_or(0, |s| s.start_line),
+                start_col: span.map_or(0, |s| s.start_col),
+                end_line: span.map_or(0, |s| s.end_line),
+                end_col: span.map_or(0, |s| s.end_col),
+            })
+            .with_suggestion(
+                "break the composition cycle — a process cannot compose (transitively) with itself",
+            ),
+        );
     }
 
     for (id, producers) in &produced {

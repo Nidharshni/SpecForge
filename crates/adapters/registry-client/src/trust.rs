@@ -60,36 +60,14 @@ pub fn load_known_keys_at(path: &std::path::Path) -> Result<KnownKeys, String> {
     }
 }
 
-/// Save the store to `path` whole: written beside it, owner-only (0600 on Unix), then renamed over
-/// it, so a failed save leaves the previous file as it was.
+/// Save the store to `path` whole and privately ([`specforge_common::fresh::replace_private`], ADR 0193):
+/// a failed save leaves the previous file as it was.
 pub fn save_known_keys_at(path: &std::path::Path, keys: &KnownKeys) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
-    }
     let json = serde_json::to_string_pretty(keys)
         .map_err(|e| format!("failed to serialize known keys: {}", e))?;
-    let mut temp_name = path.file_name().unwrap_or_default().to_os_string();
-    temp_name.push(".tmp");
-    let temp = path.with_file_name(temp_name);
-    let saved = std::fs::write(&temp, json).and_then(|()| {
-        restrict_permissions(&temp);
-        std::fs::rename(&temp, path)
-    });
-    saved.map_err(|e| {
-        let _ = std::fs::remove_file(&temp);
-        format!("failed to write {}: {}", path.display(), e)
-    })
+    specforge_common::fresh::replace_private(path, json.as_bytes())
+        .map_err(|e| format!("failed to write {}: {}", path.display(), e))
 }
-
-#[cfg(unix)]
-fn restrict_permissions(path: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-}
-
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &std::path::Path) {}
 
 #[cfg(test)]
 mod tests {

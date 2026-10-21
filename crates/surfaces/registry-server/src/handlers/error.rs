@@ -59,6 +59,15 @@ impl ApiError {
         }
     }
 
+    pub fn payload_too_large(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            code: ErrorCode::BadRequest,
+            message: message.into(),
+            retry_after_secs: None,
+        }
+    }
+
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::UNAUTHORIZED,

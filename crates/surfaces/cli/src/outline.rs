@@ -1,5 +1,5 @@
 use crate::options;
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::read::model::{DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions};
 use specforge_ops::view::ProjectView;
@@ -50,7 +50,7 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         out!(
             terminal,

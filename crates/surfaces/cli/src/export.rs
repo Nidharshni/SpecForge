@@ -1,6 +1,6 @@
 use crate::notes::Notes;
 use crate::options;
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::read::export;
 use specforge_ops::read::schema::SchemaRequest;
@@ -87,11 +87,11 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         let request = match self.request() {
             Ok(request) => request,
-            Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
+            Err(refusal) => return Refusal::fixed().report(terminal, &refusal),
         };
         let view = ProjectView::of(&project);
 
@@ -99,11 +99,11 @@ impl Args {
         // earlier exports, and `.specforge/` holds extensions and the watch
         // snapshot too, so nothing here shows the project was exported
         // before.
-        let notes = Notes::new(terminal, OutputFormat::Human);
+        let notes = Notes::fixed(terminal);
         let recorded = notes.noticed(export::export_recorded(&view, &request));
         let output = match recorded.export {
             Ok(output) => output,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         outln!(terminal, "{}", output);
 
@@ -140,9 +140,11 @@ pub(crate) struct SchemaArgs {
     publish: bool,
 
     /// Export format the published schema describes
+    // clap waives requires = "publish" beside an argument that conflicts with --publish
     #[arg(
         long,
         requires = "publish",
+        conflicts_with_all = ["kind", "no_edges", "validation_rules"],
         value_parser = options::choice(&specforge_ops::read::export::AGENT_FORMAT),
         default_value = specforge_ops::read::export::AGENT_FORMAT.default_name()
     )]
@@ -168,7 +170,7 @@ impl SchemaArgs {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
@@ -188,11 +190,11 @@ impl SchemaArgs {
         };
         match output {
             Ok(text) => {
-                let text = Notes::new(terminal, OutputFormat::Human).noticed(text);
+                let text = Notes::fixed(terminal).noticed(text);
                 outln!(terminal, "{text}");
                 Exit::Passed
             }
-            Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => Refusal::fixed().report(terminal, &error),
         }
     }
 }
@@ -231,5 +233,36 @@ mod tests {
             matches!(&both, Err(e) if e.kind() == clap::error::ErrorKind::ArgumentConflict),
             "the two flags conflict"
         );
+    }
+
+    #[derive(Parser)]
+    struct SchemaLine {
+        #[command(flatten)]
+        args: SchemaArgs,
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_schema_specification",
+        verify = "--kind with --publish, and --format without it, are refused"
+    )]
+    fn format_needs_publish_beside_every_schema_flag() {
+        for flag in [
+            &["--kind", "behavior"][..],
+            &["--no-edges"],
+            &["--validation-rules"],
+        ] {
+            let argv = std::iter::once("schema")
+                .chain(flag.iter().copied())
+                .chain(["--format", "json"]);
+            let refused = SchemaLine::try_parse_from(argv).err().map(|e| e.kind());
+            assert_eq!(
+                refused,
+                Some(clap::error::ErrorKind::ArgumentConflict),
+                "{flag:?}"
+            );
+        }
+        // A default --format still runs beside them; --publish --format still parses.
+        assert!(SchemaLine::try_parse_from(["schema", "--kind", "behavior"]).is_ok());
+        assert!(SchemaLine::try_parse_from(["schema", "--publish", "--format", "json"]).is_ok());
     }
 }

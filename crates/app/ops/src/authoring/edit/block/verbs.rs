@@ -83,7 +83,8 @@ pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal
     }
 }
 
-/// The header title replaced, or added. A spec block's title is its name: refused (`not_editable`).
+/// The header title the parse read replaced, or one added after the name. A spec block's title is its name: refused
+/// (`not_editable`).
 pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refusal<EditField>> {
     // A spec block's title is its name, its id: retitling it would rename it (ADR 0187 D4).
     if site.kind == specforge_common::structural::SPEC {
@@ -97,22 +98,15 @@ pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refus
     }
     let mut block = Block::open(site, text)?;
     let before = block.text();
-    let name = block
-        .entity()
-        .name_span
-        .clone()
-        .ok_or_else(|| unreadable(site.id))?;
-    let at = name.start_line - 1;
-    let line = block.lines[at].clone();
-    let quoted_title = spell::quoted(title);
-    let new = match lex(&line).iter().find(|l| l.kind.is_str()) {
-        Some(old) => format!("{}{}{}", &line[..old.start], quoted_title, &line[old.end..]),
-        None => {
-            let end = name.end_col - 1;
-            format!("{} {}{}", &line[..end], quoted_title, &line[end..])
+    let entity = block.entity();
+    let quoted = spell::quoted(title);
+    match (entity.title_span.clone(), entity.name_span.clone()) {
+        (Some(old), _) => block.replace_value(&old, &quoted, None),
+        (None, Some(name)) => {
+            block.lines[name.end_line - 1].insert_str(name.end_col - 1, &format!(" {quoted}"))
         }
-    };
-    block.lines[at] = new;
+        (None, None) => return Err(unreadable(site.id)),
+    }
     finish_edit(site, text, &before, &block)
 }
 
@@ -131,7 +125,6 @@ pub fn verify(
     let found = obligations
         .iter()
         .position(|o| o.kind == kind && o.description == description);
-    let lines = block.verify_lines();
     if add {
         if found.is_some() {
             return Ok(text.to_string());
@@ -143,10 +136,10 @@ pub fn verify(
         };
         block.put_verify(&format!("verify {kind_text}{}", spell::quoted(description)));
     } else {
-        let Some((first, last)) = found.and_then(|i| lines.get(i).copied()) else {
+        let Some(span) = found.and_then(|i| block.entity().obligation_spans.get(i).cloned()) else {
             return Ok(text.to_string());
         };
-        block.remove(first, last);
+        block.remove(span.start_line - 1, span.end_line - 1);
     }
     finish_edit(site, text, &before, &block)
 }

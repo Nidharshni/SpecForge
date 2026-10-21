@@ -54,7 +54,7 @@ The .spec language and what every host crate shares: the grammar, the lexer and 
 
 ### `leaf`
 
-Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, package names and the repository root. Guests build from some of them (ADR 0050).
+Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, the cycle answer, package names and the repository root. Guests build from some of them (ADR 0050).
 
 | Crate | Package | Owns |
 |---|---|---|

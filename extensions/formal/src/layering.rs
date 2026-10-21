@@ -87,7 +87,7 @@ fn layering_steps(input: &PassInput) -> Vec<LayeringStep<'_>> {
 }
 
 pub(crate) fn pass_layering_verify(input: &PassInput) -> Vec<PassDiagnostic> {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
     let by_id: HashMap<&str, &PassEntity> =
         input.entities.iter().map(|e| (e.id.as_str(), e)).collect();
@@ -99,7 +99,7 @@ pub(crate) fn pass_layering_verify(input: &PassInput) -> Vec<PassDiagnostic> {
     };
     let steps = layering_steps(input);
     // concrete behavior -> the abstract behaviors it refines
-    let mut refines: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut refines: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for step in &steps {
         if by_id.contains_key(step.concrete) && by_id.contains_key(step.abstract_id) {
             refines
@@ -110,36 +110,18 @@ pub(crate) fn pass_layering_verify(input: &PassInput) -> Vec<PassDiagnostic> {
     }
 
     let mut findings = Vec::new();
-    // Cycle detection over the refinement DAG (E041).
-    let mut state: HashMap<&str, u8> = HashMap::new(); // 0 = visiting, 1 = done
-    fn visit<'a>(
-        id: &'a str,
-        refines: &HashMap<&'a str, Vec<&'a str>>,
-        state: &mut HashMap<&'a str, u8>,
-        findings: &mut Vec<PassDiagnostic>,
-    ) {
-        match state.get(id) {
-            Some(1) => return,
-            Some(0) => {
-                findings.push(PassDiagnostic::new(
-                    "E041",
-                    PassSeverity::Error,
-                    format!("refinement chain cycle through '{}'", id),
-                ));
-                return;
-            }
-            _ => {}
-        }
-        state.insert(id, 0);
-        if let Some(targets) = refines.get(id) {
-            for target in targets.clone() {
-                visit(target, refines, state, findings);
-            }
-        }
-        state.insert(id, 1);
-    }
-    for id in refines.keys().copied().collect::<Vec<_>>() {
-        visit(id, &refines, &mut state, &mut findings);
+    // Cycle detection over the refinement DAG (E041): one per strongly
+    // connected set, named by its smallest behavior (ADR 0196).
+    let edges: BTreeMap<&str, BTreeSet<&str>> = refines
+        .iter()
+        .map(|(id, targets)| (*id, targets.iter().copied().collect()))
+        .collect();
+    for cycle in specforge_cycles::cycles(&edges) {
+        findings.push(PassDiagnostic::new(
+            "E041",
+            PassSeverity::Error,
+            format!("refinement chain cycle through '{}'", cycle.members[0]),
+        ));
     }
 
     // Depth accounting (W031): chain depth beyond MAX_LAYERING_DEPTH. Walks

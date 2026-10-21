@@ -5,6 +5,8 @@ stdout/stderr bullet). D3a's "under `--json` nothing goes to stderr" and D4's me
 [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md) (one rule for what a command says beside its document; review refuses as a read view).
 D3's "failed runs" is defined by [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) (round 17, plan 06): a run that
 did not do all it was asked; an E069 the run went around fails `ok` only.
+D5b's "every core command" is the commands with a --format human|json flag; a fixed-format command's refusal is
+D5c (round 21, plan 09).
 
 ADR 0024 D7 said operations fail with a kind decided where the failure is raised. The read views that
 read the recorded test report did not: they returned the project crate's `ReportError`, and MCP (a
@@ -159,3 +161,17 @@ stands (ADR 0072 D3).
 - **D4b.** The terminal is the CLI's `Asker`; who can be asked is `specforge_ops::asking::Asking`, built once per
   command from `--yes`, the output format and whether anyone can answer ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).
   `Terminal::ask` keeps its guard: nobody to ask is no.
+
+## Amendment (architecture round 21, plan 09)
+
+- **D5c. A fixed-format command refuses on stderr under every format.** The error document of D5/D5b is printed
+  under the `--format human|json` flag (`OutputArg`). A fixed-format command (ADR 0120 D1: export, schema, model,
+  query, outline; also `completions` and `format --stdin`) prints a document a reader parses, or nothing. Its
+  refusal is `error[CODE]: message`, its hint and the files it left written on stderr, whatever format the
+  document is in, JSON included (`export --format json`, query, schema), and stdout stays empty
+  (`specforge_cli::outcome::Refusal::fixed`). Reasons: export's and query's default formats are JSON documents,
+  so the error document would reach a person who never asked for machine output; a redirected export would hide
+  the refusal from the terminal and write `{error, code}` into the file; MCP already gives agents the
+  structured refusal. *Rejected:* the error document under a JSON document format (round 21, card 9; it flips
+  12 tests that pin today's stream). *Reopen if* a CLI consumer must read a fixed-format command's refusal as
+  JSON on stdout.

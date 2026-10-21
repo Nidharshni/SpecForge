@@ -65,6 +65,61 @@ behavior archive_task "Archive a Task" {
     assert_format_clean(&project);
 }
 
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new --in reads a spelling of an existing file as that file"
+)]
+fn new_in_a_spelling_of_an_existing_file_adds_to_it() {
+    let project = todo();
+    let before = project.read(TASKS);
+    sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive a Task",
+            "--in",
+            "./behaviors/task.spec",
+            "--contract",
+            "The system MUST archive a done task.",
+        ],
+    )
+    .exits(0);
+    let after = project.read(TASKS);
+    assert!(after.starts_with(&before), "the file as it was comes first");
+    assert!(
+        after.contains("behavior archive_task \"Archive a Task\" {"),
+        "{after}"
+    );
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new refuses a file named from the project root, naming its spec-root spelling"
+)]
+fn new_in_a_project_root_spelling_is_refused_naming_its_file() {
+    let project = todo();
+    let before = project.read(TASKS);
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive a Task",
+            "--in",
+            "spec/behaviors/task.spec",
+            "--contract",
+            "The system MUST archive a done task.",
+        ],
+    )
+    .exits(1);
+    assert!(run.stderr.contains("error[not_a_source]"), "{}", run.stderr);
+    assert!(run.stderr.contains("behaviors/task.spec"), "{}", run.stderr);
+    assert_eq!(project.read(TASKS), before);
+}
+
 #[specforge_test(
     behavior = "edit_entity_link",
     verify = "link appends the target and keeps the items as written"

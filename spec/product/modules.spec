@@ -23,6 +23,12 @@ module specforge_coverage "specforge-coverage" {
   tags        ["leaf"]
 }
 
+module specforge_cycles "specforge-cycles" {
+  family      core
+  description "Which nodes of a directed graph lie on a cycle, and one closed walk through each: the host's W061, W113 and cycle rules and the formal and product guests read it"
+  tags        ["leaf"]
+}
+
 module specforge_diagnostics "specforge-diagnostics" {
   family      core
   description "The catalog of SpecForge diagnostic codes: titles, owners, levels and explanations"
@@ -115,7 +121,7 @@ module specforge_graph "specforge-graph" {
   family      core
   description "The typed entity graph: the graph build over parsed .spec files, its nodes and edges, the graph delta between two builds, field forms and verify obligations (ADR 0032)"
   features    [incremental_compilation]
-  depends_on  [specforge_common, specforge_parser, specforge_protocol_types]
+  depends_on  [specforge_common, specforge_cycles, specforge_parser, specforge_protocol_types]
   tags        ["graph", "pipeline"]
 }
 
@@ -132,6 +138,7 @@ module specforge_registry "specforge-registry" {
   depends_on  [
     specforge_common,
     specforge_coverage,
+    specforge_cycles,
     specforge_diagnostics,
     specforge_graph,
     specforge_package,
@@ -145,7 +152,7 @@ module specforge_resolver "specforge-resolver" {
   family      core
   description "Import resolution over a compile's sources: an import names a source by its key, its path relative to the spec root; nothing here reads a file (ADR 0055)"
   features    [reference_resolution, graph_construction]
-  depends_on  [specforge_common, specforge_parser]
+  depends_on  [specforge_common, specforge_cycles, specforge_parser]
   tags        ["resolver", "pipeline"]
 }
 

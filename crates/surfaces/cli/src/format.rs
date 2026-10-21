@@ -102,7 +102,7 @@ impl Args {
         // (`error[CODE]: …`), its code and kind the OS-given ones.
         // The run's exit is its verdict (`outcome.ok()`), not this report's.
         for failure in &outcome.failures {
-            let _ = Refusal::of(OutputFormat::Human).report(terminal, &failure.to_op_error());
+            let _ = Refusal::of(format).report(terminal, &failure.to_op_error());
         }
 
         for change in &outcome.changes {
@@ -154,7 +154,7 @@ fn run_stdin(root: &ProjectRoot, dir: &Path, runtime: SharedRuntime, terminal: &
     let input = match terminal.read_to_string() {
         Ok(input) => input,
         Err(e) => {
-            return Refusal::of(OutputFormat::Human).report(
+            return Refusal::fixed().report(
                 terminal,
                 &OpError::new(
                     OpErrorKind::of_io(&e),

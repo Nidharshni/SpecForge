@@ -4,8 +4,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use specforge_common::cycles::{CycleOptions, find_cycles};
 use specforge_common::{CustomRuleFailure, Diagnostic, DiagnosticData, codes};
+use specforge_cycles::cycles;
 
 use super::files;
 use super::verdicts::{CustomCall, CustomVerdicts, Subject, Verdict, VerdictError};
@@ -106,7 +106,7 @@ pub(super) fn run(
     verdicts: &dyn CustomVerdicts,
 ) -> Vec<Diagnostic> {
     if let Check::Cycle { edge_type } = &rule.check {
-        return cycles(rule, edge_type, input);
+        return cycle_rule(rule, edge_type, input);
     }
     if let Check::FileExists { field } = &rule.check {
         return missing_files(rule, field, input);
@@ -327,10 +327,11 @@ fn interpolate(
 
 /// A cycle rule over `input`: each entity it applies to (every entity when
 /// it names no target kind) that sits on a cycle of the edges of
-/// `edge_type` between such entities, by id. `{kind}` is the member's own
+/// `edge_type` between such entities (every entity of a strongly connected
+/// set of them, ADR 0196), by id. `{kind}` is the member's own
 /// kind; `{field}` and `{value}` default to the rule's field, as for every
 /// check.
-fn cycles(rule: &Rule, edge_type: &str, input: &RuleInput<'_>) -> Vec<Diagnostic> {
+fn cycle_rule(rule: &Rule, edge_type: &str, input: &RuleInput<'_>) -> Vec<Diagnostic> {
     let members: BTreeMap<&str, &EntityRecord> = input
         .entities
         .iter()
@@ -352,9 +353,10 @@ fn cycles(rule: &Rule, edge_type: &str, input: &RuleInput<'_>) -> Vec<Diagnostic
                 .insert(edge.target.clone());
         }
     }
-    // Seeds in id order (R-6: the walk must not depend on hash order).
-    let seeds: Vec<String> = members.keys().map(|id| id.to_string()).collect();
-    let (on_cycle, _) = find_cycles(&seeds, &adjacency, CycleOptions::default());
+    let on_cycle: BTreeSet<String> = cycles(&adjacency)
+        .into_iter()
+        .flat_map(|cycle| cycle.members)
+        .collect();
     on_cycle
         .iter()
         .filter_map(|id| members.get(id.as_str()))

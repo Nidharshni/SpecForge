@@ -220,11 +220,13 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
     on disk, each reading the text the ones before it left, validated by
     compiling the edited project, and written as one project change. An edit
     list that leaves an error the project did not have MUST be refused as
-    E080 and nothing written. The response MUST list the entities and files
+    E080 and nothing written; one whose graph change goes beyond what its edits
+    declare is refused as undeclared_change. The response MUST list the entities and files
     the list changes, taken together (none for a list that cancels out), a unified diff and the warnings and infos the edit adds. When
     dry_run is true, the tool MUST return the same document and write nothing.
   """
   verify unit "specforge.edit applies a list of edits all or nothing"
+  verify unit "specforge.edit writes two spellings of one new file as one file"
   verify unit "specforge.edit with dry_run writes nothing and returns the diff"
   verify unit "specforge.edit of a list that cancels out writes nothing and names no entity"
 }
@@ -266,7 +268,9 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     with a project served init creates nothing: it creates the first project
     of a session, inside the server's root (a server with no root bounds no
     path, mcp_served_project_consistency). A directory whose starter file already exists is refused
-    (conflict), as specforge init refuses it. The tool MUST create
+    (conflict), as specforge init refuses it. With nothing served, a directory
+    whose files a project above it reads is refused as specforge init refuses
+    it (conflict, naming path). The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
     directory at the specified path. If extensions are specified, each
     string is one specifier, read as add_extension reads each of its
@@ -292,6 +296,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "each string in extensions is one specifier, as add_extension reads each of specifiers"
   verify unit "default version is 0.1.0"
   verify unit "path inside current project returns error"
+  verify unit "with nothing served, init refuses a directory whose files an enclosing project reads, as a conflict on path, before anything is written"
   verify unit "init inside the served project is refused by the call target as a conflict on path, before anything is written"
   verify unit "init refuses a directory whose starter file exists, writing nothing"
   verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"
