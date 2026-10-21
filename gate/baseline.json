@@ -49,7 +49,7 @@
     "crates/surfaces/mcp/tests/tools_core.rs": 2152,
     "crates/surfaces/mcp/tests/tools_inference.rs": 822,
     "crates/surfaces/mcp/tests/tools_navigation.rs": 820,
-    "crates/surfaces/registry-server/tests/server_contracts.rs": 1345
+    "crates/surfaces/registry-server/tests/server_contracts.rs": 1144
   },
   "specs": {
     ".": {
