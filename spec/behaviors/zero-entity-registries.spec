@@ -335,13 +335,13 @@ behavior render_extension_defined_edge_styles "Render Extension-Defined Edge Sty
   contract   """
     When rendering graph visualization, the compiler MUST query the edge
     type registry for style metadata on each edge. Edge styles MUST be
-    one of: solid, dashed, or dotted. If no edge_style is defined for an
-    edge type in the extension manifest, the compiler MUST default to a
-    solid line. The style MUST appear in the DOT edge attribute list as
-    the style property. When edge_color is specified, the renderer MUST
-    set the DOT edge color attribute (default: "black"). When
-    edge_arrowhead is specified, the renderer MUST set the DOT edge
-    arrowhead attribute (default: "normal").
+    one of: solid, dashed, or dotted. The declared style MUST appear in
+    the DOT edge attribute list as the style property; an edge type that
+    declares none is written without one, which Graphviz draws as a
+    solid line. When edge_color is specified, the renderer MUST set the
+    DOT edge color attribute, and when edge_arrowhead is specified, the
+    DOT edge arrowhead attribute; without them Graphviz's defaults
+    (black, normal) apply.
   """
   verify unit "edge uses extension-defined edge_style"
   verify unit "default style is solid when edge_style not specified"

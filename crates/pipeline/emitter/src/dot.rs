@@ -133,12 +133,36 @@ pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
             if !keep {
                 continue;
             }
+            // The edge type the source's kind writes through this label declares its style.
+            let declared = graph
+                .node(edge.source.as_str())
+                .and_then(|n| {
+                    options
+                        .registries
+                        .edges()
+                        .written_by(n.kind.raw.as_str(), edge.label.as_str())
+                })
+                .and_then(|entry| entry.declared());
+            let mut style = String::new();
+            for (name, value) in [
+                ("style", declared.and_then(|d| d.edge_style.as_ref())),
+                ("color", declared.and_then(|d| d.edge_color.as_ref())),
+                (
+                    "arrowhead",
+                    declared.and_then(|d| d.edge_arrowhead.as_ref()),
+                ),
+            ] {
+                if let Some(value) = value {
+                    style.push_str(&format!(" {name}=\"{}\"", escape_dot(value)));
+                }
+            }
             writeln!(
                 out,
-                "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                "  \"{}\" -> \"{}\" [label=\"{}\"{}];",
                 escape_dot(edge.source.as_str()),
                 escape_dot(edge.target.as_str()),
-                escape_dot(edge.label.as_str())
+                escape_dot(edge.label.as_str()),
+                style
             )?;
         }
 

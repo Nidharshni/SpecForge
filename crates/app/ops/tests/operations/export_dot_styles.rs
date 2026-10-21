@@ -61,7 +61,6 @@ fn a_declared_fill_color_fills_the_node() {
     behavior = "render_extension_defined_edge_styles",
     verify = "edge uses extension-defined edge_style"
 )]
-#[ignore = "flipped by T5"]
 fn a_declared_edge_style_reaches_the_dot_edge() {
     let text = dot(&styled());
     assert!(
