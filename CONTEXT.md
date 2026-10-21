@@ -253,7 +253,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
   before it to the graph after is empty, and reports each change as W054. A node that only moved is no change; the
   update lists it apart (**moved node**, `Update::moved`), so what writes positions (MCP's `specforge://graph`) is
-  notified.
+  notified. A typed edit reads it over the files it changes (`compute_graph_delta_over`).
 - **Moved node**: a node in both graphs declared at another file or start line, where it is now
   (`specforge_graph::NodeChange` in `Applied::moved` / `Update::moved`). Not part of the graph delta; MCP notifies
   the resources that write positions (`Watched::Graph`, what a resource declares with
@@ -1238,12 +1238,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   rename plan answer them; `navigate::apply_edits` applies a file's edits whole or not at all; the LSP converts
   their spans to UTF-16 ranges and MCP returns them as the spec's `TextEdit`. The formatter's edits are byte ranges
   of one buffer instead (ADR 0021 D8, ADR 0164).
+- **Declared change**: what a typed edit may change in the graph: set, unset, link and unlink their field, retitle
+  the title, add-verify and remove-verify the obligations, create and delete their entity whole, a delete with
+  `unlink_references` each referrer's field; an edge by a declared field of its source or a created or deleted end
+  (`specforge_ops::authoring::edit`, ADR 0198). The plan's graph delta over the files it changes, less the declared
+  changes, must be empty, as a migration's less its steps' (ADR 0186).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151). Its report names the net change of the list: the entities and the files its planned change answers (ADR 0184, amended).
+  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151). It is also refused (`undeclared_change`) when the edited graph changes what its edits do not declare (a **declared change**, ADR 0198). Its report names the net change of the list: the entities and the files its planned change answers (ADR 0184, amended).
   A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
