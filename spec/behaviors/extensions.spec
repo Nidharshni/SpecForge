@@ -1209,6 +1209,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
   verify unit "403 response produces E-level diagnostic with permission guidance"
   verify unit "every registry call reads an answer's status as one error"
   verify integration "a credential kept for one registry root is never sent to another root under the same alias"
+  verify unit "a kept token whose secret is missing is R-AUTH-021 before any request"
   verify contract "Authenticate Registry Request: registry authentication holds — credential_configured, registry_client_available, token_resolved, auth_header_attached, missing_source_diagnosed, unauthorized_diagnosed, tokens_never_logged, authenticated_emitted"
 }
 
