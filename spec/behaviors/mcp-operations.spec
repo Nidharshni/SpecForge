@@ -488,6 +488,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
   verify unit "a problem in specforge.json the migration goes around makes ok false and does not fail the call, dry run included"
+  verify unit "a dry run the run would refuse is a failed call, its document the data"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
 }

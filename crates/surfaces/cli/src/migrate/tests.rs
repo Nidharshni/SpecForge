@@ -130,3 +130,16 @@ fn a_failed_migration_is_told_by_its_failures_message() {
     assert!(stderr.contains("does not compile"), "{stderr}");
     assert!(!stderr.contains("backups"), "{stderr}");
 }
+
+#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "generate_migration_diff",
+    verify = "a dry run the run would refuse exits 1"
+)]
+fn a_dry_run_the_run_would_refuse_exits_failed() {
+    let (exit, stdout, _) = migrate_refused(&["--dry-run", "--format", "json"]);
+
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(exit, Exit::Failed, "{document}");
+    assert_eq!(document["ok"], false, "{document}");
+}

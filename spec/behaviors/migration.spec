@@ -290,6 +290,8 @@ behavior generate_migration_diff "Generate Migration Diff" {
   verify unit "each file diff labeled with file path"
   verify unit "failure in one file does not block diff generation for others"
   verify unit "json format diff produces structured output with file-level entries"
+  verify unit "a dry run reports the verdict the run reaches: its hooks, its W054 and its errors"
+  verify unit "a dry run the run would refuse exits 1"
   verify contract "Generate Migration Diff: migration diff generation holds — spec_files_available, dry_run_flag_set, diff_produced, no_files_modified, migration_diff_generated_emitted"
 }
 
@@ -348,6 +350,7 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "a migration that changes an existing title or a kind is reported and rolled back"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
   verify unit "a refused migration's cause counts only the errors it would add"
+  verify unit "a refused migration writes nothing, not even a backup"
   verify unit "a failed migration is told on stderr by its failure's message, naming no backup it did not make"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }
@@ -493,6 +496,7 @@ behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
     WasmTrapInfo diagnostic, and continue with the next extension.
   """
   verify unit "a migration hook receives the from and to format versions and the migrated files"
+  verify unit "the hooks run before any file is written"
   verify unit "extension with migration_hook field has it invoked during migrate"
   verify unit "extension without migration_hook field is skipped silently"
   verify unit "extension with empty migration_hook field is skipped silently"
