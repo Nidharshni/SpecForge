@@ -68,7 +68,9 @@ behavior edit_entity_field "Edit an Entity Field" {
     writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
     included; a block field left with no entry over a default is written `{}`. An unset of an
     entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
-    replaces the header title; a spec block's title is its name, and a retitle of it is
+    replaces the header title where the parse read it, or writes one after
+    the name when the header has none; a union's string variant is never its
+    title; a spec block's title is its name, and a retitle of it is
     refused not_editable. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """

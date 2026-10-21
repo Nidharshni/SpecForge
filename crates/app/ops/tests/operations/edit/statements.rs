@@ -104,7 +104,6 @@ fn a_verify_stub_is_offered_beside_an_entry_named_verify() {
     behavior = "edit_entity_field",
     verify = "retitle of an untitled union writes the title after its name, never over a variant"
 )]
-#[ignore = "flipped by T4"]
 fn retitle_of_an_untitled_union_writes_the_title_after_its_name() {
     let retitle = |title: &str, id: &str| Edit::Retitle {
         entity_id: id.into(),
