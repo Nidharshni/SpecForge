@@ -35,9 +35,9 @@ pub(crate) fn judge_planned(
     judge(&pre, &planned, &input)
 }
 
-/// Five `behavior` blocks writing `owner`, no field of their kind: the defaults hoist is E077 and reaches no block,
-/// so the migration changes the graph (and the project already reports errors of its own).
-pub(crate) fn refused_project() -> (tempfile::TempDir, String) {
+/// Five `behavior` blocks writing `owner [x]`: the project already reports errors of its own (E014 `x`). The
+/// verdict tests plan its hoisted text themselves.
+pub(crate) fn erring_project() -> (tempfile::TempDir, String) {
     let dir = crate::migrate::project();
     let block = |id: &str| format!("behavior {id} \"T\" {{\n  owner [x]\n}}\n");
     let original = ["a", "b", "c", "d", "e"].map(block).join("\n");
@@ -51,25 +51,38 @@ pub(crate) fn refused_project() -> (tempfile::TempDir, String) {
     (dir, original)
 }
 
+/// A project whose one migration hook fails, so a run over it is refused.
+fn hook_refused() -> (tempfile::TempDir, SharedRuntime) {
+    (
+        project_with_extension(),
+        Arc::new(hooked(|_| Err("refused".into()))),
+    )
+}
+
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
     verify = "a refused migration's cause counts only the errors it would add"
 )]
 fn a_refused_migrations_cause_counts_only_the_errors_it_adds() {
-    let (dir, original) = refused_project();
+    let (dir, original) = erring_project();
+    let owner_free = ["a", "b", "c", "d", "e"]
+        .map(|id| format!("behavior {id} \"T\" {{\n}}\n"))
+        .join("\n");
+    let planned = format!("defaults behavior {{\n  owner [x]\n}}\n\n{owner_free}");
 
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+    let verdict = judge_planned(
+        dir.path(),
         Some(specforge_project::testing::component_runtime()),
+        planned,
     );
 
     assert!(
         matches!(
-            outcome.failure(),
+            verdict.refusal(),
             Some(Failure::DoesNotCompile { errors: 1 })
         ),
         "{:?}",
-        outcome.failure()
+        verdict.refusal()
     );
     assert_eq!(
         std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),
@@ -82,26 +95,47 @@ fn a_refused_migrations_cause_counts_only_the_errors_it_adds() {
     verify = "a dry run reports the verdict the run reaches: its hooks, its W054 and its errors"
 )]
 fn a_dry_run_reports_the_verdict_the_run_reaches() {
-    let (dir, original) = refused_project();
-    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
-    let mut request = request(&root);
-    request.dry_run = true;
-
-    let outcome = run(
-        &request,
-        Some(specforge_project::testing::component_runtime()),
-    );
-
-    assert!(!outcome.ok(), "{outcome:?}");
-    assert!(outcome.failure().is_some(), "{outcome:?}");
-    assert!(outcome.verdict.compared, "{outcome:?}");
-    assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
-    assert_eq!(
-        std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),
-        original
-    );
-    assert!(!dir.path().join("old.spec.bak").exists());
-    assert!(matches!(outcome.wrote(), Wrote::Previewed), "{outcome:?}");
+    let kept = || {
+        (
+            project_with_extension(),
+            Arc::new(hooked(|_| Ok(()))) as SharedRuntime,
+        )
+    };
+    for fixture in [kept, hook_refused] {
+        let outcomes = [true, false].map(|dry_run| {
+            let (dir, runtime) = fixture();
+            let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+            let mut request = request(&root);
+            request.dry_run = dry_run;
+            let outcome = run(&request, Some(runtime));
+            if dry_run {
+                assert!(matches!(outcome.wrote(), Wrote::Previewed), "{outcome:?}");
+                assert_eq!(
+                    std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),
+                    OLD
+                );
+                assert!(!dir.path().join("old.spec.bak").exists());
+            }
+            outcome
+        });
+        let [dry, wet] = &outcomes;
+        assert_eq!(dry.ok(), wet.ok(), "{dry:?} {wet:?}");
+        assert_eq!(
+            format!("{:?}", dry.failure()),
+            format!("{:?}", wet.failure())
+        );
+        assert_eq!(dry.verdict.hooks_invoked, wet.verdict.hooks_invoked);
+        assert_eq!(dry.verdict.hook_failures, wet.verdict.hook_failures);
+        assert_eq!(dry.verdict.compared, wet.verdict.compared);
+        assert_eq!(
+            dry.structural_differences().len(),
+            wet.structural_differences().len()
+        );
+        assert_eq!(
+            dry.verdict.post_errors().count(),
+            wet.verdict.post_errors().count()
+        );
+    }
 }
 
 #[cfg(unix)]
@@ -111,23 +145,27 @@ fn a_dry_run_reports_the_verdict_the_run_reaches() {
 )]
 fn a_refused_migration_writes_nothing() {
     use std::os::unix::fs::MetadataExt as _;
-    let (dir, original) = refused_project();
+    let (dir, runtime) = hook_refused();
     let file = dir.path().join("old.spec");
     let before = std::fs::metadata(&file).unwrap();
+    let state = crate::writes::files_under(&dir.path().join(".specforge"));
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(specforge_project::testing::component_runtime()),
+        Some(runtime),
     );
 
     let after = std::fs::metadata(&file).unwrap();
     assert!(outcome.failure().is_some(), "{outcome:?}");
     assert_eq!(after.ino(), before.ino(), "the source was replaced");
     assert_eq!(after.modified().unwrap(), before.modified().unwrap());
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), OLD);
     assert!(outcome.writes.is_empty(), "{:?}", outcome.writes);
     assert!(!dir.path().join("old.spec.bak").exists());
-    assert!(!dir.path().join(".specforge").exists());
+    assert_eq!(
+        crate::writes::files_under(&dir.path().join(".specforge")),
+        state
+    );
 }
 
 #[specforge_test(
