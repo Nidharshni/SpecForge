@@ -8,7 +8,8 @@ use specforge_parser::{header_row, parse};
 /// doc comment (the `//` lines directly above its header, no blank line between, the format header excluded), each
 /// line's text after `//` trimmed and the lines joined by one space, escaped as a `.spec` string (`field_form::spell::quoted`); the comment lines
 /// are removed. With no doc comment, its id in Title Case words (`CompleteTaskCommand` → "Complete Task Command",
-/// `complete_task` → "Complete Task"). `define`, `spec` and `ref` blocks, and text with a syntax error, are left as
+/// `complete_task` → "Complete Task"). The title is written after the block's name, on whichever line of its
+/// header the name stands. `define`, `spec` and `ref` blocks, and text with a syntax error, are left as
 /// they are. Idempotent: a text whose blocks all have titles is returned unchanged.
 pub(crate) fn add_titles(text: &str) -> String {
     let file = parse(text, "titles.spec");
@@ -22,18 +23,16 @@ pub(crate) fn add_titles(text: &str) -> String {
         if entity.title.is_some() || !needs_title(entity.kind.raw.as_str()) {
             continue;
         }
-        let row = entity.span.start_line - 1;
-        let Some(at) = lines
-            .get(row)
-            .and_then(|l| after_id(l, entity.id.raw.as_str()))
-        else {
+        let Some(name) = entity.name_span.as_ref() else {
             continue;
         };
+        let row = entity.span.start_line - 1;
         let (first, title) = match doc_comment(&lines, row, format_header) {
             Some((first, title)) => (first, title),
             None => (row, words(entity.id.raw.as_str())),
         };
-        lines[row].insert_str(at, &format!(" {}", spell::quoted(&title)));
+        lines[name.end_line - 1]
+            .insert_str(name.end_col - 1, &format!(" {}", spell::quoted(&title)));
         lines.drain(first..row);
     }
     lines.concat()
@@ -55,19 +54,6 @@ pub(crate) fn added(change: &ModifiedNodeChange, before: &Graph) -> bool {
                 .as_deref()
                 .is_none_or(|title| title.trim().is_empty())
         })
-}
-
-/// The byte offset just after `id` on a block's header `line` (`kind id`, indented or not), when it stands there.
-fn after_id(line: &str, id: &str) -> Option<usize> {
-    let word = |s: &str| {
-        s.find(|c: char| !(c.is_alphanumeric() || c == '_'))
-            .unwrap_or(s.len())
-    };
-    let kind_at = line.len() - line.trim_start().len();
-    let kind_end = kind_at + word(&line[kind_at..]);
-    let id_at = kind_end + (line[kind_end..].len() - line[kind_end..].trim_start().len());
-    let id_end = id_at + word(&line[id_at..]);
-    (kind_end > kind_at && id_end > id_at && &line[id_at..id_end] == id).then_some(id_end)
 }
 
 /// The doc comment of the block whose header is line `row`: the `//` lines directly above it, as the row of the

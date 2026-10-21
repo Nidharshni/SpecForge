@@ -191,7 +191,8 @@ behavior add_missing_titles "Add Missing Titles" {
   ports      [FileSystem]
   contract   """
     The titles step MUST write a title into every block header that has
-    none, entity blocks and unions alike: the block's doc comment (the //
+    none, entity blocks and unions alike, written after the block's name
+    on whichever line of its header the name stands: the block's doc comment (the //
     lines directly above its header with no blank line between, the format
     header excluded), each line's text after // trimmed and the lines
     joined by one space, with \\ and " escaped, the comment lines removed.

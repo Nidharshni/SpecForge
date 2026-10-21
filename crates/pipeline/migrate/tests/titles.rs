@@ -180,7 +180,6 @@ fn beyond_steps_drops_only_titles_the_step_added() {
     behavior = "add_missing_titles",
     verify = "a header whose name is on its second line takes its title after the name"
 )]
-#[ignore = "flipped by T5"]
 fn a_header_whose_name_is_on_its_second_line_takes_its_title_after_the_name() {
     assert_eq!(
         migrated("feature\n  second_auth {\n  status proposed\n}\n"),
