@@ -37,11 +37,11 @@ fn renaming_an_inherited_reference_edits_it_once() {
     let p = compile(SOFTWARE, &[("a.spec", BLOCKS), ("port.spec", PORT)]);
     let plan = rename::plan(&p.navigator(), "Repo", "Store").unwrap();
     let on_line = plan
-        .edits
+        .edits()
         .iter()
         .filter(|e| e.span.file == "a.spec" && e.span.start_line == 2)
         .count();
-    assert_eq!(on_line, 1, "{:?}", plan.edits);
+    assert_eq!(on_line, 1, "{:?}", plan.edits());
 }
 
 #[specforge_test(

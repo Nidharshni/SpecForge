@@ -1,13 +1,13 @@
 //! Renaming an entity ID: the MCP `specforge.rename` tool and the LSP's
 //! `textDocument/rename` plan the same edits under the same rules. MCP
 //! runs it ([`run`]: planned, then written as one project change unless the
-//! request previews) and recompiles; the LSP hands the plan's edits to the
+//! request previews, as one planned change, ADR 0184) and recompiles; the LSP hands the plan's edits to the
 //! editor. The edits are exactly the tokens the graph's finder reads (ADR 0163: the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::change::ProjectChange;
+use crate::authoring::planned::PlannedChange;
 use crate::read::navigate::{Navigator, Precision, TextEdit, apply_edits};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
@@ -15,9 +15,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_parser::lex::{is_identifier, lex};
 use specforge_registry::ID_LENGTH;
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::collections::BTreeSet;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,24 +61,25 @@ pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result
     Ok(())
 }
 
-/// The edits that rename one entity: its declaration and every reference.
+/// The edits that rename one entity: its declaration and every reference, and the change they make.
 #[derive(Debug, Clone)]
 pub struct RenamePlan {
     pub old_id: String,
     pub new_id: String,
     /// One per occurrence: the token's span as navigation found it, relative to the spec root; its
     /// text becomes the new ID.
-    pub edits: Vec<TextEdit>,
-    /// Each affected file's text, as the plan read it: the text the edits are positions in.
-    planned: BTreeMap<String, Arc<str>>,
-    /// Where the edits' files are keyed from: the spec root of the view the plan read.
-    spec_root: PathBuf,
+    edits: Vec<TextEdit>,
+    /// The texts the edits make, planned with them (ADR 0184).
+    change: PlannedChange,
 }
 
 impl RenamePlan {
-    /// The files the edits touch, sorted.
-    pub fn affected_files(&self) -> BTreeSet<&str> {
-        self.edits.iter().map(|e| e.span.file.as_str()).collect()
+    pub fn edits(&self) -> &[TextEdit] {
+        &self.edits
+    }
+
+    pub fn change(&self) -> &PlannedChange {
+        &self.change
     }
 }
 
@@ -170,19 +169,38 @@ pub fn plan(
             new_text: new_id.to_string(),
         })
         .collect();
-    let planned = occurrences
+    // The edits are positions in the compiled text they were found in (ADR 0116 D1): one that does not lie in it is
+    // a navigator fault, refused before anything is planned (ADR 0164 D2, amended by ADR 0184).
+    let mut files = Vec::new();
+    for file in edits
         .iter()
-        .filter_map(|o| {
-            let file = o.span.file.as_str();
-            Some((file.to_string(), nav.source_text(file)?))
-        })
-        .collect();
+        .map(|e| e.span.file.as_str())
+        .collect::<BTreeSet<_>>()
+    {
+        let written = nav.source_text(file).and_then(|text| {
+            let edited = apply_edits(&text, edits.iter().filter(|e| e.span.file == file))?;
+            Some((file.to_string(), Some(text), edited))
+        });
+        files.push(written.ok_or_else(|| {
+            OpError::new(
+                OpErrorKind::Internal,
+                crate::FILE_UNREADABLE,
+                format!(
+                    "cannot rename '{old_id}': its edits do not lie in the compiled text of {file}"
+                ),
+            )
+        })?);
+    }
+    let change = PlannedChange::new(
+        nav.view().env().spec_root().to_path_buf(),
+        format!("cannot rename '{old_id}'"),
+        files,
+    );
     Ok(RenamePlan {
         old_id: old_id.to_string(),
         new_id: new_id.to_string(),
         edits,
-        planned,
-        spec_root: nav.view().env().spec_root().to_path_buf(),
+        change,
     })
 }
 
@@ -205,45 +223,6 @@ fn unparsed<'n>(nav: &'n Navigator<'_>, id: &str) -> Vec<&'n str> {
         .collect()
 }
 
-/// Write `plan`'s edits to the files under the spec root it was planned from as one project change (ADR 0128): every file is checked
-/// against the text the plan was made on, then replaced; if a write fails, every file already written is put back,
-/// and one that cannot be is the error's writes. A failure is the change's own (ADR 0155). Returns the files it wrote.
-///
-/// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
-/// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
-/// written.
-pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpError> {
-    let spec_root = plan.spec_root.as_path();
-    let mut change = ProjectChange::new(spec_root, format!("cannot rename '{}'", plan.old_id));
-    for file in plan.affected_files() {
-        let held = caller.containment().resolve(&spec_root.join(file))?;
-        // The edits are positions in the planned text: another text refuses the whole rename.
-        let Some(planned) = plan.planned.get(file) else {
-            return Err(OpError::new(
-                OpErrorKind::Internal,
-                crate::FILE_UNREADABLE,
-                format!(
-                    "cannot rename '{}': no text was planned for {file}",
-                    plan.old_id
-                ),
-            ));
-        };
-        let Some(edited) = apply_edits(planned, plan.edits.iter().filter(|e| e.span.file == file))
-        else {
-            return Err(OpError::new(
-                OpErrorKind::Internal,
-                crate::FILE_UNREADABLE,
-                format!(
-                    "cannot rename '{}': its edits do not lie in the text planned for {file}",
-                    plan.old_id
-                ),
-            ));
-        };
-        change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
-    }
-    change.commit()
-}
-
 /// What a rename did: the plan it made, and whether it wrote (ADR 0162).
 #[derive(Debug, Clone)]
 pub struct Renamed {
@@ -251,8 +230,8 @@ pub struct Renamed {
     pub wrote: Wrote,
 }
 
-/// Plan renaming `old_id` to `new_id` over `nav` ([`plan`]) and write its edits as one project change ([`apply`])
-/// unless `dry_run`. Refused as [`plan`] refuses, before anything is written, or with [`apply`]'s error: about no
+/// Plan renaming `old_id` to `new_id` over `nav` ([`plan`]) and write its planned change ([`PlannedChange::apply`])
+/// unless `dry_run`. Refused as [`plan`] refuses, before anything is written, or with the change's error: about no
 /// field, its writes the files it could not put back.
 pub fn run(
     nav: &Navigator<'_>,
@@ -262,7 +241,7 @@ pub fn run(
     caller: Caller<'_>,
 ) -> Result<Renamed, Refusal<RenameField>> {
     let plan = plan(nav, old_id, new_id)?;
-    let wrote = Wrote::unless_preview(dry_run, || apply(&plan, caller))?;
+    let wrote = Wrote::unless_preview(dry_run, || plan.change().apply(caller))?;
     Ok(Renamed { plan, wrote })
 }
 
@@ -286,8 +265,8 @@ impl Renamed {
             new_name: self.plan.new_id.clone(),
             affected_files: self
                 .plan
+                .change()
                 .affected_files()
-                .into_iter()
                 .map(String::from)
                 .collect(),
             dry_run: self.wrote.previewed(),
@@ -399,10 +378,10 @@ mod tests {
 
         let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         assert_eq!(
-            plan.affected_files().into_iter().collect::<Vec<_>>(),
+            plan.change().affected_files().collect::<Vec<_>>(),
             ["limit.spec", "login.spec"]
         );
-        apply(&plan, crate::testing::caller()).unwrap();
+        plan.change().apply(crate::testing::caller()).unwrap();
         let login = std::fs::read_to_string(dir.path().join("login.spec")).unwrap();
         assert!(login.contains("invariants [session_cap]"), "{login}");
         let limit = std::fs::read_to_string(dir.path().join("limit.spec")).unwrap();
@@ -420,12 +399,12 @@ mod tests {
 
         let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         let at: Vec<(usize, usize)> = plan
-            .edits
+            .edits()
             .iter()
             .map(|e| (e.span.start_line, e.span.start_col))
             .collect();
         assert_eq!(at, [(1, 11), (5, 15)], "the declaration and the reference");
-        apply(&plan, crate::testing::caller()).unwrap();
+        plan.change().apply(crate::testing::caller()).unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.path().join("a.spec")).unwrap(),
             text.replace("invariant session_limit", "invariant session_cap")
@@ -446,7 +425,7 @@ mod tests {
             return; // permissions don't bind this user (root)
         }
 
-        let error = apply(&plan, crate::testing::caller()).unwrap_err();
+        let error = plan.change().apply(crate::testing::caller()).unwrap_err();
 
         assert_eq!(error.code, crate::FILE_UNWRITABLE);
         assert_eq!(
@@ -469,7 +448,10 @@ mod tests {
         std::os::unix::fs::symlink(&elsewhere, dir.path().join("login.spec")).unwrap();
 
         let held = crate::Containment::within(dir.path());
-        let error = apply(&plan, crate::testing::bounded(&held)).unwrap_err();
+        let error = plan
+            .change()
+            .apply(crate::testing::bounded(&held))
+            .unwrap_err();
 
         assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
         assert_eq!(

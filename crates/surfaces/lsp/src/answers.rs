@@ -320,7 +320,7 @@ pub fn rename(
         id.as_str(),
         new_name,
     ) {
-        Ok(plan) => plan.edits,
+        Ok(plan) => plan.edits().to_vec(),
         Err(e) if e.error.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
         Err(e) => return Err(Error::invalid_params(e.error.message)),
     };

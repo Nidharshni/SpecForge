@@ -82,7 +82,7 @@ impl<'a> Navigator<'a> {
         text
     }
 
-    /// The text of `file` a rename plan keeps: the text its edits are positions in.
+    /// The text of `file` a rename plans on: the text its edits are positions in, and its change's planned-on text.
     pub(crate) fn source_text(&self, file: &str) -> Option<std::sync::Arc<str>> {
         self.view.project().source_text(file)
     }

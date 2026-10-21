@@ -271,7 +271,7 @@ fn a_rename_preview_writes_nothing_and_says_so() {
             "dry_run": true
         })
     );
-    assert_eq!(renamed.plan.edits.len(), 2);
+    assert_eq!(renamed.plan.edits().len(), 2);
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn a_rename_run_writes_what_it_planned() {
     let root = c.project.environment().spec_root().to_path_buf();
     let planned = rename::plan(&c.navigator(), "session_limit", "session_cap").unwrap();
     let renamed = rename_over(&c, "session_cap", false).unwrap();
-    assert_eq!(renamed.plan.edits, planned.edits);
+    assert_eq!(renamed.plan.edits(), planned.edits());
     assert!(!renamed.document().dry_run);
     assert_eq!(
         crate::writes::listed(&renamed.wrote.into_files(), &root),

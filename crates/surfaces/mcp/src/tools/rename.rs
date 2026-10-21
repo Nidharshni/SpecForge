@@ -89,7 +89,7 @@ impl CoreTool for Tool {
         .map_err(Self::failed)?;
         let reply = Reply {
             renamed: renamed.document(),
-            edits: renamed.plan.edits.iter().map(Into::into).collect(),
+            edits: renamed.plan.edits().iter().map(Into::into).collect(),
         };
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
