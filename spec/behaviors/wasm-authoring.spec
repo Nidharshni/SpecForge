@@ -109,7 +109,8 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
     itself and its diagnostics, in the shape every command writes a
     diagnostic, under --format json; it reads and declares the binary as
     publish does. No built component is an error (E040), and
-    a binary that is not an extension is E028.
+    a binary that is not an extension is E028, and one declaring a builtin's
+    name is extension_conflict, as publish refuses it.
   """
   produces   [extension_fixtures_validated]
   verify unit "validation loads local .wasm binary"

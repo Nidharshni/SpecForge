@@ -874,7 +874,8 @@ behavior publish_to_registry "Publish to Registry" {
     create a publisher signing key; a signing key that can't be read or
     created MUST be refused with E074 before any network call. Publish
     refuses in one order, each refusal before anything after it is read or
-    asked: the binary (E040, E028), its declaration's errors, its name and
+    asked: the binary (E040, E028, a binary declaring a builtin's name:
+    extension_conflict, as add refuses to install it), its declaration's errors, its name and
     version (E072), the registry configuration (E063, E067), the registry
     for the name (R-OPS-001), the credential (R001, R012, R-AUTH-020,
     R-AUTH-021), the signing key (E074); then the registry's answer.
@@ -887,6 +888,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "the declaration is validated before publish"
   verify integration "publish derives the stored declaration from the binary"
   verify unit "publish refuses a binary whose declaration has errors before any network call"
+  verify unit "publish and extension validate refuse a binary that declares a builtin's name, as add refuses to install it"
   verify integration "the registry refuses a manifest that is not an extension declaration"
   verify integration "the registry takes a package's description and keywords from its declaration"
   verify integration "the registry refuses a signature that is not a package signature, and the version stays publishable"

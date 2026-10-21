@@ -101,8 +101,10 @@ fn publish_refuses_in_one_order() {
     assert!(registry.asked().is_empty());
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "publish_to_registry",
+    verify = "publish and extension validate refuse a binary that declares a builtin's name, as add refuses to install it"
+)]
 fn a_binary_declaring_a_builtins_name_is_refused_as_add_refuses_it() {
     let dir = tempfile::tempdir().unwrap();
     let wasm = bytes("@specforge/product 9.0.0");

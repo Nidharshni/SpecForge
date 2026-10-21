@@ -62,6 +62,21 @@ pub(crate) fn package(declaration: &ExtensionDeclaration) -> Result<PackageName,
     })
 }
 
+/// The one rule an extension's declared name is held to beside the builtins this specforge embeds (ADR 0028 D7): it
+/// is none of theirs, since a builtin's name always enables the builtin. `add`, `update` and `init` refuse to install
+/// such a binary, `publish` and `extension validate` to read it, `extension init` to scaffold it: `extension_conflict`
+/// "the extension declares the name of the builtin '<name>'". Each caller adds what to do instead.
+pub fn not_a_builtins_name(name: &str) -> Result<(), OpError> {
+    match builtin_name(name) {
+        None => Ok(()),
+        Some(builtin) => Err(OpError::new(
+            OpErrorKind::Conflict,
+            "extension_conflict",
+            format!("the extension declares the name of the builtin '{builtin}'"),
+        )),
+    }
+}
+
 /// A binary to install (`add`, `update`, `init`): its module and what it
 /// declares, checked as an installed extension must be — a loadable
 /// extension (E028) that does not claim a builtin's name
@@ -75,20 +90,12 @@ pub struct Installable {
 impl Installable {
     pub fn read(runtime: &dyn WasmRuntime, module: Module) -> Result<Installable, OpError> {
         let declaration = read_declaration(runtime, module.bytes())?.declaration;
-        if builtin_name(declaration.name()).is_some() {
-            return Err(OpError::new(
-                OpErrorKind::Conflict,
-                "extension_conflict",
-                format!(
-                    "the extension declares the name of the builtin '{}'",
-                    declaration.name()
-                ),
-            )
-            .with_suggestion(format!(
+        not_a_builtins_name(declaration.name()).map_err(|e| {
+            e.with_suggestion(format!(
                 "enable the builtin instead: specforge add {}",
                 declaration.name()
-            )));
-        }
+            ))
+        })?;
         Ok(Installable {
             module,
             declaration,
