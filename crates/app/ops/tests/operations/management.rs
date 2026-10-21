@@ -280,7 +280,8 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
     verify = "an extension's source is where the extension load takes it from, whatever order its entries are in"
 )]
 fn an_extensions_source_is_the_entry_that_loaded_it() {
-    use specforge_ops::extension::{Origin, inventory};
+    use specforge_installed::Origin;
+    use specforge_ops::extension::inventory;
 
     let dir = tempfile::tempdir().unwrap();
     let config = serde_json::json!({

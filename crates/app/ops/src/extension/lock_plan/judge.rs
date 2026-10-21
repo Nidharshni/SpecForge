@@ -6,11 +6,11 @@ use specforge_package::peers::{PeerRequirement, Verdict};
 use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::PeerDependency;
 
-use super::super::Origin;
 use super::super::peer_set::ProjectPeers;
 use super::{Ask, Changing, Checked, LockPlan, Staged, Verb};
 use crate::registry::Registry;
 use crate::{OpError, OpErrorKind};
+use specforge_installed::Origin;
 
 impl<'a> LockPlan<'a> {
     /// Judge the plan, then load what it fetched.

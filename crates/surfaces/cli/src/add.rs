@@ -1,8 +1,9 @@
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension};
 use specforge_ops_registry::ConfiguredRegistry;
+use specforge_project::Origin;
 use std::path::Path;
 
 // `specforge add`'s command line.

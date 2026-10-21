@@ -68,7 +68,7 @@ pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
 };
-pub use specforge_installed::{EnabledExtension, LoadSubject, Loaded};
+pub use specforge_installed::{EnabledExtension, LoadSubject, Loaded, Origin};
 
 /// The runtime a project's extensions run in (every [`WasmRuntime`] is
 /// `Send + Sync`).

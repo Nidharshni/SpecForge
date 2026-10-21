@@ -6,12 +6,11 @@
 
 use std::path::{Path, PathBuf};
 
-use specforge_installed::{Installed, Module, Resolved};
+use specforge_installed::{Installed, Module, Origin, Resolved};
 use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
-use super::Origin;
 use super::candidate::{builtin_declaration, read_declaration};
 use crate::OpError;
 use crate::view::ProjectView;
@@ -64,14 +63,14 @@ impl ProjectPeers {
                         name: (*name).to_string(),
                         version: declared.version().to_string(),
                         peers: declared.peers().to_vec(),
-                        origin: Origin::of(&resolution, i),
+                        origin: resolution.origin(i),
                     }
                 }
                 Resolved::Locked { entry, .. } => PeerMember {
                     name: entry.name.to_string(),
                     version: entry.version.clone(),
                     peers: entry.peer_dependencies.clone(),
-                    origin: Origin::of(&resolution, i),
+                    origin: resolution.origin(i),
                 },
                 Resolved::File(file) => {
                     let Some(declared) = read.file(&file.file) else {
@@ -88,7 +87,7 @@ impl ProjectPeers {
                         name,
                         version: declared.version().to_string(),
                         peers: declared.peers().to_vec(),
-                        origin: Origin::of(&resolution, i),
+                        origin: resolution.origin(i),
                     }
                 }
                 Resolved::Unloadable { .. } | Resolved::Again { .. } => continue,

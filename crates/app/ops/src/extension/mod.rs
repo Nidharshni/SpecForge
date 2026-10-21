@@ -49,7 +49,6 @@ pub(crate) use lock_plan::{Also, Install, LockPlan};
 pub(crate) use names::{Answer, Names, Place};
 
 use specforge_graph::{Graph, Node};
-use specforge_installed::LockSource;
 use specforge_registry::KindRegistry;
 
 /// The code an operation reports for an extension the project doesn't
@@ -65,54 +64,6 @@ pub(crate) fn not_installed(name: &str, why: Option<&str>) -> crate::OpError {
     }
     crate::OpError::new(crate::OpErrorKind::ExtensionNotFound, NOT_FOUND, message)
         .with_data(serde_json::json!({ "extension": name }))
-}
-
-/// Where an extension comes from.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Origin {
-    /// Embedded in the binary; enabling it is only a config entry.
-    Builtin,
-    /// Installed under `.specforge/extensions/`, pinned in `specforge.lock`
-    /// with this source.
-    Installed { source: LockSource },
-    /// Loaded from the `.wasm` file a `specforge.json` entry names; `path`
-    /// as the entry writes it.
-    File { path: String },
-    /// Named by an entry, neither a builtin nor locked: it does not load
-    /// (E028).
-    Unknown,
-}
-
-impl Origin {
-    /// Where the entry at `at` loads its extension from, by the load's one rule
-    /// (`Installed::resolve`): a builtin's name is `Builtin`; a locked name `Installed { source }`;
-    /// a `.wasm` file entry `File { path }` (as written); a name nothing loads `Unknown`; an entry
-    /// naming what an earlier one enables, that entry's origin.
-    pub fn of(resolution: &specforge_installed::Resolution<'_>, at: usize) -> Origin {
-        use specforge_installed::Resolved;
-        match &resolution.entries()[at] {
-            Resolved::Builtin { .. } => Origin::Builtin,
-            Resolved::Locked { entry, .. } => Origin::Installed {
-                source: entry.source.clone(),
-            },
-            Resolved::File(file) => Origin::File {
-                path: file.path.to_string(),
-            },
-            Resolved::Unloadable { .. } => Origin::Unknown,
-            Resolved::Again { first } => Origin::of(resolution, *first),
-        }
-    }
-
-    /// What the listings call it: `builtin`, the lock entry's source, or
-    /// `file:<path>`.
-    pub fn source(&self) -> String {
-        match self {
-            Origin::Builtin => "builtin".to_string(),
-            Origin::Installed { source } => source.to_string(),
-            Origin::File { path } => format!("file:{path}"),
-            Origin::Unknown => "unknown".to_string(),
-        }
-    }
 }
 
 /// The builtin a named `specifier` names (`@specforge/product`, optionally with an

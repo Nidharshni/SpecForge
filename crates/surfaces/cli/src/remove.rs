@@ -1,7 +1,8 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::extension::{self, Origin, RemoveRequest};
+use specforge_ops::extension::{self, RemoveRequest};
 use specforge_ops::view::ProjectView;
+use specforge_project::Origin;
 
 // `specforge remove`'s command line.
 #[derive(clap::Args)]

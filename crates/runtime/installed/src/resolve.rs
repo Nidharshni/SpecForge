@@ -10,7 +10,7 @@ use specforge_package::PackageName;
 
 use crate::Installed;
 use crate::load::{Builtins, LoadProblem};
-use crate::lock::{LockFileEntry, LockState};
+use crate::lock::{LockFileEntry, LockSource, LockState};
 
 /// What one `extensions` entry names, decided as the extension load decides it, nothing loaded.
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +94,55 @@ impl<'a> Resolution<'a> {
         indexed()
             .filter(move |(_, resolved)| !is_file(resolved))
             .chain(indexed().filter(move |(_, resolved)| is_file(resolved)))
+    }
+}
+
+/// Where an extension comes from, as the extension load takes it (ADR 0028 D3, ADR 0180).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Origin {
+    /// Embedded in the binary; enabling it is only a config entry.
+    Builtin,
+    /// Installed under `.specforge/extensions/`, pinned in `specforge.lock`
+    /// with this source.
+    Installed { source: LockSource },
+    /// Loaded from the `.wasm` file a `specforge.json` entry names; `path`
+    /// as the entry writes it.
+    File { path: String },
+    /// Named by an entry, neither a builtin nor locked: it does not load
+    /// (E028).
+    Unknown,
+}
+
+impl Origin {
+    /// What the listings call it: `builtin`, the lock entry's source, or
+    /// `file:<path>`.
+    pub fn source(&self) -> String {
+        match self {
+            Origin::Builtin => "builtin".to_string(),
+            Origin::Installed { source } => source.to_string(),
+            Origin::File { path } => format!("file:{path}"),
+            Origin::Unknown => "unknown".to_string(),
+        }
+    }
+}
+
+impl Resolution<'_> {
+    /// Where the entry at `at` loads its extension from, by the load's one rule: a builtin's name
+    /// is `Builtin`; a locked name `Installed { source }`; a `.wasm` file entry `File { path }`
+    /// (as written); a name nothing loads `Unknown`; an entry naming what an earlier one enables,
+    /// that entry's origin. Panics on an index the resolution did not make.
+    pub fn origin(&self, at: usize) -> Origin {
+        match &self.entries[at] {
+            Resolved::Builtin { .. } => Origin::Builtin,
+            Resolved::Locked { entry, .. } => Origin::Installed {
+                source: entry.source.clone(),
+            },
+            Resolved::File(file) => Origin::File {
+                path: file.path.to_string(),
+            },
+            Resolved::Unloadable { .. } => Origin::Unknown,
+            Resolved::Again { first } => self.origin(*first),
+        }
     }
 }
 
@@ -316,6 +365,61 @@ mod tests {
             shadowed.resolve(&entries, &builtins).entries()[0],
             Resolved::Builtin { .. }
         ));
+    }
+
+    #[test]
+    fn each_entry_has_the_origin_the_load_takes_it_from() {
+        let installed = Installed::with_lock(Path::new("/p"), lock_of(&["@acme/tool"]));
+        let builtins = Builtins(&[("@specforge/product", b"\0asm")]);
+        let entries = strings(&[
+            "@specforge/product",
+            "@acme/tool",
+            "@acme/tool@1.0.0",
+            "Bad Name",
+            "@acme/none",
+            "x.wasm",
+            "g=y.wasm",
+            "x.wasm",
+        ]);
+        let file = |path: &str| Origin::File { path: path.into() };
+        let registry = Origin::Installed {
+            source: LockSource::Registry,
+        };
+
+        let resolution = installed.resolve(&entries, &builtins);
+
+        let origins: Vec<Origin> = (0..entries.len()).map(|i| resolution.origin(i)).collect();
+        assert_eq!(
+            origins,
+            [
+                Origin::Builtin,
+                registry.clone(),
+                registry,
+                Origin::Unknown,
+                Origin::Unknown,
+                file("x.wasm"),
+                file("y.wasm"),
+                file("x.wasm"),
+            ]
+        );
+        let stray = Installed::with_lock(Path::new("/p"), lock_of(&["@specforge/product"]));
+        let entries = strings(&["@specforge/product"]);
+        assert_eq!(
+            stray.resolve(&entries, &builtins).origin(0),
+            Origin::Builtin
+        );
+        let unreadable = Installed::with_lock(
+            Path::new("/p"),
+            LockState::Unreadable(specforge_common::Diagnostic::new(
+                specforge_common::codes::E033,
+                "x",
+            )),
+        );
+        let entries = strings(&["@acme/tool"]);
+        assert_eq!(
+            unreadable.resolve(&entries, &builtins).origin(0),
+            Origin::Unknown
+        );
     }
 
     #[test]

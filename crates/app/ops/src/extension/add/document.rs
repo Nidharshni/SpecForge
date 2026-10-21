@@ -132,7 +132,7 @@ pub struct InstalledPackage {
     pub extension: String,
     pub version: String,
     pub sha256: String,
-    /// `registry`, or `local:<path>` for a local file ([`Origin::source`](super::super::Origin::source)).
+    /// `registry`, or `local:<path>` for a local file ([`Origin::source`](specforge_installed::Origin::source)).
     pub source: String,
     /// The publisher key id; absent for an unsigned package or a local file.
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -3,11 +3,11 @@
 //! comes from and whether it loaded (ADR 0028, "The project's extensions are
 //! one inventory").
 
-use super::{Origin, builtin_name};
+use super::builtin_name;
 use crate::view::ProjectView;
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_installed::{EnabledExtension, LoadFailure, LockFileEntry};
+use specforge_installed::{EnabledExtension, LoadFailure, LockFileEntry, Origin};
 use specforge_protocol_types::ExtensionDeclaration;
 use std::collections::BTreeSet;
 
@@ -129,7 +129,7 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
             let lock = locked.iter().find(|e| e.name.as_str() == name);
             ProjectExtension {
                 origin: match loaded_by {
-                    Some(at) => Origin::of(&resolution, at),
+                    Some(at) => resolution.origin(at),
                     None => unlisted_origin(name, lock),
                 },
                 status: match (enabling.is_empty(), declaration) {
