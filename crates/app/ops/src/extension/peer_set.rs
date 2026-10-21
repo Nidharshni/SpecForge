@@ -156,31 +156,28 @@ impl<'r> Declarations<'r> {
         }
     }
 
-    /// The declarations `view`'s compile loaded: each builtin by its name, each `.wasm` file entry
-    /// that loaded by the file it names; anything else is read through the view's runtime.
+    /// The declarations `view`'s compile loaded, by the entry that loaded each: a builtin by its
+    /// name, a `.wasm` file entry by the file it names; anything else is read through the view's
+    /// runtime.
     pub(crate) fn loaded_by(view: &ProjectView<'r>) -> Self {
-        let declarations = view.registries().declarations();
-        let builtins = declarations
-            .iter()
-            .filter(|declared| super::builtin_name(declared.name()).is_some())
-            .map(|declared| (declared.name().to_string(), declared.clone()))
-            .collect();
-        let files = view
-            .root()
-            .map(|root| {
-                view.env()
-                    .enabled()
-                    .iter()
-                    .filter(|entry| entry.file.is_some() && entry.failure.is_none())
-                    .filter_map(|entry| {
-                        let file =
-                            specforge_common::ExtensionEntry::parse(&entry.entry).file(root)?;
-                        let declared = declarations.iter().find(|d| d.name() == entry.name)?;
-                        Some((file, Some(declared.clone())))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let registries = view.registries();
+        let (mut builtins, mut files) = (Vec::new(), Vec::new());
+        for entry in view.env().enabled().iter().filter(|entry| entry.loaded) {
+            let Some(declared) = registries.declaration(&entry.name) else {
+                continue;
+            };
+            match &entry.origin {
+                Origin::Builtin => builtins.push((entry.name.clone(), declared.clone())),
+                Origin::File { .. } => {
+                    let file = view.root().and_then(|root| {
+                        specforge_common::ExtensionEntry::parse(&entry.entry).file(root)
+                    });
+                    files.extend(file.map(|file| (file, Some(declared.clone()))));
+                }
+                // An installed extension is a member by its lock entry; an unknown one never loads.
+                Origin::Installed { .. } | Origin::Unknown => {}
+            }
+        }
         Declarations {
             runtime: view.runtime().map(|runtime| &**runtime),
             builtins,
@@ -317,7 +314,6 @@ mod tests {
         invariant = "peer_dependency_satisfaction",
         verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
     )]
-    #[ignore = "flipped by the inventory and the remove plan reading what the load recorded"]
     fn loaded_by_takes_a_builtin_only_from_its_entry() {
         // A `.wasm` file entry loaded under a builtin's name: its declaration is the file's, not
         // the builtin's.

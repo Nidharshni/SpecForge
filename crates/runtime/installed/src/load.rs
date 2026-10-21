@@ -96,6 +96,17 @@ pub enum LoadSubject {
 }
 
 impl EnabledExtension {
+    /// Of the entries that enable one extension, in entry order, the one whose origin is the
+    /// extension's: the entry that loaded it, else the first the load tried (a named entry before
+    /// a `.wasm` file entry, `Resolution::in_load_order`'s order). A repeat never wins over its
+    /// first: both have the same keys and the first comes earlier. `None` for no entry.
+    pub fn loader<'e>(enabling: &[&'e EnabledExtension]) -> Option<&'e EnabledExtension> {
+        enabling
+            .iter()
+            .copied()
+            .min_by_key(|e| (!e.loaded, matches!(e.origin, Origin::File { .. })))
+    }
+
     /// What `entry` names when nothing is loaded (no runtime), from `origin`.
     pub fn unloaded(entry: &str, origin: Origin) -> Self {
         match ExtensionEntry::parse(entry) {

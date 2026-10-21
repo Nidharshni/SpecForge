@@ -2,7 +2,7 @@
 // it loaded (ADR 0180).
 
 use specforge_installed::testing::install;
-use specforge_installed::{Builtins, Installed, LockSource, Origin};
+use specforge_installed::{Builtins, EnabledExtension, Installed, LockSource, Origin};
 use specforge_wasm::testing::InProcessRuntime;
 use tempfile::TempDir;
 
@@ -87,4 +87,50 @@ fn without_a_runtime_each_entry_records_its_origin() {
             .all(|e| !e.loaded && e.failure.is_none())
     );
     assert!(unloaded.declarations.is_empty());
+}
+
+#[specforge_test_macros::test(
+    behavior = "list_installed_extensions",
+    verify = "an extension's source is where the extension load takes it from, whatever order its entries are in"
+)]
+fn the_loader_is_the_entry_that_loaded_else_the_first_tried() {
+    let entry = |origin: Origin, loaded: bool| EnabledExtension {
+        origin: origin.clone(),
+        loaded,
+        ..EnabledExtension::unloaded("x", origin)
+    };
+    let named = |loaded| entry(Origin::Unknown, loaded);
+    let file = |loaded| {
+        entry(
+            Origin::File {
+                path: "x.wasm".into(),
+            },
+            loaded,
+        )
+    };
+    let loader = |entries: &[EnabledExtension]| {
+        let enabling: Vec<&EnabledExtension> = entries.iter().collect();
+        EnabledExtension::loader(&enabling).map(|e| e.origin.clone())
+    };
+    let some = |e: &EnabledExtension| Some(e.origin.clone());
+
+    let (named_loaded, file_failed) = (named(true), file(false));
+    assert_eq!(
+        loader(&[file_failed.clone(), named_loaded.clone()]),
+        some(&named_loaded)
+    );
+    assert_eq!(
+        loader(&[named_loaded.clone(), file_failed.clone()]),
+        some(&named_loaded)
+    );
+    // A repeat is never the loader: the file that loaded wins over a failed named entry and its
+    // repeat.
+    let file_loaded = file(true);
+    assert_eq!(
+        loader(&[named(false), named(false), file_loaded.clone()]),
+        some(&file_loaded)
+    );
+    // Nothing loaded: the first the load tried, a named entry before a file.
+    assert_eq!(loader(&[file(false), named(false)]), some(&named(false)));
+    assert_eq!(loader(&[]), None);
 }

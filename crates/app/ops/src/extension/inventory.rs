@@ -97,11 +97,6 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
     let entries: &'a [EnabledExtension] = view.env().enabled();
     let declarations: &'a [ExtensionDeclaration] = view.registries().declarations();
     let locked: &'a [LockFileEntry] = view.lock().entries();
-    // What each entry names, decided as the extension load decides it (`Installed::resolve`):
-    // aligned with `entries` by index.
-    let texts: Vec<String> = entries.iter().map(|e| e.entry.clone()).collect();
-    let builtins = specforge_project::builtins();
-    let resolution = view.installed().resolve(&texts, &builtins);
     let names: BTreeSet<&'a str> = entries
         .iter()
         .map(|e| e.name.as_str())
@@ -113,25 +108,13 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
         .map(|name| {
             let enabling: Vec<&'a EnabledExtension> =
                 entries.iter().filter(|e| e.name == name).collect();
-            // The entry that loaded it, else the first that tried, in the order the load tries
-            // them.
-            let in_load_order: Vec<usize> = resolution
-                .in_load_order()
-                .map(|(at, _)| at)
-                .filter(|at| entries[*at].name == name)
-                .collect();
-            let loaded_by = in_load_order
-                .iter()
-                .copied()
-                .find(|at| entries[*at].failure.is_none())
-                .or_else(|| in_load_order.first().copied());
-            let declaration = declarations.iter().find(|d| d.name() == name);
+            let declaration = view.registries().declaration(name);
             let lock = locked.iter().find(|e| e.name.as_str() == name);
             ProjectExtension {
-                origin: match loaded_by {
-                    Some(at) => resolution.origin(at),
-                    None => unlisted_origin(name, lock),
-                },
+                origin: EnabledExtension::loader(&enabling).map_or_else(
+                    || unlisted_origin(name, lock),
+                    |loader| loader.origin.clone(),
+                ),
                 status: match (enabling.is_empty(), declaration) {
                     (false, Some(_)) => Status::Loaded,
                     (false, None) => Status::NotLoaded,
@@ -258,6 +241,21 @@ mod tests {
         }
     }
 
+    fn registry() -> Origin {
+        Origin::Installed {
+            source: LockSource::Registry,
+        }
+    }
+
+    /// `entry` as the load records it when it loaded from `origin`.
+    fn loaded(entry: &str, origin: Origin) -> EnabledExtension {
+        EnabledExtension {
+            origin,
+            loaded: true,
+            ..crate::testing::unloaded(entry)
+        }
+    }
+
     /// One row, as a table compares it.
     #[derive(Debug, PartialEq)]
     struct Row {
@@ -319,14 +317,22 @@ mod tests {
         };
         let fixture = Assembled::new()
             .enabled(vec![
-                crate::testing::unloaded("@specforge/product"),
-                crate::testing::unloaded("@acme/locked"),
+                loaded("@specforge/product", Origin::Builtin),
+                loaded("@acme/locked", registry()),
                 EnabledExtension {
                     name: "@sdk/greet".into(),
-                    ..crate::testing::unloaded("greet.wasm")
+                    ..loaded(
+                        "greet.wasm",
+                        Origin::File {
+                            path: "greet.wasm".into(),
+                        },
+                    )
                 },
                 failing("@acme/missing@1.2.0", LoadProblem::NotInstalled),
-                failing("@acme/changed", changed.clone()),
+                EnabledExtension {
+                    origin: registry(),
+                    ..failing("@acme/changed", changed.clone())
+                },
             ])
             .declarations(vec![
                 Assembled::declaration("@specforge/product", "1.0.0"),
@@ -338,16 +344,12 @@ mod tests {
                 ("@acme/stale", "3.0.0", "local:/x/stale.wasm"),
                 ("@acme/changed", "4.0.0", "registry"),
             ]);
-        let registry = Origin::Installed {
-            source: LockSource::Registry,
-        };
-
         assert_eq!(
             table(&fixture.view()),
             [
                 row(
                     "@acme/changed",
-                    registry.clone(),
+                    registry(),
                     Status::NotLoaded,
                     Some("4.0.0"),
                     (1, false, true),
@@ -355,7 +357,7 @@ mod tests {
                 ),
                 row(
                     "@acme/locked",
-                    registry,
+                    registry(),
                     Status::Loaded,
                     Some("2.0.0"),
                     (1, true, true),
@@ -400,8 +402,8 @@ mod tests {
             ]
         );
 
-        // Without a root there is no lock: the rows are what was enabled
-        // and loaded.
+        // Without a root there is no lock: the rows are what was enabled and loaded, each with the
+        // origin the load recorded.
         let rootless = table(&fixture.rootless_view());
         let names: Vec<&str> = rootless.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(
@@ -418,7 +420,7 @@ mod tests {
             rootless
                 .iter()
                 .filter(|r| r.name == "@acme/locked" || r.name == "@acme/changed")
-                .all(|r| r.origin == Origin::Unknown && !r.locked)
+                .all(|r| r.origin == registry() && !r.locked)
         );
     }
 
@@ -444,7 +446,7 @@ mod tests {
                 declared: "@sdk/greet".into(),
             },
         );
-        let named = crate::testing::unloaded("@sdk/greet");
+        let named = loaded("@sdk/greet", registry());
         for enabled in [
             vec![refused.clone(), named.clone()],
             vec![named.clone(), refused.clone()],

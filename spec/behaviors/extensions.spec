@@ -511,11 +511,11 @@ behavior list_installed_extensions "List Installed Extensions" {
     the project has (enabled by a specforge.json entry, locked in specforge.lock, or loaded: the extension inventory) with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
     extension. Each entry MUST carry its source: where the extension load
-    loaded it from (the entry that loaded it, read by the load's one rule,
-    load_extension_manifests: builtin for a builtin's name, the lock
+    loaded it from (the origin the load recorded on the entry that loaded
+    it, load_extension_manifests: builtin for a builtin's name, the lock
     entry's source for an installed one, file:<path> for a .wasm file
-    entry, listed under the name it declares), else where its first entry
-    in load order would load it from, else its lock entry's source, else
+    entry, listed under the name it declares), else the origin recorded on
+    its first entry in load order, else its lock entry's source, else
     unknown; its version: the
     loaded one, else an installed extension's locked one, else the version
     a legacy name@version entry writes; and its status (loaded, not_loaded,
