@@ -25,6 +25,7 @@ mod export;
 mod export_markdown;
 mod export_version;
 mod extension_authoring;
+mod extension_origins;
 mod extension_surfaces;
 mod extensions;
 mod format;
