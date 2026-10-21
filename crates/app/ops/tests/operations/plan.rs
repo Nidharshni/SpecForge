@@ -499,3 +499,29 @@ fn an_entry_and_the_cycle_it_depends_on_are_ordered_as_components() {
         ]
     );
 }
+
+#[test]
+#[ignore = "flipped by T5"]
+fn a_plan_must_cover_every_entity_that_counts_toward_coverage() {
+    // pay owes obligations (W004's rule applies to behavior) and declares
+    // none; log is of a testable kind no rule obligates and declares none
+    // (exempt): only pay counts and is missing.
+    let project = Assembled::over(registries(&["behavior"], &["note"])).source(
+        "behavior refund \"Refund\" {\n  verify unit \"refund works\"\n}\n\n\
+         behavior pay \"Pay\" {\n}\n\nnote log \"Log\" {\n}\n",
+    );
+    let plan = AgentPlan::read(&serde_json::json!(
+        {"plan_id": "p", "entries": [{"entity_id": "refund", "action": "implement"}]}
+    ))
+    .unwrap();
+    let outcome = specforge_ops::read::plan::check(&project.view(), &plan);
+    assert_eq!(
+        gap_texts(&outcome, PlanGapKind::MissingPlanEntry),
+        ["testable entity 'pay' (behavior) is not covered by the plan"]
+    );
+    assert!(
+        outcome.ok,
+        "a missing entry is a warning: {:?}",
+        outcome.gaps
+    );
+}
