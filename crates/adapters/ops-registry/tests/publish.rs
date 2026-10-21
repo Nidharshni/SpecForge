@@ -284,7 +284,6 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
     behavior = "publish_to_registry",
     verify = "a signing key that can't be read is refused with E074 before any network call"
 )]
-#[ignore = "flipped by T3"]
 fn an_unreadable_signing_key_is_e074_and_left_as_it_was() {
     use std::os::unix::fs::PermissionsExt;
     let world = World::acme();
