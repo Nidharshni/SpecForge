@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-19, architecture round 16, plan 07). Amends [ADR 0016](0016-navigation-is-one-module.md)
 (its rejected item "0-based byte columns"), [ADR 0032](0032-one-graph-build.md) (its consequence that `RenameEdit`
 lives with the rename operation) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (round 15 plan 06's
-amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`). Amended by round 17 plan 07 (2026-10-19): D4 is one conversion.
+amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`). Amended by round 17 plan 07 (2026-10-19): D4 is one conversion. D2 amended by [ADR 0184](0184-a-typed-edit-and-a-rename-write-one-planned-change.md): `rename::plan` refuses an edit that does not lie in its text, before anything is planned; `apply` is the planned change's.
 
 ## Context
 

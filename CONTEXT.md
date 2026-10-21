@@ -214,6 +214,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes (`specforge_ops::change::ProjectChange`, ADR 0128). Its failure is its own: one code per cause
   (`file_changed`, `file_unreadable`, `file_unwritable`), the file named from the root the change was opened under,
   after what the operation was doing (ADR 0155).
+- **Planned change**: what a plan of a project's sources will write: per file, relative to the spec root, the text it
+  was planned on (none for a new file) and the text it will hold; an unchanged file is not in it. It answers the
+  affected files, the after texts, the text edits and the diff, and is written as one project change
+  (`specforge_ops::authoring::planned::PlannedChange`, ADR 0184). A typed edit's plan and a rename plan each hold one.
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -1158,9 +1162,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
   only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
-- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits (`rename::run` plans it and writes it unless its request previews: `Renamed`, whose document is `RenameDocument`; ADR 0162):
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits and the planned change they make (ADR 0184) (`rename::run` plans it and writes it unless its request previews: `Renamed`, whose document is `RenameDocument`; ADR 0162):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
-  which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  which its planned change keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
   The new ID is refused when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
@@ -1183,7 +1187,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
   (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
   unresolved target's kind, a verify obligation) planned as a typed edit and offered as the position edits that apply it
-  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161); the LSP lists none over a buffer typed since the compile (ADR 0023 D3).
+  (`PlannedChange::text_edits`); a stub the plan refuses is not offered (ADR 0161); the LSP lists none over a buffer typed since the compile (ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

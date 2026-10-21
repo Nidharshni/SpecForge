@@ -4,7 +4,7 @@
 D3 (the spelling of the field), [ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md) D2's request
 sentence and D5's builders, and [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md)
 D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`). Their other decisions stand, and so does
-ADR 0112's Rejected line on `AnalyzeOptions.containment`. Amended by round 14, plan 12 (D2: `rename::apply`).
+ADR 0112's Rejected line on `AnalyzeOptions.containment`. Amended by round 14, plan 12 (D2: `rename::apply`). D2's `rename::apply(plan, caller)` is `PlannedChange::apply(caller)` ([ADR 0184](0184-a-typed-edit-and-a-rename-write-one-planned-change.md)).
 
 ## Context
 
