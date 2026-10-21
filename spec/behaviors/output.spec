@@ -316,6 +316,8 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
   verify unit "the CLI and the LSP read the recorded report where its link points"
   verify unit "over MCP, a recorded report that leads outside the project is the same refusal on every view"
+  verify unit "over MCP, a schema cache that leads outside the project or has more than one name is not read"
+  verify unit "the CLI and the LSP read the schema cache where its link points"
   verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"

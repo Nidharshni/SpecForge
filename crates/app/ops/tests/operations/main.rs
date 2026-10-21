@@ -60,6 +60,7 @@ mod options;
 mod peers;
 mod plan;
 mod previews;
+mod project_file_reads;
 mod project_files;
 mod publish;
 mod query;
