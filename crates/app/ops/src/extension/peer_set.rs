@@ -6,9 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
-use specforge_installed::{Installed, Module, Origin, Resolved};
+use specforge_installed::{Installed, Origin, Resolved};
 use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
+use specforge_registry::{Disk, PlainDisk};
 use specforge_wasm::WasmRuntime;
 
 use super::candidate::{builtin_declaration, read_declaration};
@@ -146,15 +147,19 @@ impl ProjectPeers {
 pub(crate) struct Declarations<'r> {
     /// With no runtime (a view assembled in a test), an entry that was not loaded is no member.
     runtime: Option<&'r dyn WasmRuntime>,
+    /// What a `.wasm` file entry is read through: the disk the environment load reads through
+    /// (ADR 0145 D3, ADR 0181 D2).
+    disk: &'r dyn Disk,
     builtins: Vec<(String, ExtensionDeclaration)>,
     files: Vec<(PathBuf, Option<ExtensionDeclaration>)>,
 }
 
 impl<'r> Declarations<'r> {
-    /// Declarations read through `runtime`.
-    pub(crate) fn through(runtime: &'r dyn WasmRuntime) -> Self {
+    /// Declarations read through `runtime`, files read through `disk`.
+    pub(crate) fn through(runtime: &'r dyn WasmRuntime, disk: &'r dyn Disk) -> Self {
         Declarations {
             runtime: Some(runtime),
+            disk,
             builtins: Vec::new(),
             files: Vec::new(),
         }
@@ -184,9 +189,15 @@ impl<'r> Declarations<'r> {
         }
         Declarations {
             runtime: view.runtime().map(|runtime| &**runtime),
+            disk: &PlainDisk,
             builtins,
             files,
         }
+    }
+
+    /// The disk files and modules are read through.
+    pub(crate) fn disk(&self) -> &'r dyn Disk {
+        self.disk
     }
 
     /// The builtin `name`'s declaration (`builtin_declaration`): E028 "the builtin '<name>' does not
@@ -210,9 +221,9 @@ impl<'r> Declarations<'r> {
             Some(at) => at,
             None => {
                 let declared = self.runtime.and_then(|runtime| {
-                    Module::read(path)
+                    let bytes = self.disk.read(path).ok()?;
+                    read_declaration(runtime, &bytes)
                         .ok()
-                        .and_then(|module| read_declaration(runtime, module.bytes()).ok())
                         .map(|loaded| loaded.declaration)
                 });
                 self.files.push((path.to_path_buf(), declared));
@@ -230,6 +241,7 @@ mod tests {
     use specforge_installed::{EnabledExtension, LockFile, LockFileEntry, LockSource, LockState};
     use specforge_package::PackageName;
     use specforge_project::testing::Assembled;
+    use specforge_registry::{Asked, MemoryDisk};
     use specforge_test_macros::test as specforge_test;
 
     fn locked(name: &str, version: &str, source: &str) -> LockFileEntry {
@@ -248,11 +260,11 @@ mod tests {
         verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
     )]
     fn the_set_is_what_the_entries_load() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("base.wasm"), testing::BASE_2).unwrap();
-        std::fs::write(dir.path().join("twin.wasm"), testing::BASE_2).unwrap();
+        let disk = MemoryDisk::new()
+            .with_file("/p/base.wasm", testing::BASE_2)
+            .with_file("/p/twin.wasm", testing::BASE_2);
         let installed = Installed::with_lock(
-            dir.path(),
+            Path::new("/p"),
             LockState::Read(LockFile {
                 lockfile_version: 1,
                 entries: vec![
@@ -277,8 +289,12 @@ mod tests {
         .map(String::from)
         .to_vec();
 
-        let set =
-            ProjectPeers::of(&installed, &entries, &mut Declarations::through(&runtime)).unwrap();
+        let set = ProjectPeers::of(
+            &installed,
+            &entries,
+            &mut Declarations::through(&runtime, &disk),
+        )
+        .unwrap();
 
         let members: Vec<(&str, &str, &Origin)> = set
             .members()
@@ -311,6 +327,47 @@ mod tests {
             set.requirers("@probe/base").len(),
             0,
             "nobody declares a peer on it"
+        );
+    }
+
+    #[specforge_test(
+        invariant = "peer_dependency_satisfaction",
+        verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
+    )]
+    fn the_prediction_reads_each_file_entry_once_through_its_disk() {
+        let disk = MemoryDisk::new()
+            .with_file("/p/base.wasm", testing::BASE_2)
+            .with_file("/p/twin.wasm", testing::BASE_2);
+        let installed = Installed::with_lock(Path::new("/p"), LockState::Absent);
+        let runtime = testing::probes();
+        let on_the_real_one = tempfile::tempdir().unwrap();
+        let outside = on_the_real_one.path().join("only-on-the-file-system.wasm");
+        std::fs::write(&outside, testing::BASE_2).unwrap();
+        let entries = [
+            "base.wasm".to_string(),
+            "twin.wasm".to_string(),
+            outside.display().to_string(),
+        ];
+        let mut read = Declarations::through(&runtime, &disk);
+
+        let first = ProjectPeers::of(&installed, &entries, &mut read).unwrap();
+        let second = ProjectPeers::of(&installed, &entries, &mut read).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(
+            first.members().len(),
+            1,
+            "the twin and the real file are no member"
+        );
+        let reads: Vec<Asked> = disk.asked();
+        assert_eq!(
+            reads,
+            [
+                Asked::Read("/p/base.wasm".into()),
+                Asked::Read("/p/twin.wasm".into()),
+                Asked::Read(outside),
+            ],
+            "each file entry is asked once, through the disk, and nothing reads around it"
         );
     }
 
@@ -349,8 +406,12 @@ mod tests {
             &runtime,
             &specforge_registry::PlainDisk,
         );
-        let set =
-            ProjectPeers::of(&installed, &entries, &mut Declarations::through(&runtime)).unwrap();
+        let set = ProjectPeers::of(
+            &installed,
+            &entries,
+            &mut Declarations::through(&runtime, &PlainDisk),
+        )
+        .unwrap();
 
         let by_the_load: Vec<(&str, &Origin)> = (loaded.enabled.iter())
             .filter(|entry| entry.loaded)

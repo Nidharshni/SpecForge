@@ -26,6 +26,7 @@ use specforge_common::ExtensionEntry;
 use specforge_installed::{Installed, LockFile, LockFileEntry, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_registry::PlainDisk;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
@@ -220,7 +221,7 @@ impl<'a> LockPlan<'a> {
         let mut plan = LockPlan::open(
             installed,
             config,
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Install,
             Some((fetching, runtime)),
             "add",
@@ -243,7 +244,7 @@ impl<'a> LockPlan<'a> {
         Ok(LockPlan::open(
             installed,
             config,
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Update,
             Some((fetching, runtime)),
             "update",
@@ -263,7 +264,7 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             Opened::creating(document),
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Install,
             None,
             "init",
@@ -432,7 +433,10 @@ impl<'a> LockPlan<'a> {
         name: &PackageName,
         same: impl Fn(&LockFileEntry) -> bool,
     ) -> Option<&LockFileEntry> {
-        let entry = self.installed.verified(name.as_str()).filter(|e| same(e))?;
+        let entry = self
+            .installed
+            .verified(name.as_str(), self.declarations.disk())
+            .filter(|e| same(e))?;
         let enabled = self
             .config
             .entries()

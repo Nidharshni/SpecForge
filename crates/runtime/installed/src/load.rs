@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry::{Disk, PlainDisk};
+use specforge_registry::Disk;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
 
@@ -642,13 +642,13 @@ impl Installed {
     /// `name`'s lock entry when its module on disk is the one it pins (any
     /// module, for an entry that pins no hash): the check the extension load
     /// makes ([`Self::check_module`]), without loading it.
-    pub fn verified(&self, name: &str) -> Option<&LockFileEntry> {
+    pub fn verified(&self, name: &str, disk: &dyn Disk) -> Option<&LockFileEntry> {
         let entry = self
             .lock
             .entries()
             .iter()
             .find(|e| e.name.as_str() == name)?;
-        self.check_module(entry, &PlainDisk).ok().map(|_| entry)
+        self.check_module(entry, disk).ok().map(|_| entry)
     }
 }
 
