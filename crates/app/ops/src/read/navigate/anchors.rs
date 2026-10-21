@@ -4,6 +4,8 @@
 //! private to this module; MCP's `specforge.find_implementation`, `specforge.find_spec_for_source` and
 //! the infer prompt's file scope render these documents (ADR 0140).
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 use specforge_common::shape::Shape;
 
@@ -94,6 +96,31 @@ fn manifest(view: &ProjectView<'_>) -> Result<AnchorManifest, OpError> {
         crate::read::infer::read_manifest::<AnchorManifest>(root, ANCHORS_FILENAME)?
             .unwrap_or_default(),
     )
+}
+
+/// Which public source items the project covers: what inference gaps leave out.
+pub(crate) struct CoveredItems<'a> {
+    /// Every id the graph declares.
+    declared: HashSet<&'a str>,
+}
+
+impl<'a> CoveredItems<'a> {
+    /// The view's covered items. Without a root: `no_project`.
+    pub(crate) fn of(view: &ProjectView<'a>) -> Result<Self, OpError> {
+        view.project_root()?;
+        let declared = view
+            .graph()
+            .nodes()
+            .into_iter()
+            .map(|n| n.id.raw.as_str())
+            .collect();
+        Ok(CoveredItems { declared })
+    }
+
+    /// Whether the item `name` in the source `file` is covered.
+    pub(crate) fn covers(&self, _file: &str, name: &str) -> bool {
+        self.declared.contains(name)
+    }
 }
 
 /// Which entities belong to the source files `file_path` names: the manifest's anchors in them, under
