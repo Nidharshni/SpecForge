@@ -465,7 +465,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     diagnostics). A failed
     migration's error names its cause: a migration hook that failed
     (internal_error), a migrated project whose graph changed (W054) or that
-    does not compile (compilation_failed), or files that could not be
+    would add errors (compilation_failed), or files that could not be
     migrated (schema_mismatch); its data is the migration document. A
     problem in specforge.json the run went around fails ok and not the
     call: the call succeeds with the migration document, its E069 among

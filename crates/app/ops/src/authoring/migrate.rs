@@ -28,6 +28,7 @@ use specforge_wasm::WasmRuntime;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
+use crate::authoring::edit::validate::added;
 use crate::change::{ProjectChange, unreadable, unwritable};
 use crate::{Caller, Held, OpError, OpErrorKind, ReadFailure, Refusal, Writes, Wrote};
 
@@ -138,7 +139,7 @@ impl From<Failure> for OpError {
                 OpErrorKind::CompilationFailed,
                 "migration_does_not_compile",
                 format!(
-                    "the migrated project does not compile ({errors} error(s)); nothing was written"
+                    "the migrated project does not compile ({errors} error(s) it would add); nothing was written"
                 ),
             ),
             Failure::ChangedGraph { differences } => OpError::new(
@@ -310,11 +311,13 @@ pub struct Verdict {
     pub graph_delta: GraphDelta,
     /// What the edited compile reports, in `specforge check`'s order.
     pub post_diagnostics: Vec<Diagnostic>,
+    /// How many of its errors the project does not report now (`edit::validate::added`).
+    pub added_errors: usize,
 }
 
 impl Verdict {
     /// Why the migration is refused, or `None` when it is kept: a hook that failed; else a graph that changed, as
-    /// "does not compile" when the planned project has errors, else as W054s.
+    /// "does not compile" when the planned project has errors the project has not, else as W054s.
     pub fn refusal(&self) -> Option<Failure> {
         if !self.hook_failures.is_empty() {
             return Some(Failure::HookFailed {
@@ -324,9 +327,10 @@ impl Verdict {
         if self.graph_delta.is_empty() {
             return None;
         }
-        let errors = self.post_errors().count();
-        if errors > 0 {
-            return Some(Failure::DoesNotCompile { errors });
+        if self.added_errors > 0 {
+            return Some(Failure::DoesNotCompile {
+                errors: self.added_errors,
+            });
         }
         Some(Failure::ChangedGraph {
             differences: structural_differences(&self.graph_delta).len(),
@@ -366,6 +370,9 @@ pub fn judge(
     verdict.compared = true;
     verdict.graph_delta = beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
     verdict.post_diagnostics = post.diagnostics();
+    verdict.added_errors = added(&pre.checked_diagnostics(), verdict.post_diagnostics.clone())
+        .0
+        .len();
     verdict
 }
 

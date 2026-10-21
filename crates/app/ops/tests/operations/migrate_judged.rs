@@ -51,7 +51,6 @@ pub(crate) fn refused_project() -> (tempfile::TempDir, String) {
     (dir, original)
 }
 
-#[ignore = "flipped by T6"]
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
     verify = "a refused migration's cause counts only the errors it would add"

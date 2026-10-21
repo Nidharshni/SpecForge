@@ -8,7 +8,7 @@ mod create;
 mod defaults;
 mod outcome;
 mod path;
-mod validate;
+pub(crate) mod validate;
 pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
