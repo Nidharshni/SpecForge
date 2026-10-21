@@ -210,6 +210,20 @@ pub(crate) mod tests {
         assert_eq!(load_secret("@acme/x").unwrap(), None);
     }
 
+    // Pin (01-D3): keyring-rs is built with no platform feature, so its default store is the in-memory mock.
+    #[test]
+    #[ignore = "removed by T7 (U2=a) or flipped by T7b (U2=b)"]
+    fn the_keyring_backend_is_an_os_store() {
+        let entry = keyring::Entry::new("specforge-registry", "r20-p01-pin").unwrap();
+        assert!(
+            entry
+                .get_credential()
+                .downcast_ref::<keyring::mock::MockCredential>()
+                .is_none(),
+            "the OS keyring is keyring's in-memory mock"
+        );
+    }
+
     #[test]
     fn file_fallback_round_trips_with_restricted_permissions() {
         let dir = tempfile::tempdir().unwrap();

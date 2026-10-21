@@ -5,6 +5,7 @@
 
 mod contract;
 mod credentials;
+mod home;
 mod registry_client;
 mod registry_config;
 mod registry_ops;
