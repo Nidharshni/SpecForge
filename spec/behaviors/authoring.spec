@@ -203,4 +203,5 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "a failed write puts every file back"
   verify unit "an edit planned while the checks are skipped is compared with the checked report"
   verify unit "the report names what the edits change taken together"
+  verify unit "a create links the names the project already writes for its ID"
 }

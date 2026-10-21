@@ -93,3 +93,38 @@ fn a_rename_whose_new_id_is_written_nowhere_plans() {
     let plan = rename::plan(&p.navigator(), "Session", "Token").unwrap();
     assert_eq!(plan.edits().len(), 2);
 }
+
+#[specforge_test_macros::test(
+    behavior = "validate_typed_edit",
+    verify = "a create links the names the project already writes for its ID"
+)]
+fn a_create_links_the_names_already_written_for_its_id() {
+    use specforge_ops::authoring::edit::{self, Edit};
+    use specforge_ops::view::ProjectView;
+    let p = compile(&[(
+        "a.spec",
+        "type Counter \"Counter\" {\n  count integer\n}\n\ntype ApiKey \"Api Key\" {\n  value Token\n}\n",
+    )]);
+    for (id, holder) in [("integer", "Counter"), ("Token", "ApiKey")] {
+        let plan = edit::plan(
+            &ProjectView::of(&p.project),
+            &[Edit::Create {
+                kind: "type".into(),
+                id: id.into(),
+                title: id.into(),
+                file: "a.spec".into(),
+                fields: Default::default(),
+                verify: vec![],
+            }],
+        )
+        .unwrap();
+        let after = p.project.edited(&plan.change().after());
+        let linked = after.graph().edges_from(holder);
+        assert!(
+            linked
+                .iter()
+                .any(|e| e.target.as_str() == id && e.label.as_str() == "composed_types"),
+            "{id}: {linked:?}"
+        );
+    }
+}
