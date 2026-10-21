@@ -14,6 +14,7 @@ mod contracts;
 mod contracts_pass;
 mod coverage;
 mod cross_extension;
+mod declaration_names;
 mod defaults;
 mod determinism;
 mod diagnostics_json;

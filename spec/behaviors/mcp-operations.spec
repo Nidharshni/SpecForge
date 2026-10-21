@@ -179,6 +179,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename never edits a nested project's files"
   verify unit "a rename is refused while a source that spells the ID does not parse"
   verify unit "renaming a spec block is refused: its name is a string, not an entity ID"
+  verify unit "a rename edits a declaration whose name is written below its kind"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
   verify integration "a rename that cannot put a file back names it in files_written"
 }

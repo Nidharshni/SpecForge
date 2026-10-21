@@ -106,6 +106,27 @@ fn retitle_replaces_the_title() {
     );
 }
 
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "retitle of a spec block is refused: its title is its name"
+)]
+#[ignore = "flipped by T6"]
+fn retitling_a_spec_block_is_refused_as_not_editable() {
+    let c = project(&[
+        ("tasks.spec", TASKS),
+        ("guide.spec", "spec \"Guide\" {\n}\n"),
+    ]);
+    let (code, message) = refused(
+        &c,
+        &[Edit::Retitle {
+            entity_id: "Guide".into(),
+            title: "Other".into(),
+        }],
+    );
+    assert_eq!(code, "not_editable");
+    assert!(message.contains("spec block"), "{message}");
+}
+
 #[test]
 fn an_entity_that_does_not_exist_is_refused_with_a_close_match() {
     let c = tasks();

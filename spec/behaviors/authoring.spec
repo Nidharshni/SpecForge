@@ -78,6 +78,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set of an entry into a block field written as none writes it inside"
   verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
+  verify unit "retitle of a spec block is refused: its title is its name"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {

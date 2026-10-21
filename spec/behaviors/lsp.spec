@@ -211,6 +211,7 @@ behavior go_to_definition "Go-to-Definition" {
   verify integration "go-to-def works across files"
   verify unit "source spans convert from 1-based to 0-based for LSP"
   verify unit "the definition's selection is the entity's name token"
+  verify unit "the definition selects a name written below its kind"
   verify unit "a use binding's imported name goes to the entity it names"
   verify unit "a definition is a location link for a client that declares linkSupport, else a location at the name"
   verify unit "the entity after a body being typed is navigated to"
@@ -420,6 +421,7 @@ behavior prepare_rename "Prepare Rename" {
   """
   verify unit "prepare rename on entity ID returns token range"
   verify unit "prepare rename on non-renameable token returns not available"
+  verify unit "prepare rename answers on a name written below its kind"
   verify unit "prepare rename answers on a default no block takes"
   verify unit "prepare rename answers on a reference in a duplicate declaration"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
@@ -476,6 +478,7 @@ behavior rename_entity_id "Rename Entity ID" {
     leave them behind.
   """
   verify unit "rename updates declaration and all references"
+  verify unit "rename edits a name written below its kind and its references"
   verify unit "rename leaves strings, comments and verify texts alone"
   verify unit "rename edits a type named in a method signature and no parameter name"
   verify unit "rename is atomic — all or nothing"
