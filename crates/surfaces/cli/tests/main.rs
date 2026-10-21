@@ -15,6 +15,7 @@ mod config_schema;
 mod contracts;
 mod coverage_corpus;
 mod coverage_gate;
+mod credential_root;
 mod credential_store;
 mod determinism;
 mod docs_relations;
