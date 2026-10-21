@@ -9,7 +9,6 @@ Entities: 7
   type: 2
 Edges:    1
 Unconnected: 5
-Verified: 4
 Declared: 75% of 4 testable
 Proven:   50% of 4 testable
 Diagnostics: 0 errors, 9 warnings, 3 info

@@ -318,8 +318,6 @@ type McpStatsResult "Mcp Stats Result" {
   testable_count     integer
   /// Testable entities with at least one verify statement.
   declared_count     integer
-  /// Entities of any kind with at least one verify statement.
-  verified_count     integer
   /// declared_count over testable_count, in percent (0 when nothing is testable).
   declared_pct       float
   /// Testable entities proven, in percent; absent without recorded test results.

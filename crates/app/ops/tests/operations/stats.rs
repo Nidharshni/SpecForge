@@ -124,18 +124,6 @@ fn stats_reports_the_unconnected_count() {
     assert_eq!(stats.unconnected_count, 2); // "a" and "s"
 }
 
-// B:compute_project_statistics — verify unit "stats reports coverage percentage"
-// (covers verified entity counting for coverage computation)
-#[specforge_test(behavior = "compute_project_statistics")]
-fn stats_reports_verified_count() {
-    let mut graph = Graph::new();
-    graph.add_node(node_with_verify("a", "behavior"));
-    graph.add_node(node("b", "behavior")); // no verify
-
-    let stats = crate::view_support::stats_of(&graph, &[], &[]);
-    assert_eq!(stats.verified_count, 1);
-}
-
 // B:compute_project_statistics — verify unit "stats reports correct entity counts"
 // (edge case: empty graph)
 #[specforge_test(behavior = "compute_project_statistics")]
@@ -145,7 +133,6 @@ fn stats_on_empty_graph() {
     assert_eq!(stats.entity_count, 0);
     assert_eq!(stats.edge_count, 0);
     assert_eq!(stats.unconnected_count, 0);
-    assert_eq!(stats.verified_count, 0);
 }
 
 // B:compute_project_statistics — verify unit "stats reports coverage percentage"
@@ -163,7 +150,7 @@ fn stats_coverage_over_the_testable_kinds() {
     let stats = crate::view_support::stats_of(&graph, testable, &[]);
     // 1 verified out of 2 testable = 50%
     assert_eq!(stats.testable_count, 2);
-    assert_eq!(stats.verified_count, 1);
+    assert_eq!(stats.declared_count, 1);
     assert!((stats.declared_pct - 50.0).abs() < 0.01);
 }
 
@@ -217,7 +204,7 @@ fn stats_counts_obligations_behind_a_verify_member() {
 
     let stats = crate::view_support::stats_of(&graph, &["type"], &[]);
     assert_eq!(stats.testable_count, 2);
-    assert_eq!(stats.verified_count, 1, "Payload declares an obligation");
+    assert_eq!(stats.declared_count, 1, "Payload declares an obligation");
     assert!((stats.declared_pct - 50.0).abs() < 0.01);
 }
 
@@ -287,7 +274,6 @@ const STATS_TODAY: &str = r#"{
     unconnected_count: 2,
     testable_count: 3,
     declared_count: 2,
-    verified_count: 3,
     declared_pct: 66.66666666666666,
     proof_pct: None,
     diagnostic_summary: Counts {
@@ -344,8 +330,10 @@ fn stats_document_leaves_proof_pct_out_without_results() {
 
 /// 11-D1: "verified" is the glossary's word for what counts and is
 /// proven; stats must not print it for entities that only declare.
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "compute_project_statistics",
+    verify = "stats reports no verified count: unverified is what counts toward coverage and is not proven"
+)]
 fn stats_calls_no_count_verified() {
     let mut graph = Graph::new();
     graph.add_node(node_with_verify("a", "behavior")); // declares, nothing proven

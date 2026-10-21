@@ -45,7 +45,6 @@ fn print_human(stats: &Stats, terminal: &Terminal) {
     }
     outln!(terminal, "Edges:    {}", stats.edge_count);
     outln!(terminal, "Unconnected: {}", stats.unconnected_count);
-    outln!(terminal, "Verified: {}", stats.verified_count);
     outln!(
         terminal,
         "Declared: {}% of {} testable",

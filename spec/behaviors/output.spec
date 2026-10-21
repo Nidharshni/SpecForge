@@ -231,8 +231,8 @@ behavior compute_project_statistics "Compute Project Statistics" {
     error.
     specforge stats --format json prints the statistics document
     specforge.stats answers (McpStatsResult): the entity count and the
-    counts by kind, the edge count, the unconnected, testable, declared and
-    verified counts, the declared and proof percentages and the diagnostic
+    counts by kind, the edge count, the unconnected, testable and declared
+    counts, the declared and proof percentages and the diagnostic
     summary by severity; an absent proof percentage is no key, never null.
   """
   verify unit "stats reports correct entity counts"
@@ -242,6 +242,7 @@ behavior compute_project_statistics "Compute Project Statistics" {
   verify unit "coverage is 0% when testable_entity_count is zero"
   verify unit "stats leaves the entities W004 exempts out of the testable count"
   verify unit "the stats document has no proof_pct without recorded test results"
+  verify unit "stats reports no verified count: unverified is what counts toward coverage and is not proven"
   verify integration "stats reports the declared and proof percentages"
   verify contract "Compute Project Statistics: project statistics computation holds — validation_complete_fired, entity_counts_produced, coverage_computed, zero_testable_safe"
 }

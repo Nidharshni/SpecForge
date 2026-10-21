@@ -166,10 +166,10 @@ fn fx1_stats_today() {
     // Testable kinds: behavior and type (5 entities, less the union
     // Status, D2-b); the property is not.
     assert_eq!(stats["testable_count"], 4, "{stats}");
-    // login, reset_password, Payload (its statement sits behind a struct
-    // field named `verify`, S2) and the property, which counts toward
-    // "verified" though its kind is not testable.
-    assert_eq!(stats["verified_count"], 4, "{stats}");
+    // login, reset_password and Payload (its statement sits behind a struct
+    // field named `verify`, S2); the property's kind is not testable.
+    assert_eq!(stats["declared_count"], 3, "{stats}");
+    assert!(stats.get("verified_count").is_none(), "{stats}");
     assert_eq!(stats["declared_pct"], 75.0, "{stats}");
 }
 
@@ -234,7 +234,7 @@ fn todo_app_analyze_and_stats_today() {
 
     let stats = stats(&example);
     assert_eq!(stats["testable_count"], 16, "{stats}");
-    assert_eq!(stats["verified_count"], 16, "{stats}");
+    assert_eq!(stats["declared_count"], 16, "{stats}");
 }
 
 /// The ids of the entities a finding with `code` names (`kind 'id' ...`).
