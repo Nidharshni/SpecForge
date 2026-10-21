@@ -177,6 +177,26 @@ fn the_block_goes_after_the_imports_or_before_the_first_form() {
 
 #[specforge_test(
     behavior = "hoist_file_defaults",
+    verify = "the block goes below the format header"
+)]
+#[ignore = "flipped by T5"]
+fn the_block_goes_below_the_format_header() {
+    let body = blocks(3, |_| BOTH.to_string());
+    let defaults = "defaults behavior {\n  ports    [R]\n  features [F]\n}\n";
+    let bare = blocks(3, |_| String::new());
+    let header = "// specforge-format: 1.0\n";
+    assert_eq!(
+        migrated(&format!("{header}{body}")),
+        format!("{header}{defaults}\n{bare}")
+    );
+    assert_eq!(
+        migrated(&format!("{header}// Doc.\n{body}")),
+        format!("{header}{defaults}\n// Doc.\n{bare}")
+    );
+}
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
     verify = "hoisting twice changes nothing"
 )]
 fn hoisting_twice_changes_nothing() {

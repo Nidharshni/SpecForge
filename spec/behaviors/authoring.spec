@@ -158,6 +158,7 @@ behavior delete_entity "Delete an Entity" {
     is written.
   """
   verify unit "delete removes the block and the comment above it"
+  verify unit "delete keeps the format header above the block"
   verify unit "delete of a referenced entity is E080"
   verify unit "delete with unlink_references removes every reference"
   verify unit "delete with unlink_references removes a scheme ref ID from a string list"

@@ -248,6 +248,7 @@ behavior hoist_file_defaults "Hoist File Defaults" {
   verify unit "a kind that has defaults is left as written"
   verify unit "a hoist that saves no line is not written"
   verify unit "the block goes after the imports or before the first form"
+  verify unit "the block goes below the format header"
   verify unit "hoisting twice changes nothing"
   verify unit "a file with a syntax error is left alone"
   verify unit "a migration that hoists defaults keeps the graph"
