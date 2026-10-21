@@ -18,8 +18,9 @@ behavior create_entity "Create an Entity" {
     its kind in the file, or at the end of the file; a file that does not exist
     is created. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
-    A field whose written value restates its file's default for the kind (W161)
-    is not written: the block inherits it. The field flags of `specforge new` are the kind's fields in the project
+    Each field is written as a set of it writes it, so a field whose written value restates its file's default (W161)
+    is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
+    once. The field flags of `specforge new` are the kind's fields in the project
     the command acts on. A create takes whole fields; a `field.entry` path is refused.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
@@ -31,6 +32,7 @@ behavior create_entity "Create an Entity" {
   verify unit "new never writes a field that restates its default"
   verify unit "new refuses a field.entry path"
   verify unit "new writes each field as set writes it"
+  verify unit "new writes an equal verify obligation once"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"

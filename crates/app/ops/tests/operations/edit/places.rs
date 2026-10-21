@@ -232,8 +232,10 @@ fn set_of_a_new_entry_writes_its_annotations() {
         assert!(line.ends_with("@since \"1.2\""), "{id}: {text}");
     }
 }
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new writes an equal verify obligation once"
+)]
 fn new_writes_an_equal_obligation_once() {
     let c = project(&[("tasks.spec", TASKS)]);
     let Edit::Create {

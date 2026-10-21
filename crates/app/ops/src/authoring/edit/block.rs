@@ -217,7 +217,7 @@ fn group_of(entry: &FieldEntry) -> u8 {
 }
 
 /// The group of a value about to be written.
-pub fn group_of_text(written: &str) -> u8 {
+fn group_of_text(written: &str) -> u8 {
     if written.starts_with('{') {
         2
     } else if written.starts_with("\"\"\"") {
@@ -228,7 +228,7 @@ pub fn group_of_text(written: &str) -> u8 {
 }
 
 /// The rank of field `name` in `group`: where `order` puts it, undeclared members last.
-pub fn rank(order: &[String], name: &str, group: u8) -> (u8, usize) {
+fn rank(order: &[String], name: &str, group: u8) -> (u8, usize) {
     (
         group,
         order.iter().position(|n| n == name).unwrap_or(usize::MAX),

@@ -1,9 +1,9 @@
 //! Creating and deleting entities (ADR 0151): a new block goes after the last block of its kind in its file, laid
 //! out canonically; a deleted block takes the comment lines above it and one blank line with it.
 
-use super::block::{self, Block, Site, group_of_text, rank};
+use super::block::{self, Block, Site};
 use super::path::{self, FieldPath};
-use super::write::{not_editable, written};
+use super::write::not_editable;
 use super::{EditField, Input, Obligation, Planner};
 use crate::authoring::rename::{self, validate_id};
 use crate::{OpError, OpErrorKind, Refusal};
@@ -67,46 +67,16 @@ impl Planner<'_> {
             kind,
             config: self.config_of(file),
         };
-        let order = block::order(self.view, kind);
-        let config = site.config.clone();
-        let mut members: Vec<((u8, usize), String, String)> = Vec::new();
+        let header = format!("{kind} {id} {} {{\n}}", spell::quoted(title));
+        let mut text = block::canonical(&site, &place(&existing, &parsed, kind, &header))?;
         for (name, input) in fields {
-            let reading = match path::resolve(&site, name, None)? {
-                FieldPath::Entry { field, entry, .. } => {
-                    return Err(path::whole_field("create", field, entry));
-                }
-                FieldPath::Field { reading, .. } => reading,
-            };
-            let value = written(reading, name, input, &config.indent_str(), &config)?;
-            members.push((
-                rank(&order, name, group_of_text(&value)),
-                name.clone(),
-                value,
-            ));
+            if let FieldPath::Entry { field, entry } = path::resolve(&site, name, None)? {
+                return Err(path::whole_field("create", field, entry));
+            }
+            text = block::set(&site, &text, name, input, None)?;
         }
-        members.sort();
-        let mut lines = vec![format!("{kind} {id} {} {{", spell::quoted(title))];
-        lines.extend(
-            members
-                .iter()
-                .map(|(_, name, value)| format!("  {name} {value}")),
-        );
-        lines.extend(verify.iter().map(|o| {
-            let kind = o
-                .kind
-                .as_deref()
-                .map(|k| format!("{k} "))
-                .unwrap_or_default();
-            format!("  verify {kind}{}", spell::quoted(&o.text))
-        }));
-        lines.push("}".to_string());
-        let text = place(&existing, &parsed, kind, &lines.join("\n"));
-        let mut text = block::canonical(&site, &text)?;
-        // A field that restates its file's default is not written (W161), judged on what was written (ADR 0154).
-        for name in fields.keys() {
-            text = super::defaults::change(&site, &text, name, |_, _| {
-                Ok(super::defaults::Change::Changed)
-            })?;
+        for o in verify {
+            text = block::verify(&site, &text, o.kind.as_deref(), &o.text, true)?;
         }
         self.texts.insert(file.to_string(), text);
         self.created
