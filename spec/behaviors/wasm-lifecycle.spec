@@ -153,6 +153,7 @@ behavior install_wasm_extension "Install Wasm Extension" {
   verify unit "an install over an unreadable specforge.lock is refused before anything is written"
   verify unit "an add whose installs are all present writes only specforge.json, wherever its lock links"
   verify unit "an install of an extension whose binary changed after install replaces it"
+  verify unit "an add of a registry install whose lock entry pins no hash fetches it and pins its bytes"
   verify unit "an extension is installed under the extensions directory of its project, by its package name"
   verify unit "add, init and publish read a candidate's declaration in the runtime their surface passes"
   verify performance "single extension install completes within 30 seconds on commodity hardware"

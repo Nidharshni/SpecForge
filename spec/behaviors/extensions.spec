@@ -1004,6 +1004,8 @@ behavior check_registry_reply "Check Registry Reply" {
   verify unit "add refuses a package whose binary declares other than its published declaration"
   verify unit "the diamond gate decides on the published declaration's peers"
   verify unit "add refuses another version served with the bytes the lock already pins"
+  verify unit "add refuses the version specforge.lock pins served as other bytes, writing nothing, and its dry run says so"
+  verify unit "add of the version specforge.lock pins, served as its bytes, installs them and leaves the lock as it was"
   verify integration "a package published with a legacy manifest is refused with a re-publish suggestion"
 }
 
