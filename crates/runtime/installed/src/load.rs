@@ -21,7 +21,7 @@ use crate::module::Module;
 use crate::resolve::{Origin, Resolved};
 
 /// The builtin extensions the host embeds: name and component bytes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Builtins<'a>(pub &'a [(&'a str, &'a [u8])]);
 
 impl<'a> Builtins<'a> {
@@ -170,6 +170,9 @@ pub enum LoadProblem {
     /// E028, file entry: declares another name than the one written before
     /// `=`.
     NotTheNameWritten { declared: String, written: String },
+    /// E028, file entry: declares the name of a builtin this specforge embeds; only the builtin
+    /// loads under it.
+    BuiltinsName { declared: String },
     /// E028, file entry: declares an extension another entry already loads.
     AlreadyLoaded { declared: String },
 }
@@ -297,6 +300,7 @@ impl LoadProblem {
             )),
             LoadProblem::FileMissing { .. }
             | LoadProblem::NotTheNameWritten { .. }
+            | LoadProblem::BuiltinsName { .. }
             | LoadProblem::AlreadyLoaded { .. }
             | LoadProblem::NotAComponent { .. }
             | LoadProblem::NoDeclaration { .. } => {
@@ -322,6 +326,15 @@ impl LoadProblem {
             LoadProblem::NotTheNameWritten { declared, written } => refused(
                 format!("{} declares '{declared}', not '{written}'", file.display()),
                 format!("write \"{declared}={path}\", or just \"{path}\""),
+            ),
+            LoadProblem::BuiltinsName { declared } => refused(
+                format!(
+                    "{} declares '{declared}', the name of a builtin extension: only the builtin loads under it",
+                    file.display()
+                ),
+                format!(
+                    "write \"{declared}\" in place of this entry to enable the builtin, or rebuild the extension under a name of its own"
+                ),
             ),
             LoadProblem::AlreadyLoaded { declared } => refused(
                 format!(

@@ -75,7 +75,8 @@ behavior load_extension_manifests "Load Extension Manifests" {
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
     read that one decision. A file that does not exist, cannot be read, does not load as a
-    component, declares another name than the one written, or declares an
+    component, declares another name than the one written, declares the name of a
+    builtin (only the builtin loads under a builtin's name), or declares an
     extension another entry already loads MUST produce E028 naming the entry.
     Each entry's outcome MUST record where the load takes its extension from
     (builtin, the lock entry's source, file:<path>, or unknown; a repeated

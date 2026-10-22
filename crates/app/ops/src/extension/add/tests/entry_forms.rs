@@ -63,7 +63,6 @@ fn an_add_that_would_shadow_a_loading_file_entry_is_refused() {
     behavior = "add_extension_to_existing_project",
     verify = "an add of a builtin over a .wasm file entry that declares its name enables the builtin"
 )]
-#[ignore = "flipped by T2"]
 fn an_add_of_a_builtin_over_a_file_entry_declaring_its_name_enables_the_builtin() {
     let dir = project_with(r#"{"name":"p","extensions":["./impostor.wasm"]}"#);
     std::fs::write(dir.path().join("impostor.wasm"), b"\0asm impostor").unwrap();

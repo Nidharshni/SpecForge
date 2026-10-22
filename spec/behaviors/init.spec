@@ -325,6 +325,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     the extension load admits it, an installed extension of that name whose module is missing or
     changed included) MUST NOT be installed or enabled beside it: the add is refused
     with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
+    A .wasm file entry that declares a builtin's name is never admitted, so it does not stand in
+    the way of enabling that builtin.
     Only a named entry (name, or name@version as older adds wrote it) makes an extension already
     enabled or already present.
     A dry run is the add's lock plan judged and not committed: it answers

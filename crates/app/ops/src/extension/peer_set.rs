@@ -515,8 +515,8 @@ mod tests {
         verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
     )]
     fn loaded_by_takes_a_builtin_only_from_its_entry() {
-        // A `.wasm` file entry loaded under a builtin's name: its declaration is the file's, not
-        // the builtin's.
+        // A view assembled with a `.wasm` file entry loaded under a builtin's name (the load
+        // refuses one since ADR 0214): its declaration is still filed by origin, not by name.
         let fixture = Assembled::new()
             .runtime(std::sync::Arc::new(serving_builtin(
                 testing::probes(),

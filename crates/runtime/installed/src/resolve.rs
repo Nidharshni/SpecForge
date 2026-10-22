@@ -49,18 +49,25 @@ pub struct FileEntry<'a> {
 
 impl FileEntry<'_> {
     /// Whether a component declaring `declared` is what this entry enables. It must declare the name
-    /// written before `=` when there is one (`NotTheNameWritten`), and an extension an entry tried
+    /// written before `=` when there is one (`NotTheNameWritten`), never a builtin's name
+    /// (`BuiltinsName`: only the builtin loads under it, ADR 0214), and an extension an entry tried
     /// before it must not already be loaded under that name (`AlreadyLoaded`; `loaded` says which
     /// names are).
     pub(crate) fn admit(
         &self,
         declared: &str,
+        builtins: &Builtins,
         loaded: impl Fn(&str) -> bool,
     ) -> Result<(), LoadProblem> {
         if let Some(written) = self.written.filter(|written| *written != declared) {
             return Err(LoadProblem::NotTheNameWritten {
                 declared: declared.to_string(),
                 written: written.to_string(),
+            });
+        }
+        if builtins.contains(declared) {
+            return Err(LoadProblem::BuiltinsName {
+                declared: declared.to_string(),
             });
         }
         if declared != self.key && loaded(declared) {
@@ -76,6 +83,9 @@ impl FileEntry<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resolution<'a> {
     entries: Vec<Resolved<'a>>,
+    /// The builtins the entries were resolved over: a `.wasm` file entry is never admitted under
+    /// one's name.
+    builtins: Builtins<'a>,
 }
 
 impl<'a> Resolution<'a> {
@@ -121,7 +131,7 @@ impl<'a> Resolution<'a> {
         let mut outcomes = Vec::new();
         for (i, resolved) in self.in_load_order() {
             let outcome = read(i, resolved).and_then(|(declared, brings)| {
-                match resolved.admit(&declared, |name| admitted.contains(name)) {
+                match resolved.admit(&declared, &self.builtins, |name| admitted.contains(name)) {
                     Ok(()) => {
                         let name = match resolved {
                             Resolved::File(_) => declared,
@@ -209,11 +219,13 @@ impl Resolution<'_> {
 impl Resolved<'_> {
     /// Whether a component declaring `declared` is what this entry enables: the one place the
     /// admit rules live. A builtin admits any name; a locked entry must declare its own name
-    /// (`NotItsLockEntry`); a `.wasm` file entry follows [`FileEntry::admit`]. `Unloadable` and
+    /// (`NotItsLockEntry`); a `.wasm` file entry follows [`FileEntry::admit`]: the name written,
+    /// never a builtin's, not one already loaded. `Unloadable` and
     /// `Again` never reach a component, so they admit nothing to refuse.
     pub(crate) fn admit(
         &self,
         declared: &str,
+        builtins: &Builtins,
         loaded: impl Fn(&str) -> bool,
     ) -> Result<(), LoadProblem> {
         match self {
@@ -222,7 +234,7 @@ impl Resolved<'_> {
                     declared: declared.to_string(),
                 })
             }
-            Resolved::File(file) => file.admit(declared, loaded),
+            Resolved::File(file) => file.admit(declared, builtins, loaded),
             _ => Ok(()),
         }
     }
@@ -269,7 +281,10 @@ impl Installed {
                 }
             })
             .collect();
-        Resolution { entries: resolved }
+        Resolution {
+            entries: resolved,
+            builtins: *builtins,
+        }
     }
 
     /// The extension a named entry names: a builtin from its bytes, an installed one by its lock
@@ -542,10 +557,16 @@ mod tests {
             name: "@acme/a",
             entry: &entry,
         };
-        assert_eq!(builtin.admit("@acme/anything", |_| true), Ok(()));
-        assert_eq!(installed.admit("@acme/a", |_| true), Ok(()));
         assert_eq!(
-            installed.admit("@acme/b", |_| false),
+            builtin.admit("@acme/anything", &Builtins::none(), |_| true),
+            Ok(())
+        );
+        assert_eq!(
+            installed.admit("@acme/a", &Builtins::none(), |_| true),
+            Ok(())
+        );
+        assert_eq!(
+            installed.admit("@acme/b", &Builtins::none(), |_| false),
             Err(LoadProblem::NotItsLockEntry {
                 declared: "@acme/b".to_string()
             })
@@ -557,8 +578,8 @@ mod tests {
             written: Some("@acme/x"),
         };
         assert_eq!(
-            Resolved::File(file.clone()).admit("@acme/g", |_| false),
-            file.admit("@acme/g", |_| false)
+            Resolved::File(file.clone()).admit("@acme/g", &Builtins::none(), |_| false),
+            file.admit("@acme/g", &Builtins::none(), |_| false)
         );
     }
 
@@ -571,22 +592,64 @@ mod tests {
             written,
         };
 
-        assert_eq!(file(None).admit("@acme/g", |_| false), Ok(()));
-        assert_eq!(file(Some("@acme/g")).admit("@acme/g", |_| false), Ok(()));
         assert_eq!(
-            file(Some("@acme/x")).admit("@acme/g", |_| false),
+            file(None).admit("@acme/g", &Builtins::none(), |_| false),
+            Ok(())
+        );
+        assert_eq!(
+            file(Some("@acme/g")).admit("@acme/g", &Builtins::none(), |_| false),
+            Ok(())
+        );
+        assert_eq!(
+            file(Some("@acme/x")).admit("@acme/g", &Builtins::none(), |_| false),
             Err(LoadProblem::NotTheNameWritten {
                 declared: "@acme/g".to_string(),
                 written: "@acme/x".to_string()
             })
         );
         assert_eq!(
-            file(None).admit("@acme/g", |name| name == "@acme/g"),
+            file(None).admit("@acme/g", &Builtins::none(), |name| name == "@acme/g"),
             Err(LoadProblem::AlreadyLoaded {
                 declared: "@acme/g".to_string()
             })
         );
         // The entry's own key is not "another entry".
-        assert_eq!(file(None).admit("g.wasm", |_| true), Ok(()));
+        assert_eq!(
+            file(None).admit("g.wasm", &Builtins::none(), |_| true),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_file_entry_is_never_admitted_under_a_builtins_name() {
+        let builtins = Builtins(&[("@acme/core", b"\0asm")]);
+        let file = FileEntry {
+            key: "g.wasm",
+            path: "g.wasm",
+            file: PathBuf::from("/p/g.wasm"),
+            written: None,
+        };
+        let named = FileEntry {
+            written: Some("@acme/core"),
+            ..file.clone()
+        };
+        for entry in [file, named] {
+            assert_eq!(
+                entry.admit("@acme/core", &builtins, |_| false),
+                Err(LoadProblem::BuiltinsName {
+                    declared: "@acme/core".into()
+                })
+            );
+            assert_eq!(
+                entry.admit("@acme/g", &builtins, |_| false).is_ok(),
+                entry.written.is_none()
+            );
+        }
+        // A builtin entry admits its own name.
+        let builtin = Resolved::Builtin {
+            name: "@acme/core",
+            bytes: b"",
+        };
+        assert_eq!(builtin.admit("@acme/core", &builtins, |_| false), Ok(()));
     }
 }
