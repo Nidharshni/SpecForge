@@ -344,10 +344,23 @@ impl From<&MissingLink> for Gap {
             target_entity: link.expected_kind.clone(),
             missing_link_type: "missing_link".to_string(),
             gap_context: format!(
-                "{} '{}' has no '{}' link to a {}{required}",
-                link.from_kind, link.from, link.edge_label, link.expected_kind
+                "{} '{}' has no '{}' link to {} {}{required}",
+                link.from_kind,
+                link.from,
+                link.edge_label,
+                article(&link.expected_kind),
+                link.expected_kind
             ),
         }
+    }
+}
+
+/// "an" before a kind name that starts with a vowel, else "a".
+fn article(kind: &str) -> &'static str {
+    if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        "an"
+    } else {
+        "a"
     }
 }
 
@@ -412,4 +425,16 @@ fn links(graph: &Graph, entity_id: &str, direction: Direction) -> Vec<TraceLink>
         .collect();
     links.sort_by(|a, b| a.depth.cmp(&b.depth).then(a.entity_id.cmp(&b.entity_id)));
     links
+}
+
+#[cfg(test)]
+mod tests {
+    use super::article;
+
+    #[test]
+    fn the_missing_link_sentence_writes_an_before_a_vowel() {
+        assert_eq!(article("event"), "an");
+        assert_eq!(article("invariant"), "an");
+        assert_eq!(article("port"), "a");
+    }
 }
