@@ -855,7 +855,7 @@ fn query_today() {
     );
     let filtered = cli(
         &tmp,
-        &["query", "login", "--path", s(root), "--kind", "behaviour"],
+        &["query", "login", "--path", s(root), "--kinds", "behaviour"],
     );
     snap(
         "cli_unknown_kind",

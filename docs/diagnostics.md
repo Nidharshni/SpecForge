@@ -1260,7 +1260,7 @@ Level: info
 ```
 I020: Unknown entity kind in a filter
 
-A kind filter (`specforge export --kinds`, `specforge query --kind`, `specforge
+A kind filter (`specforge export --kinds`, `specforge query --kinds`, `specforge
 explore --kind`, `specforge model --kinds`, and the `kinds` or `kind` of the
 `specforge.export`, `specforge.query`, `specforge.search`, `specforge.list`,
 `specforge.coverage` and `specforge.model` MCP tools, the explore prompt and the

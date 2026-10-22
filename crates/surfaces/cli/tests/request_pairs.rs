@@ -740,7 +740,6 @@ fn a_kinds_list_written_as_text_is_one_filter_on_every_surface() {
     );
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test_macros::test(
     behavior = "query_graph_multi_resolution",
     verify = "specforge query --kinds reads a kinds list as specforge export --kinds does, and answers what specforge.query answers for its items"

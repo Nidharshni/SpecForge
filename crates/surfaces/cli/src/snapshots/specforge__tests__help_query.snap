@@ -21,8 +21,8 @@ Options:
           
           [default: 1]
 
-      --kind <KIND>
-          Filter results to specific entity kinds (can be repeated)
+      --kinds <KINDS>
+          Keep only entities of these kinds (comma-separated, or the flag repeated); the queried entity always stays
 
       --format <FORMAT>
           Output detail level

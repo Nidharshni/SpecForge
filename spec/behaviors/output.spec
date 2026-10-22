@@ -1318,7 +1318,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   }
   ensures {
     depth_respected            "Subgraph returned contains only entities within the requested hop distance"
-    kind_filter_applied        "When --kind is specified, results are restricted to the specified entity kinds"
+    kind_filter_applied        "When --kinds is specified, results are restricted to the specified entity kinds"
     graph_protocol_conformance "Output is valid JSON conforming to the Graph Protocol schema with schema_version"
     graph_queried_emitted      "graph_queried event is emitted after query completes"
   }
@@ -1327,10 +1327,12 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
     the system MUST return the subgraph at the requested resolution level.
     Depth 0 returns only the entity itself. Depth 1 (the default) returns
     direct neighbors. Depth N returns all entities within N hops. An
-    optional --kind parameter MUST filter results to only include entities
+    optional --kinds parameter MUST filter results to only include entities
     of the specified kind(s), the queried entity always, keeping an edge
-    only when both of its entities are kept. Multiple --kind values MAY be
-    specified (e.g., --kind=alpha --kind=beta); a kind the project does not
+    only when both of its entities are kept. --kinds is a kinds list
+    (comma-separated, each item trimmed, as specforge export --kinds) and
+    MAY be repeated (e.g., --kinds=alpha,beta or --kinds=alpha --kinds=beta);
+    a kind the project does not
     know matches nothing and is reported as I020 with the closest kind.
     Kind names are extension-defined; examples use placeholders.
     --format selects an agent format (graph, context, brief) and
@@ -1354,7 +1356,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "depth N returns all entities within N hops"
   verify unit "kind filter restricts results to specified entity kinds"
   verify unit "multiple kind filters combine as union"
-  verify unit "an unknown --kind is reported with I020 and the closest kind"
+  verify unit "an unknown kind of --kinds is reported with I020 and the closest kind"
   verify unit "specforge query --kinds reads a kinds list as specforge export --kinds does, and answers what specforge.query answers for its items"
   verify unit "a non-existent entity is E003 naming the closest entity"
   verify unit "--include-coverage gives each entity its coverage status"
