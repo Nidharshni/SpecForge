@@ -88,3 +88,14 @@ fn the_rewritten_text_is_a_fixed_point() {
     let once = fmt_forms("behavior b \"B\" {\n  category \"cart\"\n  types [\"a\"]\n}\n");
     assert_eq!(fmt_forms(&once), once);
 }
+
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
+fn a_triple_quoted_word_is_written_bare_as_a_quoted_one_is() {
+    assert_eq!(
+        fmt_forms("behavior b \"B\" {\n  category \"\"\"cart\"\"\"\n}\n"),
+        "behavior b \"B\" {\n  category cart\n}\n"
+    );
+}

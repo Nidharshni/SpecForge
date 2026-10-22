@@ -77,6 +77,11 @@ pub fn kinds_of_text(text: &str) -> impl Iterator<Item = &str> {
     text.split(',').map(str::trim)
 }
 
+/// [`kinds_of_text`] over each of several texts (a repeatable `--kinds` flag), in order.
+pub fn kinds_of_texts(texts: &[String]) -> impl Iterator<Item = &str> {
+    texts.iter().flat_map(|text| kinds_of_text(text))
+}
+
 impl ProjectView<'_> {
     /// The filter `kinds` (empty: every kind), with I020 for each kind the project lacks.
     pub fn kind_filter<'r>(&self, kinds: &'r [&'r str]) -> KindFilter<'r> {
