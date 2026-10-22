@@ -1248,12 +1248,16 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   holder (each block the finder says holds the token: an inherited reference once per block that takes it, none for a
   default no block takes; `Navigator::references`, what find-references returns) and one per written token (`Navigator::tokens`, read by the graph's finder, a default no block takes
   included: what rename edits and an editor shows) (ADR 0149 D11, ADR 0156, ADR 0163, ADR 0176).
+- **Reference span**: where a reference writes its ID: the ID's own bytes, inside the quotes of a quoted value
+  (`"user"` is `user`; `"""user"""` too), else the value as written. `Reading::references` answers it
+  (`field_form::spell::id_span`), so the finder's tokens, the linker's E003/E022/I004, navigation, rename and the replace fix
+  read the same span; W159 and the formatter read the whole value (ADR 0218).
 - **Written token**: a place a file writes an entity's ID as a reference: a field's reference (a block's own, or a
   `defaults` entry whether or not a block takes it) or a type name a derived field reads. The graph's one finder answers
   them per parsed file (`specforge_graph::written_tokens`), with who writes each and how, and the blocks that hold it (`held_by`). Every question of where a name is written asks
   it: rename and the editor's references (`Navigator::tokens`), find-references (`Navigator::references`), the token at
   a position (`Navigator::occurrence_at`: prepareRename, hover, definition) and a delete's referrer scan (ADR 0163,
-  ADR 0176). The graph keeps no position of a reference; a declaration's name is the parse's (ADR 0187). The finder reads each block the way the graph build stores it
+  ADR 0176, ADR 0218: at its reference span). The graph keeps no position of a reference; a declaration's name is the parse's (ADR 0187). The finder reads each block the way the graph build stores it
   (its entries coerced), so a list written as one value is one item, never a type name.
 - **Declaration name**: where a block's name is written, as the parse read it (`specforge_parser::Entity::name_span`;
   a method's, `MethodDecl::name_span`): an entity's identifier on whichever line of its header, a scheme ref's ID, a
