@@ -74,7 +74,6 @@ fn init_writes_any_version_as_the_one_string_its_starter_reads_back() {
     behavior = "scaffold_starter_spec_file",
     verify = "init refuses a starter that does not parse, naming the extension whose template it is, before anything is written"
 )]
-#[ignore = "flipped by T4"]
 fn init_refuses_a_starter_template_that_does_not_parse_writing_nothing() {
     let scratch = TempDir::new().unwrap();
     let wasm = scratch.path().join("broken.wasm");
@@ -97,7 +96,7 @@ fn init_refuses_a_starter_template_that_does_not_parse_writing_nothing() {
         &runtime,
     )
     .unwrap_err();
-    assert_eq!(refusal.error.code, "starter_unparsed");
+    assert_eq!(refusal.error.code, init::STARTER_UNPARSED);
     assert_eq!(refusal.subject, Some(InitField::Extensions));
     assert!(
         refusal.error.message.contains("@x/broken"),

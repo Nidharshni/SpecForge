@@ -123,7 +123,9 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
     in with the version escaped as the inside of a .spec string (backslash,
     quote, line breaks, tab), so a template writes it between quotes and the
     spec block reads back the version specforge.json records, whatever it
-    holds. Init MUST write the starter as the
+    holds. Init MUST parse the laid-out starter before it writes anything
+    and refuse one that does not parse (starter_unparsed), naming the
+    extension whose template it is. Init MUST write the starter as the
     formatter writes it, with the configuration of its directory and the
     field forms of the extensions it enables, whatever they contribute, so
     a freshly initialised project passes specforge format --check.

@@ -33,6 +33,8 @@ pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
 /// starter is already there.
 pub const STARTER_EXISTS: &str = "starter_exists";
+/// The code an init refused with because the laid-out starter does not parse.
+pub const STARTER_UNPARSED: &str = "starter_unparsed";
 /// The code an init refused with because the project its directory lies inside would read other
 /// sources once it is a project (ADR 0197).
 pub const INSIDE_PROJECT_SOURCES: &str = "inside_project_sources";
@@ -153,7 +155,8 @@ pub struct InitDocument {
 /// it lies inside reads as its sources, or that is where that project reads them from, is refused
 /// (`inside_project_sources`). Its error reports nothing
 /// written. A name whose starter spec ID `check` would refuse (E014, or E013 over the kinds of the
-/// extensions it enables) is refused once those are read.
+/// extensions it enables) is refused once those are read. A starter that does not parse is refused
+/// (`starter_unparsed`), naming the extension whose template it is.
 pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal<InitField>> {
     if ProjectRoot::is_root(req.dir) {
         return Err(OpError::new(
@@ -244,9 +247,10 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The registry build its first `check` loads, made before the project exists: it decides whether the
     // starter's spec ID is one `check` refuses (E014, E013), whatever is enabled (ADR 0189).
     let declared = declarations(&extensions, locals, runtime)?;
-    let template = declared
-        .iter()
-        .find_map(|declaration| declaration.handshake.starter_template.clone());
+    let template = declared.iter().find_map(|declaration| {
+        let text = declaration.handshake.starter_template.clone()?;
+        Some((declaration.handshake.name.clone(), text))
+    });
     let build = specforge_registry::build_registries(declared);
     match specforge_registry::refused_id(&spec_id, build.kinds()) {
         None => {}
@@ -274,9 +278,11 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
 
     // Each placeholder stands for the inside of a `.spec` string: `{project}` first, so a version that
     // writes `{project}` stays literal (ADR 0226).
-    let starter = template
-        .as_deref()
-        .unwrap_or(STRUCTURAL_STARTER)
+    let (origin, text) = match &template {
+        Some((name, text)) => (Some(name.as_str()), text.as_str()),
+        None => (None, STRUCTURAL_STARTER),
+    };
+    let starter = text
         .replace("{project}", &spell::escaped(&spec_id))
         .replace("{version}", &spell::escaped(&version));
     // Whatever the extensions contribute, the file is written as the
@@ -288,6 +294,14 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         &req.caller.containment().narrowed(req.dir).disk(),
         build.field_forms(),
     );
+    // What `check` starts with, asked before anything is written (ADR 0226): a template's text is the
+    // extension's, so a starter that does not parse is refused about the extensions.
+    let parsed = specforge_parser::parse(&starter, STARTER_FILE);
+    if let Some(first) = parsed.errors.first() {
+        return Err(
+            starter_unparsed(origin, first, parsed.errors.len()).about(InitField::Extensions)
+        );
+    }
     let dir = req.dir;
     let files = vec![
         Also {
@@ -348,6 +362,34 @@ fn starter_exists(dir: &Path) -> OpError {
             dir.display()
         ),
     )
+}
+
+/// The refusal of a starter that does not parse: `origin` is the extension whose template it is.
+fn starter_unparsed(
+    origin: Option<&str>,
+    first: &specforge_parser::ParseError,
+    count: usize,
+) -> OpError {
+    let whose = origin.map_or_else(
+        || "the starter".to_string(),
+        |name| format!("the starter template '{name}' declares"),
+    );
+    let error = OpError::new(
+        OpErrorKind::InvalidInput,
+        STARTER_UNPARSED,
+        format!(
+            "{whose} does not parse (line {}: {}; {count} error{}); nothing was written",
+            first.span.start_line,
+            first.message,
+            if count == 1 { "" } else { "s" },
+        ),
+    );
+    match origin {
+        Some(name) => error.with_suggestion(format!(
+            "list another extension first in --extensions, or init without '{name}' and add it afterwards"
+        )),
+        None => error,
+    }
 }
 
 fn invalid_name(name: &str, why: &str) -> OpError {
