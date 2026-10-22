@@ -425,6 +425,7 @@ behavior prepare_rename "Prepare Rename" {
   verify unit "prepare rename answers on a name written below its kind"
   verify unit "prepare rename answers on a default no block takes"
   verify unit "prepare rename answers on a reference in a duplicate declaration"
+  verify unit "prepare rename answers on a quoted reference, inside its quotes"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
   verify unit "prepare rename from a document the project does not build answers that rename is not available"
   verify unit "prepare rename from a document opened since the compile waits for it"
@@ -498,6 +499,7 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename to a name the project already writes for no entity is refused naming each place"
   verify unit "rename refuses a capture the graph shows no new edge for"
   verify unit "rename onto an unresolved reference is refused as a capture"
+  verify unit "rename edits a quoted reference inside its quotes"
   verify unit "a rename is refused while a source that spells the new ID does not parse"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
@@ -957,6 +959,7 @@ behavior code_action_replace_unresolved "Code Action: Replace an Unresolved Refe
   """
   verify unit "an unresolved reference with a close match is replaced at its token"
   verify unit "an unresolved import with a close match is replaced inside its quotes"
+  verify unit "a quoted unresolved reference with a close match is replaced inside its quotes"
   verify unit "the replacement is read from the diagnostic's data, whatever its message says"
 }
 

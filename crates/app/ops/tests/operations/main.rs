@@ -73,6 +73,7 @@ mod project_file_reads;
 mod project_files;
 mod publish;
 mod query;
+mod quoted_references;
 mod refusals;
 mod registry_search;
 mod remedy_wording;
