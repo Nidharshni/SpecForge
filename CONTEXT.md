@@ -902,7 +902,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   milestone due before its dependency (I064), a shipped deliverable tracking an incomplete milestone
   (I065). Its declarative rules check one entity at a time (ADR 0039).
 - **Missing link**: an expected edge, from the registries, that a traced entity lacks
-  (`MissingLink`). The only gap a trace reports.
+  (`MissingLink`). The only gap a trace reports. Written, like a plan gap, as an
+  `McpTraceGap` row (`specforge_ops::read::trace::Gap`).
 - **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
   (`specforge_ops::read::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
   Its entry order is its dependency order; the graph's edges are the dependencies, and entities on one cycle come
@@ -972,7 +973,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Preview**: a mutation asked only to report (`--dry-run`/`dry_run`; format's `--check` or `--diff`). It writes
   nothing; its operation's outcome answers `Wrote::Previewed` (`specforge_ops::Wrote`), its document says
   `dry_run: true`, and neither surface lists `files_written`. A run that found nothing to change is no preview:
-  `Wrote::Ran` with no file, `files_written: []` (ADR 0162).
+  `Wrote::Ran` with no file, `files_written: []` (ADR 0162). A call refused before it runs
+  (no project served, a `path` naming none) is still a preview when its arguments read and ask for one: nothing
+  listed, nothing recorded (ADR 0229).
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`, `ExtensionsDocument`, `ProvidersDocument`, `SchemaDocument`; an outcome whose every field reaches its
