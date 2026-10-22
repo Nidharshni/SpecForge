@@ -17,6 +17,7 @@ mod graph;
 mod obligations;
 mod reach;
 mod reading;
+mod repeated;
 mod resolution;
 mod select;
 mod spell;

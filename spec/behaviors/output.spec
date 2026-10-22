@@ -486,6 +486,7 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   verify unit "an entity's coverage is its coverage row's verdict, obligation by obligation"
   verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
   verify unit "an unknown entity is E003, entity_not_found"
+  verify unit "an entity's headline and its fields read the one entry of a field written twice"
 }
 
 // The exploration and the review: the explore and review prompts'

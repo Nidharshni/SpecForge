@@ -273,6 +273,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
   verify unit "a rule without a target kind applies to every kind, for the rule, the standing and the verify stub alike"
   verify unit "a kind that accepts no verify statements owes no obligations, whatever rule applies to it"
+  verify unit "a field written twice reads as its first entry to declarative rules, custom validators and compiler passes"
   verify unit "the checks, the check passes and the coverage of one compile read one snapshot"
   verify unit "a session's snapshot follows every update"
   verify unit "a snapshot reads only a graph built in its registry build"

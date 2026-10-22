@@ -301,3 +301,27 @@ fn an_unknown_entity_is_not_found() {
         "unresolved entity 'ghost' — not found in graph"
     );
 }
+
+#[specforge_test(
+    behavior = "inspect_entity_facts",
+    verify = "an entity's headline and its fields read the one entry of a field written twice"
+)]
+#[ignore = "flipped by T3"]
+fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
+    let p = compile(
+        &["@specforge/software"],
+        &[(
+            "a.spec",
+            "behavior beh \"B\" {\n  category command\n  contract \"first contract\"\n  \
+             contract \"second contract\"\n}\n",
+        )],
+    );
+    let view = ProjectView::of(&p.project);
+    let facts = inspect(&view, "beh").unwrap();
+    assert_eq!(facts.headline, Some("first contract"));
+    let fields = specforge_graph::field_form::write_fields(&facts.node.fields);
+    assert_eq!(
+        serde_json::to_value(&fields["contract"]).unwrap(),
+        serde_json::json!("first contract")
+    );
+}

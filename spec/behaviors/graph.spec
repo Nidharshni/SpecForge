@@ -54,6 +54,9 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "detects self-referencing cycle"
   verify unit "no false positives for acyclic graph"
   verify unit "same ID with different kinds does not produce E002"
+  verify unit "a field written twice in one block is E081, and the node holds its first entry, at any depth"
+  verify unit "a later entry's names stay tokens a rename edits, and link nothing"
+  verify unit "an update reports a field written twice as the cold build does"
 }
 
 behavior apply_file_defaults "Apply File Defaults" {
