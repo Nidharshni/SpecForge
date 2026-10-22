@@ -19,6 +19,10 @@ A user-facing capability that solves a specific problem
 
 ---
 
+**Coverage** · `not_testable` · its kind is not testable, so it does not count
+
+---
+
 **Referenced by** *(1)*
 - behavior via `features`: login
 

@@ -19,7 +19,7 @@ A temporal property assertion (safety, liveness, fairness)
 
 ---
 
-**Coverage** · `not_testable` · 0/1 obligations proven · 0 tests · its kind is not testable, so it does not count
+**Coverage** · `not_testable` · its kind is not testable, so it does not count · 0/1 obligations proven · 0 tests
 
 ---
 

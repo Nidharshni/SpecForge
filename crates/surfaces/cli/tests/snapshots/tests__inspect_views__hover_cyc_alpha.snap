@@ -49,6 +49,10 @@ A testable unit of system functionality with a defined contract
 
 ---
 
+**Coverage** · `not_testable` · its kind is not testable, so it does not count
+
+---
+
 **Refers to** *(1)*
 - `depends_on` → beta
 

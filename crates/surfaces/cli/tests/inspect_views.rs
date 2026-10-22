@@ -244,28 +244,20 @@ fn assert_hover_and_inspect_agree(served: &mut Served, file: &str) {
             "{id}: testable\n{hover}"
         );
 
-        // The Coverage line is inspect's status, or its exempt standing and
-        // the reason, obligated.
-        match section("**Coverage**") {
-            None => assert!(
-                inspect["testable"] == false && inspect["declared"] == false,
-                "{id}: a hover without coverage\n{hover}"
-            ),
-            Some(line) if inspect["coverage_status"] == "exempt" => {
-                let reason = if inspect["obligated"] == true {
-                    "exempt: it owes none (a union or an exempting field)"
-                } else {
-                    "exempt: its kind need not declare obligations"
-                };
-                assert_eq!(*line, format!("**Coverage** · {reason}"), "{id}");
-            }
-            Some(line) => {
-                let status = inspect["coverage_status"].as_str().unwrap();
-                assert!(
-                    line.starts_with(&format!("**Coverage** · `{status}` · ")),
-                    "{id}: {line} vs {status}"
-                );
-            }
+        // Every entity has a Coverage line: inspect's status first, then the
+        // reason an exempt entity is exempt (obligated).
+        let line = section("**Coverage**")
+            .unwrap_or_else(|| panic!("{id}: a hover without coverage\n{hover}"));
+        let status = inspect["coverage_status"].as_str().unwrap();
+        let start = format!("**Coverage** · `{status}`");
+        assert!(line.starts_with(&start), "{id}: {line} vs {status}");
+        if status == "exempt" {
+            let reason = if inspect["obligated"] == true {
+                "it owes none (a union or an exempting field)"
+            } else {
+                "its kind need not declare obligations"
+            };
+            assert_eq!(*line, format!("{start} · {reason}"), "{id}");
         }
 
         // The references: each direction's ids, and their counts together.

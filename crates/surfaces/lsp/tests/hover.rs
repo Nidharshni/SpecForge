@@ -136,7 +136,7 @@ fn hover_shows_testability_from_the_standing() {
         served
             .hover_on("main.spec", "auth")
             .unwrap()
-            .ends_with("*@specforge/product*")
+            .contains("*@specforge/product*")
     );
 }
 
@@ -200,7 +200,7 @@ fn hover_shows_reference_counts_and_groups() {
     let served = plain("type orphan \"Orphan Type\" {}\n");
     assert_eq!(
         served.hover_on("main.spec", "orphan").unwrap(),
-        "**type** `orphan` — Orphan Type"
+        "**type** `orphan` — Orphan Type\n\n---\n\n**Coverage** · `not_testable` · its kind is not testable, so it does not count"
     );
 }
 
@@ -210,10 +210,10 @@ fn hover_shows_reference_counts_and_groups() {
 )]
 fn hover_without_registries_is_plain_markdown() {
     let served = plain("type g \"G\" {}\n");
-    // No extension line, no sections.
+    // No extension line; the one section is its coverage.
     assert_eq!(
         served.hover_on("main.spec", "g").unwrap(),
-        "**type** `g` — G"
+        "**type** `g` — G\n\n---\n\n**Coverage** · `not_testable` · its kind is not testable, so it does not count"
     );
 }
 
@@ -340,29 +340,30 @@ fn hover_shows_each_coverage_case() {
         ),
         (
             "U",
-            Some("**Coverage** · exempt: it owes none (a union or an exempting field)"),
+            Some("**Coverage** · `exempt` · it owes none (a union or an exempting field)"),
         ),
         (
             "free",
-            Some("**Coverage** · exempt: its kind need not declare obligations"),
+            Some("**Coverage** · `exempt` · its kind need not declare obligations"),
         ),
         (
             "doc",
             Some(
-                "**Coverage** · `not_testable` · 0/1 obligations proven · 0 tests · \
-                 its kind is not testable, so it does not count",
+                "**Coverage** · `not_testable` · its kind is not testable, so it does not count \
+                 · 0/1 obligations proven · 0 tests",
             ),
         ),
-        ("plain", None),
+        (
+            "plain",
+            Some("**Coverage** · `not_testable` · its kind is not testable, so it does not count"),
+        ),
     ];
     for (id, expected) in rows {
         assert_eq!(line(id).as_deref(), expected, "{id}");
         // The line agrees with the read view MCP inspect renders.
         let state = project.state();
         let facts = specforge_ops::read::inspect::inspect(&state.view(), id).unwrap();
-        if let Some(expected) = expected
-            && !facts.standing.exempt()
-        {
+        if let Some(expected) = expected {
             let status = specforge_ops::read::coverage::STATUS.name_of(
                 specforge_ops::read::inspect::coverage(&state.view(), &facts)
                     .unwrap()
@@ -379,10 +380,12 @@ fn hover_shows_each_coverage_case() {
         unreadable.starts_with("**Coverage** · the recorded test report cannot be read (E045): "),
         "{unreadable}"
     );
-    assert_eq!(
-        line("U").as_deref(),
-        Some("**Coverage** · exempt: it owes none (a union or an exempting field)"),
-        "the standing does not depend on the report"
+    // Every entity's coverage is the report's error, as MCP inspect fails
+    // (ADR 0004 D2-e); the header's badge still shows the standing.
+    assert!(
+        line("U")
+            .unwrap()
+            .starts_with("**Coverage** · the recorded test report cannot be read (E045): ")
     );
 }
 

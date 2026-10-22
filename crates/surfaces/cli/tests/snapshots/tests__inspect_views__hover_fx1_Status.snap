@@ -19,7 +19,7 @@ A data structure or domain model definition
 
 ---
 
-**Coverage** · exempt: it owes none (a union or an exempting field)
+**Coverage** · `exempt` · it owes none (a union or an exempting field)
 
 ---
 

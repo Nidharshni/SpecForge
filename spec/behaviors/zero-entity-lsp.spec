@@ -75,9 +75,12 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
     description, the entity's title, its testability (for a testable kind,
     from the same standing inspect reports), the statement its extension
     declares headline and normative as a summary (whole, every line
-    quoted), its coverage (status, proven obligations and recorded tests;
-    or that it is exempt and why; or that the recorded report cannot be
-    read; while the project rebuilds, the last complete compile's coverage),
+    quoted), its coverage, as specforge.inspect reports it (its status, why
+    an entity that does not count does not: exempt and why, or a kind that
+    is not testable; and its proven obligations and recorded tests when it
+    counts or declares obligations; or, for every entity, that the recorded
+    report cannot be read; while the project rebuilds, the last complete
+    compile's coverage),
     the references to it grouped
     by referencing kind and field and the references it makes grouped by
     field, each with its count, every other field value (a long string cut

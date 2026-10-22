@@ -26,10 +26,8 @@ type HoverContent "Hover Content" {
   testable                 boolean      @optional
   /// The statement the entity's extension declares headline and normative.
   summary                  string       @optional
-  /// As specforge.inspect's coverage_status; absent for a kind that is not
-  /// testable and an entity that declares no obligations.
-  coverage_status          string       @optional
-  exempt                   boolean      @optional
+  /// As specforge.inspect's coverage_status; every entity has one.
+  coverage_status          string
   incoming_reference_count integer
   outgoing_reference_count integer
   /// The diagnostics about the entity not already shown for the cursor.
