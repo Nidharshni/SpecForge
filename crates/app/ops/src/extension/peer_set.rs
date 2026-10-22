@@ -4,9 +4,10 @@
 //! entries and the lock a change leaves, before anything is written. Both resolve entries by
 //! `Installed::resolve` and judge by `Peers`, so `add`, `init`, `update` and `check` judge one set.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-use specforge_installed::{Declared, Installed, Origin, Resolved};
+use specforge_installed::{Declared, Installed, LockFileEntry, Origin, Resolved};
 use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_registry::{Disk, PlainDisk};
@@ -33,9 +34,9 @@ pub(crate) struct PeerMember {
 pub(crate) enum Modules<'s> {
     /// By its lock entry (ADR 0041 B1).
     Locked,
-    /// By its lock entry only when its module on disk is the one pinned
-    /// ([`Installed::pinned_module`]), as the extension load answers it; a name in `staged` by its
-    /// staged pin, whose module the change writes. The project as it is stages nothing (ADR 0160
+    /// By what its module on disk declares ([`Declarations::locked`]), when that is the module
+    /// pinned and the lock entry records it, admitted as the extension load admits it; a name in
+    /// `staged` by its staged pin, whose module the change writes. The project as it is stages nothing (ADR 0160
     /// D2); the set a change leaves stages its installs.
     OnDisk { staged: &'s [String] },
 }
@@ -50,8 +51,8 @@ impl ProjectPeers {
     /// The members `entries` load over `installed`, each entry resolved by `Installed::resolve`,
     /// the extension load's one rule:
     /// - a builtin by its embedded declaration;
-    /// - an installed extension by its lock entry (version and peers, what its pinned module
-    ///   declares);
+    /// - an installed extension by what its pinned module declares, when its lock entry records it
+    ///   (a staged pin, and every name under [`Modules::Locked`], by the entry);
     /// - a `.wasm` file entry by its file's declaration, when the file loads and the entry admits
     ///   it.
     ///
@@ -84,19 +85,24 @@ impl ProjectPeers {
                             return Err(());
                         }
                     },
-                    Resolved::Locked { entry, name } => {
-                        if let Modules::OnDisk { staged } = modules
-                            && !staged.iter().any(|staged| staged == name)
-                            && installed.pinned_module(entry, read.disk()).is_none()
+                    Resolved::Locked { entry, name } => match modules {
+                        // Its module's declaration; the walk's admit then holds it to the entry.
+                        Modules::OnDisk { staged }
+                            if !staged.iter().any(|staged| staged == name) =>
                         {
-                            return Err(());
+                            match read.locked(installed, entry) {
+                                Some(declared) => declared,
+                                None => return Err(()),
+                            }
                         }
-                        Declared {
+                        // A staged pin was just built from a declaration, and the two sets
+                        // `differing` compares are built from the same entries (ADR 0181).
+                        Modules::OnDisk { .. } | Modules::Locked => Declared {
                             name: entry.name.to_string(),
                             version: entry.version.clone(),
                             peers: entry.peer_dependencies.clone(),
-                        }
-                    }
+                        },
+                    },
                     Resolved::File(file) => match read.file(&file.file) {
                         Some(declared) => Declared::of(declared),
                         None => return Err(()),
@@ -170,6 +176,9 @@ pub(crate) struct Declarations<'r> {
     disk: &'r dyn Disk,
     builtins: Vec<(String, ExtensionDeclaration)>,
     files: Vec<(PathBuf, Option<ExtensionDeclaration>)>,
+    /// What the module each locked extension pins declares, by name, `None` when it can't be read
+    /// (missing, changed, no component). Behind a cell: the callers that ask are `&self`.
+    locked: RefCell<Vec<(String, Option<Declared>)>>,
 }
 
 impl<'r> Declarations<'r> {
@@ -180,6 +189,7 @@ impl<'r> Declarations<'r> {
             disk,
             builtins: Vec::new(),
             files: Vec::new(),
+            locked: RefCell::default(),
         }
     }
 
@@ -188,7 +198,7 @@ impl<'r> Declarations<'r> {
     /// runtime.
     pub(crate) fn loaded_by(view: &ProjectView<'r>) -> Self {
         let registries = view.registries();
-        let (mut builtins, mut files) = (Vec::new(), Vec::new());
+        let (mut builtins, mut files, mut locked) = (Vec::new(), Vec::new(), Vec::new());
         for entry in view.env().enabled().iter().filter(|entry| entry.loaded) {
             let Some(declared) = registries.declaration(&entry.name) else {
                 continue;
@@ -201,8 +211,12 @@ impl<'r> Declarations<'r> {
                     });
                     files.extend(file.map(|file| (file, Some(declared.clone()))));
                 }
-                // An installed extension is a member by its lock entry; an unknown one never loads.
-                Origin::Installed { .. } | Origin::Unknown => {}
+                // The load admitted it: its module declares what its entry records.
+                Origin::Installed { .. } => {
+                    locked.push((entry.name.clone(), Some(Declared::of(declared))));
+                }
+                // An unknown one never loads.
+                Origin::Unknown => {}
             }
         }
         Declarations {
@@ -210,6 +224,7 @@ impl<'r> Declarations<'r> {
             disk: &PlainDisk,
             builtins,
             files,
+            locked: RefCell::new(locked),
         }
     }
 
@@ -230,6 +245,25 @@ impl<'r> Declarations<'r> {
         let declared = builtin_declaration(runtime, name)?.declaration;
         self.builtins.push((name.to_string(), declared));
         Ok(self.builtins.last().map(|(_, declared)| declared))
+    }
+
+    /// What the module `entry` pins declares, read once through the runtime: `None` when the module
+    /// is missing or not the one pinned, is no component, or there is no runtime to read it with.
+    /// The extension the load admitted under this entry is read from that load instead.
+    pub(crate) fn locked(&self, installed: &Installed, entry: &LockFileEntry) -> Option<Declared> {
+        let name = entry.name.as_str();
+        if let Some((_, declared)) = self.locked.borrow().iter().find(|(read, _)| read == name) {
+            return declared.clone();
+        }
+        let declared = self.runtime.and_then(|runtime| {
+            let module = installed.pinned_module(entry, self.disk)?;
+            let loaded = read_declaration(runtime, module.bytes()).ok()?;
+            Some(Declared::of(&loaded.declaration))
+        });
+        self.locked
+            .borrow_mut()
+            .push((name.to_string(), declared.clone()));
+        declared
     }
 
     /// The declaration of the component at `path`, `None` when it can't be read or does not load:
@@ -275,9 +309,9 @@ mod tests {
     }
 
     /// `@probe/gone` locked with its module deleted and a `.wasm` file entry declaring it,
-    /// `@probe/changed` locked with its module rewritten, beside a builtin, a pinned `@probe/dep`,
-    /// a repeat, a file, a twin file, a file under the wrong written name, a missing file and an
-    /// unlocked name.
+    /// `@probe/changed` locked with its module rewritten, `@probe/lying` locked at a version its
+    /// module does not declare, beside a builtin, a pinned `@probe/dep`, a repeat, a file, a twin
+    /// file, a file under the wrong written name, a missing file and an unlocked name.
     fn broken_installs() -> (tempfile::TempDir, Installed, InProcessRuntime, Vec<String>) {
         const GONE: &[u8] = b"\0asm in-process @probe/gone 1.0.0";
         let dir = tempfile::tempdir().unwrap();
@@ -294,6 +328,16 @@ mod tests {
         install(dir.path(), &runtime, "@probe/dep", testing::DEP_1);
         install(dir.path(), &runtime, "@probe/gone", GONE);
         install(dir.path(), &runtime, "@probe/changed", testing::DEP_1);
+        let lying = specforge_wasm::testing::spelled_module("@probe/lying", "1.0.0", &[]);
+        install(dir.path(), &runtime, "@probe/lying", &lying);
+        let lock = specforge_installed::lock_path(dir.path());
+        let mut locked = specforge_installed::read_lock_file(&lock).unwrap();
+        for entry in &mut locked.entries {
+            if entry.name.as_str() == "@probe/lying" {
+                entry.version = "2.0.0".to_string();
+            }
+        }
+        specforge_installed::write_lock_file(&locked, &lock).unwrap();
         let installed = Installed::at(dir.path());
         for (name, bytes) in [
             ("@probe/gone", None),
@@ -311,6 +355,7 @@ mod tests {
             "@probe/dep@1.0.0",
             "@probe/gone",
             "@probe/changed",
+            "@probe/lying",
             "base.wasm",
             "twin.wasm",
             "named=base3.wasm",
@@ -478,7 +523,7 @@ mod tests {
                 "@probe/base",
                 "@probe/gone"
             ],
-            "the module that is gone loses its name to the file entry, the changed one loads nothing"
+            "the module that is gone loses its name to the file entry, the changed one and the one its entry misrecords load nothing"
         );
         let declared: Vec<&str> = loaded.declarations.iter().map(|d| d.name()).collect();
         assert_eq!(names, declared);

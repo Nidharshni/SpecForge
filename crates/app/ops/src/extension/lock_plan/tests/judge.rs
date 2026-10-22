@@ -267,14 +267,13 @@ fn a_refused_plan_loads_no_binary() {
     let err = refused(plan);
 
     assert_eq!(err.code, "R-RES-005", "{err:?}");
-    assert!(
-        runtime
-            .calls()
-            .iter()
-            .all(|call| call.extension != "__candidate"),
-        "{:?}",
-        runtime.calls()
-    );
+    // Only the two locked modules were read, once each; the fetched binary never was.
+    let reads = runtime
+        .calls()
+        .iter()
+        .filter(|call| call.extension == "__candidate" && call.export == "__handshake")
+        .count();
+    assert_eq!(reads, 2, "{:?}", runtime.calls());
 }
 
 #[test]

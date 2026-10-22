@@ -67,7 +67,6 @@ fn compiled(root: &Path) -> (Vec<String>, Vec<String>) {
     invariant = "peer_dependency_satisfaction",
     verify = "the lock plan judges a locked extension by what its module declares, and one whose lock entry records another version or other peers is no member, as the load refuses it"
 )]
-#[ignore = "flipped by T5"]
 fn the_lock_plan_judges_a_locked_module_by_what_it_declares() {
     // Forward: the entry records a peer the module never declared.
     let dir = project(&["@probe/base"]);

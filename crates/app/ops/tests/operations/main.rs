@@ -49,6 +49,7 @@ mod inspect;
 mod kinds;
 mod local_component;
 mod lock_records;
+mod locked_requirers;
 mod machine_reach;
 mod management;
 mod migrate;

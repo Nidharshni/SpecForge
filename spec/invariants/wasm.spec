@@ -36,7 +36,8 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     no version (E073). `check`, `doctor`, `add`, `init`, `update` and `remove`, and
     the dry runs of `add` and `remove`, judge a peer by one rule over one
     set: the extensions the project's specforge.json entries load
-    (ADR 0041).
+    (ADR 0041). An installed extension is judged by what its module
+    declares, which its lock entry must record (E070).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"
