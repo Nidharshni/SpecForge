@@ -891,8 +891,8 @@ behavior publish_to_registry "Publish to Registry" {
     created MUST be refused with E074 before any network call. Publish
     refuses in one order, each refusal before anything after it is read or
     asked: the binary (E040, E028, a binary declaring a builtin's name:
-    extension_conflict, as add refuses to install it), its declaration's errors, its name and
-    version (E072), the registry configuration (E063, E067), the registry
+    extension_conflict, as add refuses to install it), its declaration's errors (a declared
+    name that is no package name among them, E072), its scope and version (E072), the registry configuration (E063, E067), the registry
     for the name (R-OPS-001), the credential (R001, R012, R-AUTH-020,
     R-AUTH-021), the signing key (E074); then the registry's answer.
     Successful publish MUST return the registry URL for the

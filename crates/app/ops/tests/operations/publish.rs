@@ -408,7 +408,6 @@ fn validate_reads_and_declares_the_binary_publish_reads() {
     behavior = "validate_wasm_extension_locally",
     verify = "specforge extension validate reports a declared name that is no package name (E072), as add and the extension load refuse it"
 )]
-#[ignore = "flipped by T6"]
 fn validate_reports_a_declared_name_that_is_no_package_name() {
     let dir = tempfile::tempdir().unwrap();
     let wasm = bytes("Greet 0.1.0");
