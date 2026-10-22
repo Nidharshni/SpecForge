@@ -1311,6 +1311,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
   A `field.entry` path names one entry of a block field the kind declares; `set` and `unset` take one, `link`, `unlink` and `create` refuse it (ADR 0151, amended).
+  A union's members are not edited: every verb but retitle and delete refuses one (`not_editable`), before its field is read (ADR 0219).
   Where a value goes (its column and its line) is the block's answer (`Block::put`): a verb names the field and the input, never a line or a column; a create is its header, one set per field and one add-verify per obligation (ADR 0175 D6, D7).
 - **Skeleton**: a new block of a kind, or a new member, as a typed create writes it with no values, and a slot where each
   value goes: the id, the title, each required field, the final cursor (`specforge_ops::authoring::edit::Skeletons`).
@@ -1336,6 +1337,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `"""…"""` before it (ADR 0038 D7), so a block being typed never takes the forms after it. Tests hold it
   to the grammar's top-level nodes on the repository's spec, both ways, and the scanner's copy to it
   (ADR 0038 D6-D8, ADR 0063).
+- **Body shape**: how a block's body is written: **braced** (`kind name "Title" { ... }`: fields, methods, `verify`
+  statements) or a **union** (`kind name "Title" = a | b`: its variants and nothing else). The parse answers it once,
+  from the syntax (`specforge_parser::FieldMap::is_union`, the parser's own variant list), never from a field's name:
+  a braced block's member named `variants` is a field. The standing's union exemption and the typed edits read it
+  (ADR 0219).
 - **Recovered syntax**: a `.spec` source as SpecForge reads its concrete syntax
   (`specforge_parser::cst`): the grammar's tree of the whole text, or, when the tree missed a form start
   or a string was left unclosed, one tree per piece cut before those form starts. The parser's walk and

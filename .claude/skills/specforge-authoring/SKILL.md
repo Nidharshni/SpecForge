@@ -25,8 +25,9 @@ specforge delete archive_task --unlink-references
 
 Over MCP, `specforge.edit` takes a list of edits (`create`, `set`, `unset`, `retitle`, `link`, `unlink`, `add_verify`,
 `remove_verify`, `delete`) applied all or nothing, so an entity and the link to it go in one call. Add `--dry-run`
-(`dry_run: true`) to see the diff first. The child skills below say what each field means; unions and ports with `method`
-lines are not covered by typed edits yet, so write those blocks by hand.
+(`dry_run: true`) to see the diff first. The child skills below say what each field means; a union takes only `set --title`
+and `delete` (every other edit is refused), and ports with `method` lines are not covered by typed edits yet, so
+write those by hand.
 
 ## When to Use This Skill
 
