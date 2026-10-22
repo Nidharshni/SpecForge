@@ -1,6 +1,7 @@
 # Peer requirements are one module
 
 **Status:** accepted (2026-10-08). Amends ADR 0001 and ADR 0012 D11.
+**Amended by [ADR 0217](0217-a-locked-module-declares-what-its-lock-entry-records.md) (round 24):** B1: the version and peers an installed extension's lock entry records are its pinned module's, enforced (E070), and the set a plan judges answers it by that declaration; the reopen clause "a peer whose installed module may declare other peers than its lock entry records" is answered.
 **Amended by [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) (round 19):** B1: the set a plan judges answers a locked extension by its module on disk (`Installed::verified`), except one the change stages, by its staged pin; what a removal touches still compares lock entries.
 
 An extension's declared peers (`PeerDependency { name, version, optional }`, the range as raw text)

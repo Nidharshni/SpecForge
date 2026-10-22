@@ -318,11 +318,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its
   publisher key id). It loads only while its binary is
-  the one its entry pins (E070 otherwise; W149 when the entry pins no hash). A project's installed
+  the one its entry pins and declares the name, version and peers the entry records (E070 otherwise; W149 when the entry
+  pins no hash). A project's installed
   extensions are one value, its lock read once (`specforge_installed::Installed`); installing,
   updating and removing them is one **change** (`Installed::change`), written all at once or not at
   all, its last step the operation's project change (ADR 0128) and the directories it created (ADR 0028);
   `add`, `update`, `init` and `remove` change them through the **lock plan**.
+- **Lock entry**: what `specforge.lock` records for one installed extension: name, version, source, the module's SHA-256, its
+  publisher key id and peers. The version and peers are its module's, and the load holds the entry to them
+  (`LockFileEntry::declares`, E070, ADR 0217).
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
@@ -407,19 +411,20 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   take raw strings. Once read, the module asks the change's opened lock plan for each, an ask per specifier by its
   position, checks the plan once and names its refusal by the specifier it is charged to (ADR 0134).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
-  them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
-  `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
+  them: a builtin by the declaration this specforge embeds, an installed extension by what its module declares
+  (a staged install by its pin), a `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
   (`Installed::resolve`). An entry that loads nothing and a locked extension no entry enables are not in
   it (`specforge_ops::extension::peer_set::ProjectPeers`). The registry build judges it as loaded; the
   lock plan judges it as a change will leave it, before anything is written, so `add`, `init`,
   `update`, `remove`, their dry runs and `check` judge one set (ADR 0041). For the project as it is
-  (ADR 0160's refusal), a locked extension is a member only when its module on disk is the one pinned,
-  as the load answers it; for the set a change leaves, by its lock entry (ADR 0181).
+  (ADR 0160's refusal), a locked extension is a member only when its module on disk is the one pinned and
+  declares what its entry records, as the load answers it; for the set a change leaves, the same for a locked
+  extension the change does not stage (ADR 0181, ADR 0217).
 - **Load walk**: the one pass over a project's resolved `extensions` entries that the extension load and
   the lock plan's peer set share (`specforge_installed::Resolution::walk`, ADR 0181): load order, each
   entry's declared name admitted against the names the entries before it were admitted under, the
   answer in entry order. The load reads a declaration through the runtime and the disk; the peer set
-  from the embedded builtin, the lock entry or the file.
+  from the embedded builtin, the module's declaration (a staged install by its pin) or the file.
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a

@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-21, architecture round 19, plan 04). Amends [ADR 0041](0041-peer-requirements-are-one-module.md) (B1: the project as it is answers a locked extension by its module on disk), [ADR 0160](0160-what-an-extension-entry-enables-is-the-loads-decision.md) (D2: the set it asks about is the load's) and [ADR 0028](0028-installed-extensions-are-one-module.md) (D3: the load's walk is one function).
 
+**Amended by [ADR 0217](0217-a-locked-module-declares-what-its-lock-entry-records.md) (round 24):** D3: the as-is set answers a locked entry by what its module declares, admitted as the load admits it.
+
 ## Context
 
 - `Installed::load` and `ProjectPeers::of` (the lock plan's prediction of the project peer set) each walk a project's
