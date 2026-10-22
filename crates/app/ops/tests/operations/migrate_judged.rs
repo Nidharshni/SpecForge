@@ -196,3 +196,44 @@ fn the_hooks_run_before_any_file_is_written() {
     );
     assert!(outcome.ok(), "{outcome:?}");
 }
+
+#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "validate_post_migration_integrity",
+    verify = "a planned text that adds an error is refused even when the graph is unchanged"
+)]
+fn a_planned_text_that_adds_an_error_and_keeps_the_graph_is_refused() {
+    let dir = project_with_extension();
+    // A second `alpha`: E002, and the graph is the one the project has.
+    let planned = format!("{}behavior alpha \"Alpha\" {{\n}}\n", migrated());
+
+    let verdict = judge_planned(dir.path(), None, planned);
+
+    assert!(verdict.graph_delta.is_empty(), "{:?}", verdict.graph_delta);
+    assert_eq!(verdict.added_errors, 1);
+    assert!(
+        matches!(
+            verdict.refusal(),
+            Some(Failure::DoesNotCompile { errors: 1 })
+        ),
+        "{:?}",
+        verdict.refusal()
+    );
+}
+
+#[specforge_test(
+    behavior = "validate_post_migration_integrity",
+    verify = "a migration that only moves lines is kept in a file that already reports a duplicate ID"
+)]
+fn a_migration_that_only_moves_a_duplicate_ids_position_is_kept() {
+    let dir = project_with_extension();
+    let duplicate = "behavior alpha \"Alpha\" {\n}\n";
+    std::fs::write(dir.path().join("old.spec"), format!("{OLD}{duplicate}")).unwrap();
+    // The header at 1.0 and one blank line after it: the E002 now names another line.
+    let planned = format!("{}\n{duplicate}", migrated().replacen('\n', "\n\n", 1));
+
+    let verdict = judge_planned(dir.path(), None, planned);
+
+    assert!(verdict.graph_delta.is_empty(), "{:?}", verdict.graph_delta);
+    assert!(verdict.refusal().is_none(), "{:?}", verdict.refusal());
+}
