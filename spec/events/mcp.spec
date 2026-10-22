@@ -112,7 +112,8 @@ event mcp_mutation_completed "MCP Mutation Completed" {
   // one, the ones a removal strands, the ones an inference step produced).
   // A preview is no mutation and emits nothing: a call whose arguments ask
   // for one (dry_run; check or diff without write), whatever its operation
-  // answered.
+  // answered, and whatever refused it once its arguments read (no project
+  // served, a path naming none).
   channel "mcp.mutation_completed"
   payload McpMutationCompletedPayload
   verify integration "emits mcp_mutation_completed with structured outcome after each mutation tool"

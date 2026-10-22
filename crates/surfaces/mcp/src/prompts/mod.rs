@@ -91,6 +91,7 @@ impl Surface for Prompts {
 
     fn refused(
         _: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
+        _: &Invocation,
         error: McpError,
         _: &mut dyn EventSink,
     ) -> PromptOutcome {

@@ -66,7 +66,6 @@ fn refused(
     behavior = "mcp_mutation_completed",
     verify = "a preview refused before its handler runs, for no project or a path naming none, lists no files_written and records nothing"
 )]
-#[ignore = "flipped by T2"]
 fn a_preview_refused_before_it_runs_is_no_mutation() {
     let mut nothing = unserved();
     let mut served = reading();
