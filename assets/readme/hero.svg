@@ -60,28 +60,26 @@
     <rect width="880" height="300" fill="url(#grid)"/>
   </g>
 
-  <!-- The forge: the logo's cube, with a breathing core -->
-  <g transform="translate(165,185) scale(0.85)">
-    <polygon points="0,-40 69.28,-80 0,-120 -69.28,-80" fill="#0A0B0E" stroke="#FF5D00" stroke-width="1" opacity="0.4"/>
-    <circle class="core" cx="0" cy="-20" r="45" fill="url(#coreEnergy)" filter="url(#glow)"/>
-    <g filter="url(#glow)">
-      <line x1="0" y1="-20" x2="-30" y2="-5" stroke="#FFDD7A" stroke-width="2"/>
-      <line x1="0" y1="-20" x2="30" y2="-5" stroke="#FFDD7A" stroke-width="2"/>
-      <line x1="0" y1="-20" x2="0" y2="15" stroke="#FFDD7A" stroke-width="2"/>
-      <circle cx="-30" cy="-5" r="4" fill="#FFF"/>
-      <circle cx="30" cy="-5" r="4" fill="#FFF"/>
-      <circle cx="0" cy="15" r="4" fill="#FFF"/>
-      <circle cx="0" cy="-20" r="6" fill="#FFF"/>
-    </g>
-    <path d="M -86.6,-50 L 0,0 L 0,60 L -86.6,10 Z" fill="url(#metalDark)" filter="url(#shadow)"/>
-    <path d="M 86.6,-50 L 0,0 L 0,60 L 86.6,10 Z" fill="url(#metalLight)" filter="url(#shadow)"/>
-    <path d="M 0,-100 L 86.6,-50 L 0,0 L -86.6,-50 Z" fill="none" stroke="url(#metalLight)" stroke-width="14" stroke-linejoin="bevel" filter="url(#shadow)"/>
-    <circle cx="-86.6" cy="-50" r="6" fill="#FF5D00" filter="url(#glow)"/>
-    <circle cx="86.6" cy="-50" r="6" fill="#FF5D00" filter="url(#glow)"/>
-    <circle cx="0" cy="60" r="6" fill="#FF5D00" filter="url(#glow)"/>
-    <path d="M -86.6,-50 L -120,-70" stroke="#464D60" stroke-width="1.5" stroke-dasharray="4 4"/>
-    <path d="M 86.6,-50 L 120,-70" stroke="#464D60" stroke-width="1.5" stroke-dasharray="4 4"/>
-    <path d="M 0,60 L 0,100" stroke="#464D60" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <!-- The forge: the SpecForge mark, a crucible with a check forged out of it; the core breathes -->
+  <g transform="translate(58 46) scale(0.84)">
+    <circle class="core" cx="128" cy="108" r="62" fill="url(#coreEnergy)" filter="url(#glow)"/>
+    <defs>
+      <linearGradient id="hm-l" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A4152"/><stop offset="1" stop-color="#151820"/></linearGradient>
+      <linearGradient id="hm-r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A6378"/><stop offset="1" stop-color="#232834"/></linearGradient>
+      <linearGradient id="hm-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A93A8"/><stop offset=".5" stop-color="#5F687D"/><stop offset="1" stop-color="#3B4253"/></linearGradient>
+      <radialGradient id="hm-melt" cx=".5" cy=".55" r=".6"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".25" stop-color="#FFDD7A"/><stop offset=".7" stop-color="#FF5D00"/><stop offset="1" stop-color="#B83A00"/></radialGradient>
+      <filter id="hm-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <path d="M38.00 94.00 L128.00 145.96 L128.00 205.57 L56.00 164.00 Z" fill="url(#hm-l)"/>
+    <path d="M128.00 145.96 L218.00 94.00 L200.00 164.00 L128.00 205.57 Z" fill="url(#hm-r)"/>
+    <path d="M48.8 136 L128 181.72614131981837 L207.2 136" fill="none" stroke="#FF5D00" stroke-width="3" stroke-opacity=".9"/>
+    <path d="M128.00 58.67 L189.20 94.00 L128.00 129.33 L66.80 94.00 Z" fill="#07080B"/>
+    <path d="M66.80 94.00 L128.00 58.67 L128.00 74.67 L66.80 110.00 Z" fill="#2A2F3C"/>
+    <path d="M128.00 58.67 L189.20 94.00 L189.20 110.00 L128.00 74.67 Z" fill="#1A1E27"/>
+    <path d="M128.00 74.67 L189.20 110.00 L128.00 145.33 L66.80 110.00 Z" fill="url(#hm-melt)" filter="url(#hm-glow)"/>
+    <path d="M128.00 42.04 L218.00 94.00 L128.00 145.96 L38.00 94.00 Z M128.00 58.67 L66.80 94.00 L128.00 129.33 L189.20 94.00 Z" fill="url(#hm-rim)" fill-rule="evenodd"/>
+    <path d="M98 88 L120 110 L170 52" fill="none" stroke="#FF5D00" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" filter="url(#hm-glow)" opacity="0.9"/>
+    <path d="M98 88 L120 110 L170 52" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
   <!-- Wordmark and promise -->
