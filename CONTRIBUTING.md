@@ -40,6 +40,10 @@ shrink, split or move one, run `cargo gate baseline --only file-size` and commit
 
 ## Tests
 
+A test that crosses a surface (a CLI exit code, an MCP `isError`, an LSP reply) moves below it only when one surface
+test still covers the mapping, or the commit says why none can. The `verify` links do not see the loss: they count per
+obligation, not per surface.
+
 A test builds its project with `specforge_project::testing::TestProject` (feature `testing`) and exercises it
 through one driver: `compile()`/`session()` in process, `specforge_mcp::testing::Served` over MCP, or
 `crates/surfaces/cli/tests/support::Cli` through the binary. Put a test in the crate that owns what it asserts;

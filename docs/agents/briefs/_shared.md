@@ -11,6 +11,10 @@ Paste this block at the top of each brief you send.
   re-run clippy and nextest for the crates you touched.
 - No backward compatibility: SpecForge is pre-release; delete the old name and update every caller.
 - Untracked files in the checkout (`git status --short | grep '^??'`) are the user's: not yours to add, edit or delete.
+- Disk low (`df -h .` under 10 GB, or "No space left on device" in a log): `cargo run -p xtask --bin clean-target`, then re-run.
+  A failure with that text is the disk's, not the code's.
+- macOS has BSD `sed` (`sed -i ''`, or the Edit tool) and zsh errors on an unquoted glob that matches nothing: quote
+  `--include='*.rs'`.
 - A Bash call that reads stdin never returns (the harness keeps stdin open), and the agent hangs for hours. Never leave
   a file argument empty (an unset variable as a file name), never run a bare `cat`, `sed`, `grep`, `head` or `python3 -`
   without a file or a heredoc that feeds it, append `</dev/null` to any command that might read stdin, wrap long
