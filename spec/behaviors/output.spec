@@ -498,6 +498,7 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
   verify unit "an unknown entity is E003, entity_not_found"
   verify unit "an entity's headline and its fields read the one entry of a field written twice"
+  verify unit "an entity's facts carry its methods and its fields' annotations as the graph export writes them"
 }
 
 // The exploration and the review: the explore and review prompts'
@@ -1167,6 +1168,7 @@ behavior export_agent_context_format "Export Agent Context Format" {
   verify unit "context format includes entity IDs and contracts"
   verify unit "context format omits verbose prose fields"
   verify unit "context format keeps each entity's normative fields"
+  verify unit "context format keeps an entity's methods and the annotations of the fields it keeps"
   verify integration "export --format context keeps an invariant's guarantee"
   verify unit "scoped export returns only reachable subgraph"
   verify unit "non-existent scope entity produces E003 and exit code 1"
@@ -1253,6 +1255,7 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   """
   verify unit "graph format includes all nodes and edges"
   verify unit "graph format includes all fields and metadata"
+  verify unit "graph format writes each entity's methods and its fields' annotations"
   verify unit "scoped export returns only reachable subgraph"
   verify unit "non-existent scope entity produces E003 and exit code 1"
   verify unit "depth without a scope is invalid input on every surface"
@@ -1296,6 +1299,7 @@ behavior export_review_document "Export a Review Document" {
   verify unit "the entities that reference it are listed"
   verify unit "obligations are numbered in declaration order"
   verify unit "prose renders as written, raw HTML escaped outside code spans"
+  verify unit "a section lists its methods, and each field's annotations follow its value"
   verify unit "sections are ordered scope first, then by kind and id"
   verify integration "export --format markdown writes the review document of examples/todo-app and examples/shop"
   verify integration "specforge.export answers the same document as specforge export"

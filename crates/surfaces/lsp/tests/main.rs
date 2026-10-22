@@ -21,6 +21,7 @@ mod follow;
 mod format_forms;
 mod format_parity;
 mod hover;
+mod hover_members;
 mod hover_obligations;
 mod identity;
 mod lifecycle;

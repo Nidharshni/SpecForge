@@ -8,6 +8,7 @@ mod call_target;
 mod collect_machine;
 mod conformance;
 mod contracts;
+mod entity_members;
 mod event_spec;
 mod events;
 mod export_markdown;

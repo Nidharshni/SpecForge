@@ -13,6 +13,7 @@ mod emit_graph;
 mod emit_json;
 mod emit_markdown;
 mod emit_matrix;
+mod emit_members;
 mod emitter_error;
 mod model;
 mod outline;

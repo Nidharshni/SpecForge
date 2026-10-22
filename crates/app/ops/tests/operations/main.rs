@@ -67,6 +67,7 @@ mod named_files;
 mod navigate;
 mod obligations_member;
 mod options;
+mod outline_signature;
 mod peers;
 mod plan;
 mod previews;

@@ -654,6 +654,7 @@ behavior outline_view "Outline View" {
   """
   verify unit "outline lists all entities in file"
   verify unit "outline shows entity kind, ID, and title"
+  verify unit "an outline method's signature is the method as written, its parameters' annotations included"
   verify integration "the outline nests an entity's methods as the MCP outline does"
   verify unit "outline uses extension-defined SymbolKind from KindRegistry lsp_icon"
   verify contract "Outline View: outline view holds — graph_available, kind_registry_available, all_entities_listed, symbol_kind_delegated"

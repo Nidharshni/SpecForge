@@ -103,6 +103,7 @@ behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
   verify unit "specforge://prompts/context returns structured entity context"
   verify unit "response includes contract and related entities"
   verify unit "context includes every field, like an invariant's guarantee"
+  verify unit "the context prompt carries the entity's methods and its fields' annotations, a structural constraint's too"
   verify unit "non-existent entity returns error"
   verify unit "context prompt works with zero extensions installed"
   verify contract "Provide MCP Context Prompt: MCP context prompt holds — graph_available, context_returned, hints_included, prompt_invoked_emitted"
