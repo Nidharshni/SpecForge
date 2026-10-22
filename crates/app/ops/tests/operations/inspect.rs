@@ -306,7 +306,6 @@ fn an_unknown_entity_is_not_found() {
     behavior = "inspect_entity_facts",
     verify = "an entity's headline and its fields read the one entry of a field written twice"
 )]
-#[ignore = "flipped by T3"]
 fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
     let p = compile(
         &["@specforge/software"],

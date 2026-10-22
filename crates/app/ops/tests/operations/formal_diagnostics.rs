@@ -568,13 +568,13 @@ fn one_sided_conditions_are_i011_or_w096() {
 
 #[specforge_test(
     behavior = "fa_detect_redundant_precondition",
-    verify = "precondition repeated in its requires block produces W039"
+    verify = "a precondition repeated in its requires block is E081, never W039"
 )]
 #[specforge_test(
     behavior = "fa_detect_redundant_precondition",
     verify = "independent precondition passes"
 )]
-fn a_requires_naming_a_condition_twice_is_w039() {
+fn a_requires_naming_a_condition_twice_is_e081_not_w039() {
     let dir = project(concat!(
         "behavior twice \"Twice\" {\n",
         "  contract \"c\"\n",
@@ -588,10 +588,14 @@ fn a_requires_naming_a_condition_twice_is_w039() {
         "}\n",
     ));
     let findings = analyze(&dir, "condition_check");
+    // The graph keeps the first `ready` (ADR 0215): the pass sees a condition once, and the repeat is E081.
+    assert!(messages(&findings, "W039").is_empty(), "{findings:?}");
+    let diagnostics = dir.compile().diagnostics();
+    let e081: Vec<_> = diagnostics.iter().filter(|d| d.code == "E081").collect();
+    assert_eq!(e081.len(), 1, "{e081:?}");
     assert_eq!(
-        messages(&findings, "W039"),
-        ["behavior 'twice' requires 'ready' more than once (the repeat is redundant)"],
-        "{findings:?}"
+        e081[0].message,
+        "'requires.ready' is written twice in behavior 'twice'; the first, at line 4, is kept"
     );
 }
 

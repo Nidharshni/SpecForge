@@ -1035,6 +1035,23 @@ Owner: core
 Level: error
 ```
 
+## E081
+
+```
+E081: Field written twice in one block
+
+A block writes one field (an entry of a block field, a member of a type) more
+than once. A field holds one value: the graph keeps the first and every output,
+check and rule reads it; the message names the first's line. Delete the later
+line, or give every value in the first: a list field takes all its items in one
+list (`ports [a, b]`), a block field all its entries in one block. A typed edit
+that changes the field (`set`, `unset`, `link`, `unlink`) removes the later
+lines itself. A repeat in a `defaults` block is E078.
+
+Owner: core
+Level: error
+```
+
 ## I002
 
 ```

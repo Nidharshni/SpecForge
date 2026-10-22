@@ -247,8 +247,9 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     " | "; a mixed list its items' texts joined by ", "; an expression
     group its expressions joined by ", "; a block its keys joined by ", ". An empty list or
     block is written and its text is empty. No written field is left
-    out and no value is null. A name written twice has the last one's
-    value. Beside its text, every written field keeps its value shape
+    out and no value is null. A name written twice in one block is E081,
+    and every reader reads its first entry, the only one the graph keeps.
+    Beside its text, every written field keeps its value shape
     (a quoted string, a bare word, a date, an integer, a boolean, a list
     of strings, of references, mixed or of variants, a type union, a
     block, an expression) and the span of its value,

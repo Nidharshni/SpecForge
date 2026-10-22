@@ -14,7 +14,7 @@ pub mod testing;
 pub use ast::{
     Annotation, Entity, EntityId, EntityKind, FieldEntry, FieldMap, FieldValue, ImportBinding,
     ImportDeclaration, ImportKind, ListItem, MethodDecl, Parameter, ParseError, REF_SCHEME_FIELD,
-    SpecFile, TypeMember, UNION_VARIANTS_FIELD, VerifyStatement, Written,
+    Repeat, SpecFile, TypeMember, UNION_VARIANTS_FIELD, VerifyStatement, Written,
 };
 pub use expr::{CmpOp, Expr, ExprError, ExprSpan, SpannedExpr, parse_expression};
 pub use format_version::{

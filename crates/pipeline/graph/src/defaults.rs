@@ -302,10 +302,11 @@ impl<'f> FileDefaults<'f> {
         }
     }
 
-    /// `entity`'s fields: its own entries in written order, then each applied default of its kind whose key it does
-    /// not write, in the default's order, as written (spans in the defaults block).
+    /// `entity`'s fields: its own entries in written order, the first of each key (ADR 0215), then each applied
+    /// default of its kind whose key it does not write, in the default's order, as written (spans in the defaults
+    /// block).
     pub(crate) fn resolve(&self, entity: &Entity) -> FieldMap {
-        let mut fields = entity.fields.clone();
+        let mut fields = entity.fields.first_of_each_key();
         if let Some((_, applied)) = self
             .by_kind
             .iter()

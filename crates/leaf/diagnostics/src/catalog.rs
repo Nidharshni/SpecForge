@@ -271,6 +271,9 @@ catalog! {
     E080: Error core,
         "Typed edit would add errors",
         "A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or MCP `specforge.edit`) was planned, and the project it would leave reports errors the project does not report now: the edit is refused and nothing is written. The refusal lists each new error (an unresolved reference, a missing required field, a value its field does not take, …). Fix what they name first: create the referenced entity, give the required field, or make both changes in one `specforge.edit` call. `delete --unlink-references` removes the references a delete would leave dangling.";
+    E081: Error core,
+        "Field written twice in one block",
+        "A block writes one field (an entry of a block field, a member of a type) more than once. A field holds one value: the graph keeps the first and every output, check and rule reads it; the message names the first's line. Delete the later line, or give every value in the first: a list field takes all its items in one list (`ports [a, b]`), a block field all its entries in one block. A typed edit that changes the field (`set`, `unset`, `link`, `unlink`) removes the later lines itself. A repeat in a `defaults` block is E078.";
     I002: Info core,
         "Structural-only mode",
         "Emitted when no extensions are installed, or when every installed extension failed to load, so the compiler falls back to structural-only validation. Install an extension (for example `specforge add @specforge/software`) to enable kind-specific checks.";

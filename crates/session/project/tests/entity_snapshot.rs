@@ -250,7 +250,6 @@ fn every_field_an_entity_writes_has_one_text() {
     behavior = "snapshot_entities_once",
     verify = "a field written twice reads as its first entry to declarative rules, custom validators and compiler passes"
 )]
-#[ignore = "flipped by T3"]
 fn a_field_written_twice_reads_as_its_first_entry_to_every_reader() {
     let dir = TestProject::new()
         .config(|c| {

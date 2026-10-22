@@ -72,7 +72,7 @@ pub struct Applied {
 }
 
 /// The graph of a set of parsed `.spec` files and what building it
-/// reported (E001, E002, E077, E078, W060, W143, W161, I005,
+/// reported (E001, E002, E077, E078, E081, W060, W143, W161, I005,
 /// then E003/I004 and W061 from linking), kept current one whole file at a
 /// time.
 ///
@@ -327,7 +327,7 @@ struct Declarations<'a> {
 
 /// The one sweep over the files, in the iteration order they are given:
 /// every file's E001s and the I007 / E019 its
-/// format version header reports first, then per file and entity W143 / E076 / E002 / W060, then I005. It is also first-writer-wins:
+/// format version header reports first, then per file and entity W143 / E076 / E081 / E002 / W060, then I005. It is also first-writer-wins:
 /// `seen` is keyed on (kind, id), so a second declaration of a kind is E002
 /// naming the first of that kind; `winners` is keyed on the raw ID, so a
 /// declaration of another kind is W060. Placement reads `winners`.
@@ -366,6 +366,7 @@ fn declarations<'a>(
             if needs_title(entity) && entity.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
                 diagnostics.push(untitled_block_error(entity));
             }
+            diagnostics.extend(repeated_field_errors(entity));
             let key = (entity.kind.raw, entity.id.raw);
             if let Some(first) = seen.get(&key) {
                 diagnostics.push(
@@ -454,7 +455,7 @@ fn node_from_entity(entity: &Entity, defaults: Option<&FileDefaults<'_>>) -> Nod
         id: entity.id,
         kind: entity.kind,
         title: entity.title.clone(),
-        fields: defaults.map_or_else(|| entity.fields.clone(), |d| d.resolve(entity)),
+        fields: defaults.map_or_else(|| entity.fields.first_of_each_key(), |d| d.resolve(entity)),
         source_span: entity.span.clone(),
         methods: entity.methods.clone(),
         obligations: entity.obligations.clone(),
@@ -486,6 +487,24 @@ fn untitled_block_error(entity: &Entity) -> Diagnostic {
         "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block",
         entity.kind.raw, entity.id.raw
     ))
+}
+
+/// E081: each later entry of a key `entity` writes twice, at any depth (ADR 0215); its node keeps the first.
+fn repeated_field_errors(entity: &Entity) -> impl Iterator<Item = Diagnostic> + '_ {
+    entity.fields.repeats().into_iter().map(move |r| {
+        let line = r.first.value_span.as_ref().map_or(entity.span.start_line, |s| s.start_line);
+        Diagnostic::new(
+            codes::E081,
+            format!(
+                "'{}' is written twice in {} '{}'; the first, at line {line}, is kept",
+                r.path, entity.kind.raw, entity.id.raw
+            ),
+        )
+        .with_span(r.later.value_span.clone().unwrap_or_else(|| entity.span.clone()))
+        .with_suggestion(
+            "delete this line, or give every value in the first: a list takes all its items in one [...]",
+        )
+    })
 }
 
 /// W143: a define block, which declares nothing.

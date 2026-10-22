@@ -146,8 +146,9 @@ behavior fa_detect_redundant_precondition "W039: Redundant Precondition" {
   contract """
     Detect a requires block that names the same condition more than
     once: the repeat states nothing its first occurrence does not.
-    Reported as a W039 warning by the condition_check pass (specforge
-    analyze), one per repeated name. Conditions are names and prose
+    The graph build keeps the first and reports each repeat as E081
+    (ADR 0215), so the condition_check pass's W039 is not reached for a
+    block written in a spec. Conditions are names and prose
     with no semantics for implication, so a precondition implied by a
     different one, or by the entity's types, is not detected.
   """
@@ -156,7 +157,7 @@ behavior fa_detect_redundant_precondition "W039: Redundant Precondition" {
     non_redundant_passes "a requires naming each condition once passes"
     suggestion           "W039 includes suggestion to remove the repeated condition"
   }
-  verify unit "precondition repeated in its requires block produces W039"
+  verify unit "a precondition repeated in its requires block is E081, never W039"
   verify unit "independent precondition passes"
 }
 
