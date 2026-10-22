@@ -1,7 +1,7 @@
 {
   "file-size": {
     "crates/adapters/ops-registry/tests/fetch.rs": 845,
-    "crates/app/ops/tests/operations/migrate.rs": 1081,
+    "crates/app/ops/tests/operations/migrate.rs": 1080,
     "crates/app/ops/tests/operations/navigate.rs": 989,
     "crates/app/ops/tests/operations/query.rs": 896,
     "crates/app/ops/tests/operations/schema.rs": 1149,
@@ -36,7 +36,7 @@
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 817,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,
-    "crates/surfaces/mcp/tests/contracts.rs": 3275,
+    "crates/surfaces/mcp/tests/contracts.rs": 3270,
     "crates/surfaces/mcp/tests/lifecycle.rs": 859,
     "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
     "crates/surfaces/mcp/tests/operations_mgmt.rs": 833,

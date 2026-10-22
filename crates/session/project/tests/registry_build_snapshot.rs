@@ -33,7 +33,12 @@ fn load(runtime: &std::sync::Arc<ComponentRuntime>, extensions: &[&str]) -> Envi
     )
     .unwrap();
     if extensions.contains(&"@sdk/greet") {
-        specforge_installed::testing::install_module(dir.path(), "@sdk/greet", &greet());
+        specforge_installed::testing::install_module(
+            dir.path(),
+            runtime.as_ref(),
+            "@sdk/greet",
+            &greet(),
+        );
     }
     Environment::load(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),

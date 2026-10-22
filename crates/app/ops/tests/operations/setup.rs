@@ -87,7 +87,7 @@ fn compiled(
         runtime = runtime.with(served(name, *short, *build));
     }
     if !names.is_empty() {
-        specforge_installed::testing::install(dir.path(), &names);
+        specforge_installed::testing::install(dir.path(), &runtime, &names);
     }
     if !peers.is_empty() {
         let path = dir.path().join("specforge.lock");

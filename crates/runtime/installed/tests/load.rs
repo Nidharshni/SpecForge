@@ -6,13 +6,13 @@ use std::sync::Mutex;
 
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_installed::testing::{install, placeholder_module};
+use specforge_installed::testing::install;
 use specforge_installed::{
     Builtins, Installed, LoadProblem, LoadSubject, LockState, hex_sha256, write_lock_file,
 };
 use specforge_package::PackageName;
 use specforge_registry::PlainDisk;
-use specforge_wasm::testing::InProcessRuntime;
+use specforge_wasm::testing::{InProcessRuntime, spelled_module};
 use specforge_wasm::{WasmCallResult, WasmRuntime};
 use tempfile::TempDir;
 
@@ -23,7 +23,7 @@ pub(crate) fn extension(
 }
 
 /// A runtime serving `@acme/a` and `@acme/b` under their names.
-fn runtime() -> InProcessRuntime {
+pub(crate) fn runtime() -> InProcessRuntime {
     InProcessRuntime::new()
         .with(extension("@acme/a"))
         .with(extension("@acme/b"))
@@ -64,7 +64,7 @@ fn codes(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<String> {
 )]
 fn an_installed_extension_loads_from_its_pinned_module() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime());
 
@@ -85,7 +85,7 @@ fn an_installed_extension_loads_from_its_pinned_module() {
 )]
 fn a_changed_module_is_refused_and_not_loaded() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     let module = Installed::at(dir.path()).module_path(&package("@acme/a"));
     std::fs::write(&module, b"\0asm swapped after install").unwrap();
     let runtime = runtime();
@@ -103,7 +103,7 @@ fn a_changed_module_is_refused_and_not_loaded() {
     assert_eq!(
         failure.problem,
         LoadProblem::Changed {
-            locked: hex_sha256(&placeholder_module("@acme/a")),
+            locked: hex_sha256(&spelled_module("@acme/a", "1.0.0", &[])),
             actual: hex_sha256(b"\0asm swapped after install"),
         }
     );
@@ -119,7 +119,7 @@ fn a_changed_module_is_refused_and_not_loaded() {
             .suggestion
             .as_deref()
             .unwrap()
-            .contains("specforge add @acme/a@0.0.0-test"),
+            .contains("specforge add @acme/a@1.0.0"),
         "the remedy is the command that reinstalls it as its lock entry records it"
     );
 }
@@ -195,7 +195,7 @@ fn an_entry_without_a_lock_entry_is_e028_naming_the_command_that_installs_it() {
 #[test]
 fn a_locked_extension_without_its_module_is_e028_naming_where_it_should_be() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     let module = Installed::at(dir.path()).module_path(&package("@acme/a"));
     std::fs::remove_file(&module).unwrap();
 
@@ -214,7 +214,7 @@ fn a_locked_extension_without_its_module_is_e028_naming_where_it_should_be() {
 )]
 fn an_unreadable_lock_is_reported_once_before_the_first_entry_it_left_unloaded() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a", "@acme/b"]);
+    install(dir.path(), &runtime(), &["@acme/a", "@acme/b"]);
     std::fs::write(dir.path().join("specforge.lock"), "not a lock {{{").unwrap();
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a", "@acme/b"]), &runtime());
@@ -297,7 +297,7 @@ impl WasmRuntime for Recording {
 )]
 fn the_bytes_compiled_are_the_bytes_hashed() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     let runtime = Recording {
         inner: runtime(),
         loaded: Mutex::new(Vec::new()),
@@ -358,7 +358,7 @@ fn a_file_entry_loads_under_the_name_it_declares() {
 )]
 fn a_file_entry_that_cannot_load_is_e028_naming_it() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     file(dir.path(), "plain.wasm", b"not a component");
     file(dir.path(), "tool.wasm", b"\0asm tool");
     file(dir.path(), "again.wasm", b"\0asm again");
@@ -422,7 +422,7 @@ fn a_file_entry_that_cannot_load_is_e028_naming_it() {
 )]
 fn declarations_come_in_entry_order_once_per_extension() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a", "@acme/b"]);
+    install(dir.path(), &runtime(), &["@acme/a", "@acme/b"]);
     file(dir.path(), "tool.wasm", b"\0asm tool");
     let runtime = runtime().binary(b"\0asm tool", extension("@acme/tool"));
     // `@acme/b` first, the file entry between, and `@acme/a` twice (the
@@ -448,7 +448,7 @@ fn declarations_come_in_entry_order_once_per_extension() {
 )]
 fn an_unpinned_entry_loads_with_w149() {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     let mut lock = match Installed::at(dir.path()).lock().clone() {
         LockState::Read(lock) => lock,
         other => panic!("{other:?}"),
@@ -471,7 +471,7 @@ fn an_unpinned_entry_loads_with_w149() {
             .suggestion
             .as_deref()
             .unwrap()
-            .contains("specforge add @acme/a@0.0.0-test")
+            .contains("specforge add @acme/a@1.0.0")
     );
     assert!(loaded.enabled[0].failure.is_none(), "it loaded");
 }
@@ -484,8 +484,8 @@ fn a_module_declaring_another_extension_is_e070() {
     let dir = TempDir::new().unwrap();
     // The lock names @acme/a; the module installed there is @acme/b's.
     let b_binary = b"\0asm the binary of b";
-    specforge_installed::testing::install_module(dir.path(), "@acme/a", b_binary);
     let runtime = InProcessRuntime::new().binary(b_binary, extension("@acme/b"));
+    specforge_installed::testing::install_module(dir.path(), &runtime, "@acme/a", b_binary);
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime);
 

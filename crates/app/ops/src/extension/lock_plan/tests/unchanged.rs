@@ -31,7 +31,9 @@ fn finished(plan: LockPlan<'_>) -> Done {
 fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing() {
     let dir = enabled_project(vec![entry("@acme/base", "1.0.0", "local:base.wasm", &[])]);
     let installed = Installed::at(dir.path());
-    let runtime = InProcessRuntime::new().binary(b"old", declaring("@acme/base", "1.0.0", &[]));
+    // The module the entry pins spells the declaration it records.
+    let old = crate::extension::fixtures::module_of("@acme/base", "1.0.0", &[]);
+    let runtime = InProcessRuntime::new();
     let module = std::fs::read(installed.module_path(&PackageName::parse("@acme/base").unwrap()));
     let lock = std::fs::read(installed.lock_path()).unwrap();
 
@@ -43,7 +45,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Commit,
         no_registry(),
     );
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert!(plan.staged.is_empty());
     assert_eq!(asked, Answer::Unchanged);
     let done = finished(plan);
@@ -52,7 +54,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
 
     // Control: no entry enables it, so the install changes the project.
     let mut plan = base_plan(&installed, &runtime, &[], Purpose::Preview, no_registry());
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert_eq!(asked, Answer::Changes);
     finished(plan);
 
@@ -66,10 +68,10 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Preview,
         no_registry(),
     );
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert_eq!(asked, Answer::Changes);
     finished(plan);
-    assert_eq!(module.unwrap(), b"old");
+    assert_eq!(module.unwrap(), old);
 }
 
 #[test]

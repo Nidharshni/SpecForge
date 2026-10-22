@@ -47,7 +47,11 @@ pub(crate) fn erring_project() -> (tempfile::TempDir, String) {
         r#"{"name": "p", "version": "0.1.0", "extensions": ["@specforge/software"]}"#,
     )
     .unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    specforge_installed::testing::install_configured(
+        dir.path(),
+        &specforge_project::builtins(),
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    );
     (dir, original)
 }
 

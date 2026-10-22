@@ -95,6 +95,7 @@ fn one_failed_upgrade_applies_none() {
         entry("@acme/liar", "1.0.0", "registry", &[]),
     ]);
     let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+    let greet_before = std::fs::read(installed(dir.path(), "@sdk/greet")).unwrap();
     // @acme/liar 1.1.0 is published as @acme/liar but its binary is greet's: it
     // declares other than was published, E028, as add refuses it.
     let registry = MemoryRegistry::new()
@@ -132,7 +133,7 @@ fn one_failed_upgrade_applies_none() {
     );
     assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     let installed = installed(dir.path(), "@sdk/greet");
-    assert_eq!(std::fs::read(installed).unwrap(), b"old");
+    assert_eq!(std::fs::read(installed).unwrap(), greet_before);
 }
 
 #[specforge_test(
@@ -183,6 +184,7 @@ fn a_lock_that_cannot_be_written_puts_the_old_binaries_back() {
     use std::os::unix::fs::PermissionsExt;
     let dir = enabled_project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
     let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+    let greet_before = std::fs::read(installed(dir.path(), "@sdk/greet")).unwrap();
     let registry = MemoryRegistry::new().serving(greet_published());
     // The binaries can be placed, the lock beside them cannot be written.
     let mode = |m| std::fs::Permissions::from_mode(m);
@@ -207,7 +209,7 @@ fn a_lock_that_cannot_be_written_puts_the_old_binaries_back() {
     assert_eq!(error.code, "E033", "{error:?}");
     assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     let installed = installed(dir.path(), "@sdk/greet");
-    assert_eq!(std::fs::read(installed).unwrap(), b"old");
+    assert_eq!(std::fs::read(installed).unwrap(), greet_before);
 }
 
 #[cfg(unix)]
@@ -222,6 +224,8 @@ fn a_write_that_fails_while_applying_fails_the_update() {
         entry("@test/probe", "0.0.9", "registry", &[]),
     ]);
     let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+    let greet_before = std::fs::read(installed(dir.path(), "@sdk/greet")).unwrap();
+    let probe_before = std::fs::read(installed(dir.path(), "@test/probe")).unwrap();
     let probe = crate::testing::PROBE.to_vec();
     let registry = MemoryRegistry::new()
         .serving(greet_published())
@@ -252,11 +256,11 @@ fn a_write_that_fails_while_applying_fails_the_update() {
     assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     assert_eq!(
         std::fs::read(installed(dir.path(), "@sdk/greet")).unwrap(),
-        b"old"
+        greet_before
     );
     assert_eq!(
         std::fs::read(installed(dir.path(), "@test/probe")).unwrap(),
-        b"old"
+        probe_before
     );
 }
 

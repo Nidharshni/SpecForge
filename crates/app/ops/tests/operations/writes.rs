@@ -565,8 +565,6 @@ fn a_migration_writes_each_file_and_its_backup() {
 fn a_refused_migration_leaves_nothing() {
     let dir = project(&["@t/x"], &[("old.spec", OLD)]);
     let root = dir.path();
-    specforge_installed::testing::install(root, &["@t/x"]);
-    let before = files_under(root);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(|| {
         let mut c = specforge_extension_sdk::ContributionsBuilder::new(
             specforge_extension_sdk::ExtensionMeta::new("@t/x", "1.0.0"),
@@ -574,6 +572,8 @@ fn a_refused_migration_leaves_nothing() {
         c.migration_hook_handler("hook", |_| Err("the hook failed".into()));
         c
     });
+    specforge_installed::testing::install(root, &runtime, &["@t/x"]);
+    let before = files_under(root);
 
     let outcome = specforge_ops::authoring::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),

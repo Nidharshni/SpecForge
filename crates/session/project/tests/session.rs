@@ -2152,8 +2152,8 @@ fn a_sessions_snapshot_follows_every_update() {
         &[("a.spec", "item gizmo \"Gizmo\" {\n}\n")],
     );
     let root = dir.root();
-    specforge_installed::testing::install_configured(root, &specforge_project::builtins());
     let runtime = Arc::new(InProcessRuntime::new().with(obliging_items));
+    dir.install_in(&*runtime);
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(runtime.clone()),
@@ -2278,21 +2278,21 @@ fn kind_extension(
     c
 }
 
-/// The runtime of the extensions `config` names (`@test/a`, `@test/b`).
-fn runtime_of(config: &specforge_common::ProjectConfig) -> specforge_project::SharedRuntime {
+/// The runtime of the extensions named (`@test/a`, `@test/b`).
+fn runtime_of(extensions: &[impl AsRef<str>]) -> specforge_project::SharedRuntime {
     use specforge_wasm::testing::InProcessRuntime;
-    let mut runtime = InProcessRuntime::new();
-    for entry in &config.extensions {
-        match entry.as_str() {
-            "@test/a" => runtime = runtime.with(|| kind_extension("@test/a", "alpha")),
-            "@test/b" => runtime = runtime.with(|| kind_extension("@test/b", "beta")),
-            _ => {}
-        }
-    }
-    std::sync::Arc::new(runtime)
+    let named = |name: &str| extensions.iter().any(|e| e.as_ref() == name);
+    let served = [("@test/a", "alpha"), ("@test/b", "beta")]
+        .into_iter()
+        .filter(|(name, _)| named(name))
+        .fold(InProcessRuntime::new(), |runtime, (name, kind)| {
+            runtime.with(move || kind_extension(name, kind))
+        });
+    std::sync::Arc::new(served)
 }
 
 const V1: &str = r#"{"name":"s","version":"0.1.0","extensions":["@test/a"]}"#;
+const BOTH: [&str; 2] = ["@test/a", "@test/b"];
 const V2: &str = r#"{"name":"s","version":"0.1.0","extensions":["@test/a","@test/b"]}"#;
 
 type SeenConfigs = std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>>;
@@ -2315,7 +2315,7 @@ fn source_writing(
             if first {
                 during(root);
             }
-            runtime_of(config)
+            runtime_of(&config.extensions)
         },
     ));
     (source, seen)
@@ -2328,7 +2328,7 @@ fn source_writing(
 fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     let dir = project(V1, &[("a.spec", "")]);
     let root = dir.root();
-    specforge_installed::testing::install(root, &["@test/a", "@test/b"]);
+    specforge_installed::testing::install(root, &*runtime_of(&BOTH), &BOTH);
     let (source, seen) = source_writing(|root| fs::write(root.join("specforge.json"), V2).unwrap());
 
     let mut session =
@@ -2382,7 +2382,7 @@ fn a_module_written_before_the_load_reads_it_is_what_was_read() {
 fn a_reload_builds_its_runtime_from_the_config_it_read() {
     let dir = project(V1, &[("a.spec", "")]);
     let root = dir.root();
-    specforge_installed::testing::install(root, &["@test/a", "@test/b"]);
+    specforge_installed::testing::install(root, &*runtime_of(&BOTH), &BOTH);
     let (source, seen) = source_writing(|_| {});
     let mut session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
@@ -2397,7 +2397,7 @@ fn a_reload_builds_its_runtime_from_the_config_it_read() {
     );
 
     // A fixed runtime is the same one after a reload.
-    let fixed = runtime_of(&specforge_common::ProjectConfig::default());
+    let fixed = runtime_of(&[] as &[&str]);
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(fixed.clone()),
@@ -2622,8 +2622,8 @@ fn an_environment_holds_the_runtime_it_loaded_its_extensions_in() {
         &[("a.spec", "item gizmo \"Gizmo\" {\n}\n")],
     );
     let root = dir.root();
-    specforge_installed::testing::install_configured(root, &specforge_project::builtins());
     let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(obliging_items));
+    dir.install_in(&*rt);
 
     let loaded = Environment::load(
         &specforge_common::ProjectRoot::of(root).unwrap(),

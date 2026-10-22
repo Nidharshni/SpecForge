@@ -216,8 +216,18 @@ impl FakeExtension {
 pub fn project() -> tempfile::TempDir {
     let dir = cmds_project().into_dir();
     // The runtime serves it; the project has it installed.
-    specforge_installed::testing::install(dir.path(), &[EXT]);
+    specforge_installed::testing::install(dir.path(), &*FakeExtension::new().runtime(), &[EXT]);
     dir
+}
+
+/// The `specforge.json` at `root` as it is on disk now, its fixture extension installed.
+pub fn install_configured(root: &std::path::Path) {
+    let served = FakeExtension::new().runtime();
+    specforge_installed::testing::install_configured(
+        root,
+        &specforge_project::builtins(),
+        &*served,
+    );
 }
 
 /// [`project`], as the fixture serves it.

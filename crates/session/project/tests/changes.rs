@@ -554,8 +554,8 @@ fn a_file_a_file_exists_rule_names_reruns_the_checks() {
         )],
     );
     let root = dir.root();
-    specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
+    specforge_installed::testing::install(root, &*ext, &["@test/files"]);
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(Arc::clone(&ext) as SharedRuntime),

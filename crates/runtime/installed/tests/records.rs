@@ -51,9 +51,9 @@ fn a_module_declaring_another_version_or_other_peers_than_its_lock_entry_is_e070
         ("what it declares", "1.0.0", vec![peer("^1.0")], false),
     ] {
         let dir = TempDir::new().unwrap();
-        install_module(dir.path(), "@acme/a", DEP);
-        record(dir.path(), version, peers);
         let runtime = InProcessRuntime::new().binary(DEP, declaring);
+        install_module(dir.path(), &runtime, "@acme/a", DEP);
+        record(dir.path(), version, peers);
 
         let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime);
 

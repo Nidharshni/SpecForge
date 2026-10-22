@@ -404,7 +404,7 @@ mod the_views_runtime {
             r#"{"name":"p","version":"0.1.0","extensions":["@t/x"]}"#,
         )
         .unwrap();
-        specforge_installed::testing::install(dir.path(), &["@t/x"]);
+        specforge_installed::testing::install(dir.path(), &extension(), &["@t/x"]);
         std::fs::write(dir.path().join("main.spec"), "behavior a \"A\" {\n}\n").unwrap();
         dir
     }

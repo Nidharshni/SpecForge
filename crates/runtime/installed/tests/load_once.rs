@@ -72,7 +72,8 @@ fn a_file_entry_whose_describe_fails_says_its_declaration_cannot_be_read() {
 )]
 fn a_named_entry_whose_declaration_cannot_be_read_is_not_left_loaded() {
     let dir = TempDir::new().unwrap();
-    install_module(dir.path(), "@acme/a", b"\0asm a");
+    let served = InProcessRuntime::new().binary(b"\0asm a", extension("@acme/a"));
+    install_module(dir.path(), &served, "@acme/a", b"\0asm a");
     let builtins = Builtins(&[("@acme/b", &b"\0asm b"[..])]);
     let runtime = describe_fails(
         InProcessRuntime::new()

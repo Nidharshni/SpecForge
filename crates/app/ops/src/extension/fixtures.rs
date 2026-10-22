@@ -32,21 +32,28 @@ pub(super) fn entry(
     source: &str,
     peers: &[(&str, &str)],
 ) -> LockFileEntry {
+    let peers: Vec<PeerDependency> = peers
+        .iter()
+        .map(|(name, range)| PeerDependency {
+            name: name.to_string(),
+            version: range.to_string(),
+            optional: false,
+        })
+        .collect();
     LockFileEntry {
         name: PackageName::parse(name).unwrap(),
         version: version.to_string(),
         source: LockSource::parse(source),
-        wasm_hash: hex_sha256(b"old"),
+        wasm_hash: hex_sha256(&module_of(name, version, &peers)),
         key_id: None,
-        peer_dependencies: peers
-            .iter()
-            .map(|(name, range)| PeerDependency {
-                name: name.to_string(),
-                version: range.to_string(),
-                optional: false,
-            })
-            .collect(),
+        peer_dependencies: peers,
     }
+}
+
+/// The module a lock entry for `name` pins in these tests: bytes that spell the declaration the entry
+/// records, which the in-process runtime serves under any name.
+pub(super) fn module_of(name: &str, version: &str, peers: &[PeerDependency]) -> Vec<u8> {
+    specforge_wasm::testing::spelled_module(name, version, peers)
 }
 
 /// [`project`], with a `specforge.json` enabling every locked name: the extensions the project
@@ -59,13 +66,14 @@ pub(super) fn enabled_project(entries: Vec<LockFileEntry>) -> tempfile::TempDir 
     dir
 }
 
-/// A project locking `entries`, each installed with the bytes `old`.
+/// A project locking `entries`, each installed with the module its entry pins ([`module_of`]).
 pub(super) fn project(entries: Vec<LockFileEntry>) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     for e in &entries {
         let path = installed(dir.path(), e.name.as_str());
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, b"old").unwrap();
+        let module = module_of(e.name.as_str(), &e.version, &e.peer_dependencies);
+        std::fs::write(path, module).unwrap();
     }
     let lock = LockFile {
         lockfile_version: 1,

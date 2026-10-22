@@ -6,7 +6,7 @@ use specforge_installed::{Builtins, EnabledExtension, Installed, LockSource, Ori
 use specforge_wasm::testing::InProcessRuntime;
 use tempfile::TempDir;
 
-use crate::load::{entries, extension, load_with};
+use crate::load::{entries, extension, load_with, runtime};
 
 const ENTRIES: [&str; 6] = [
     "@acme/a",
@@ -19,7 +19,7 @@ const ENTRIES: [&str; 6] = [
 
 fn project() -> TempDir {
     let dir = TempDir::new().unwrap();
-    install(dir.path(), &["@acme/a"]);
+    install(dir.path(), &runtime(), &["@acme/a"]);
     std::fs::write(dir.path().join("tool.wasm"), b"\0asm tool").unwrap();
     dir
 }

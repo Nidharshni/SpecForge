@@ -120,8 +120,8 @@ fn a_file_beside_a_missing_file_exists_file_changes_its_suggestion() {
         )
         .files(&[("spec/a.spec", "note n \"N\" {\n  doc \"guide.md\"\n}\n")]);
     let root = dir.root();
-    specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
+    specforge_installed::testing::install(root, &*ext, &["@test/files"]);
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(Arc::clone(&ext) as SharedRuntime),

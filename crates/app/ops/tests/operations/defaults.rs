@@ -150,7 +150,11 @@ fn project_of(text: &str) -> tempfile::TempDir {
     )
     .unwrap();
     std::fs::write(dir.path().join("a.spec"), text).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    specforge_installed::testing::install_configured(
+        dir.path(),
+        &specforge_project::builtins(),
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    );
     dir
 }
 

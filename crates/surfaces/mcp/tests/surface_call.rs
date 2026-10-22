@@ -472,7 +472,7 @@ fn extension_enabled_after_serving()
         .file("main.spec", "")
         .serve_in(ext.runtime() as std::sync::Arc<dyn specforge_wasm::runtime::WasmRuntime>);
     // The project installs what its runtime serves, then enables it.
-    specforge_installed::testing::install(server.root(), &[EXT]);
+    specforge_installed::testing::install(server.root(), &*ext.runtime(), &[EXT]);
     server.write("specforge.json", &config(&[EXT]));
     (server, ext)
 }

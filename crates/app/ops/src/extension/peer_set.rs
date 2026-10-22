@@ -291,10 +291,11 @@ mod tests {
         ] {
             std::fs::write(dir.path().join(file), bytes).unwrap();
         }
+        let runtime = testing::probes().binary(GONE, declaring("@probe/gone", "1.0.0", &[]));
         let install = specforge_installed::testing::install_module;
-        install(dir.path(), "@probe/dep", testing::DEP_1);
-        install(dir.path(), "@probe/gone", GONE);
-        install(dir.path(), "@probe/changed", testing::DEP_1);
+        install(dir.path(), &runtime, "@probe/dep", testing::DEP_1);
+        install(dir.path(), &runtime, "@probe/gone", GONE);
+        install(dir.path(), &runtime, "@probe/changed", testing::DEP_1);
         let installed = Installed::at(dir.path());
         for (name, bytes) in [
             ("@probe/gone", None),
@@ -306,7 +307,6 @@ mod tests {
                 Some(bytes) => std::fs::write(module, bytes).unwrap(),
             }
         }
-        let runtime = testing::probes().binary(GONE, declaring("@probe/gone", "1.0.0", &[]));
         let entries = [
             "@specforge/software",
             "@probe/dep",

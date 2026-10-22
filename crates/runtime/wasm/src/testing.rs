@@ -13,7 +13,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use specforge_extension_sdk::{
-    ContributionsBuilder, ExportHandler, Served as GuestServed, no_other_exports,
+    ContributionsBuilder, ExportHandler, ExtensionMeta, PeerDependency, Served as GuestServed,
+    no_other_exports,
 };
 
 use crate::runtime::{WasmCallResult, WasmRuntime, WasmTrapInfo};
@@ -25,6 +26,26 @@ type Build = Arc<dyn Fn() -> ContributionsBuilder + Send + Sync>;
 /// An extension served under a name: what builds it, and what answers the
 /// exports its declarations do not.
 type Served = (Build, ExportHandler);
+
+/// What starts the bytes [`spelled_module`] makes.
+const SPELLED: &[u8] = b"\0asm in-process-spelled ";
+
+/// Bytes that spell a declaration: [`InProcessRuntime`] serves them, under whatever name they are
+/// loaded as, as a component declaring `name` at `version` with `peers` and nothing else (after the
+/// binaries and names it was given). A module a test installs by hand declares what its lock entry
+/// records without the test registering it.
+pub fn spelled_module(name: &str, version: &str, peers: &[PeerDependency]) -> Vec<u8> {
+    let spelling = serde_json::json!({"name": name, "version": version, "peers": peers});
+    [SPELLED, spelling.to_string().as_bytes()].concat()
+}
+
+/// The declaration `bytes` spell, if they are [`spelled_module`] bytes.
+fn spelled(bytes: &[u8]) -> Option<ExtensionMeta> {
+    let spelling: serde_json::Value = serde_json::from_slice(bytes.strip_prefix(SPELLED)?).ok()?;
+    let mut meta = ExtensionMeta::new(spelling["name"].as_str()?, spelling["version"].as_str()?);
+    meta.peer_dependencies = serde_json::from_value(spelling["peers"].clone()).ok()?;
+    Some(meta)
+}
 
 /// One call the runtime answered.
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +125,27 @@ impl InProcessRuntime {
         self.binaries
             .push((bytes.to_vec(), (Arc::new(build), no_other_exports)));
         self
+    }
+
+    /// `runtime` as the in-process runtime, if it is one.
+    pub fn of(runtime: &dyn WasmRuntime) -> Option<&InProcessRuntime> {
+        (runtime as &dyn std::any::Any).downcast_ref()
+    }
+
+    /// The version and peers the extension declares once a module of `bytes` is loaded as `name`: a
+    /// binary it was given, else the name it serves, else the declaration `bytes` spell
+    /// ([`spelled_module`]). Nothing is loaded and no call is recorded, so a test can write the lock
+    /// entry a real install would.
+    pub fn declared_by(&self, name: &str, bytes: &[u8]) -> Option<(String, Vec<PeerDependency>)> {
+        let built = |build: &Build| build().meta;
+        let meta = match self.binaries.iter().find(|(known, _)| known == bytes) {
+            Some((_, (build, _))) => built(build),
+            None => match self.extensions.lock().expect("extensions lock").get(name) {
+                Some((build, _)) => built(build),
+                None => spelled(bytes)?,
+            },
+        };
+        Some((meta.version, meta.peer_dependencies))
     }
 
     /// Answer `export` of `extension` with `result` (raw bytes or a trap)
@@ -195,6 +237,11 @@ impl WasmRuntime for InProcessRuntime {
             .iter()
             .any(|(extension, ..)| extension == name);
         if extensions.contains_key(name) || answered {
+            return Ok(());
+        }
+        if let Some(meta) = spelled(bytes) {
+            let build: Build = Arc::new(move || ContributionsBuilder::new(meta.clone()));
+            extensions.insert(name.to_string(), (build, no_other_exports));
             return Ok(());
         }
         Err("not a component the in-process runtime serves".to_string())

@@ -255,7 +255,6 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
         r#"{"name": "p", "version": "0.1.0", "spec_root": "spec", "extensions": ["@t/x"]}"#,
     )
     .unwrap();
-    specforge_installed::testing::install(root, &["@t/x"]);
     std::fs::create_dir(root.join("spec")).unwrap();
     std::fs::write(
         root.join("spec/old.spec"),
@@ -268,6 +267,7 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
             c.migration_hook_handler("migrate_x", |_| Ok(()));
             c
         }));
+    specforge_installed::testing::install(root, &*runtime, &["@t/x"]);
     let declared = |at: &Path| {
         // Start from a fresh copy of the old file each time.
         std::fs::write(

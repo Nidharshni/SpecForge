@@ -66,6 +66,12 @@ fn an_impossible_diamond_is_refused_naming_each_requirer() {
 fn a_locked_peer_at_a_version_that_is_not_semver_is_unified_like_one_out_of_range() {
     let mut entries = base_and_other("^1.0");
     entries[0].version = "local".to_string();
+    // The module the entry pins spells the version it records.
+    entries[0].wasm_hash = specforge_installed::hex_sha256(&crate::extension::fixtures::module_of(
+        "@acme/base",
+        "local",
+        &entries[0].peer_dependencies,
+    ));
     let installed = nowhere(entries);
     let registry = base_registry().serving(Published::new(
         b"\0asm app".to_vec(),
@@ -148,7 +154,11 @@ fn a_diamond_counts_a_file_entrys_range_among_the_requirers() {
     );
     let module = installed.module_path(&PackageName::parse("@acme/base").unwrap());
     std::fs::create_dir_all(module.parent().unwrap()).unwrap();
-    std::fs::write(module, b"old").unwrap();
+    std::fs::write(
+        module,
+        crate::extension::fixtures::module_of("@acme/base", "1.0.0", &[]),
+    )
+    .unwrap();
     let runtime = runtime().binary(
         X_NEEDS_BASE_1,
         declaring("@acme/x", "1.0.0", &[("@acme/base", "^1", false)]),

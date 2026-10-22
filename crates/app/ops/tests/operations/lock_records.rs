@@ -71,7 +71,7 @@ fn compiled(root: &Path) -> (Vec<String>, Vec<String>) {
 fn the_lock_plan_judges_a_locked_module_by_what_it_declares() {
     // Forward: the entry records a peer the module never declared.
     let dir = project(&["@probe/base"]);
-    specforge_installed::testing::install_module(dir.path(), "@probe/base", BASE_2);
+    specforge_installed::testing::install_module(dir.path(), &probes(), "@probe/base", BASE_2);
     lock_record(
         dir.path(),
         "@probe/base",
@@ -89,7 +89,7 @@ fn the_lock_plan_judges_a_locked_module_by_what_it_declares() {
 
     // Reverse: the entry records no peer the module declares.
     let dir = project(&["@probe/dep"]);
-    specforge_installed::testing::install_module(dir.path(), "@probe/dep", DEP_1);
+    specforge_installed::testing::install_module(dir.path(), &probes(), "@probe/dep", DEP_1);
     lock_record(dir.path(), "@probe/dep", "1.0.0", &[]);
     let base = tempfile::tempdir().unwrap();
     std::fs::write(base.path().join("base.wasm"), BASE_2).unwrap();
@@ -104,7 +104,7 @@ fn the_lock_plan_judges_a_locked_module_by_what_it_declares() {
 
     // Control: the entry records what the module declares, so the gate refuses the base.
     let dir = project(&["@probe/dep"]);
-    specforge_installed::testing::install_module(dir.path(), "@probe/dep", DEP_1);
+    specforge_installed::testing::install_module(dir.path(), &probes(), "@probe/dep", DEP_1);
     lock_record(
         dir.path(),
         "@probe/dep",
