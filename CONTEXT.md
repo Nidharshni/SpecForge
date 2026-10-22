@@ -258,7 +258,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   released one or a file on disk whose text is already the one it was built from) runs no check, unless a check input changed with it or an earlier update skipped them. One batch of changes is one update: an environment change reloads and covers the rest (ADR 0159).
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
-  kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
+  kind, title, methods and outgoing edges differ; a changed annotation, a block field's entry's included, is a changed field), added and removed edges, and the affected files; source
   positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
@@ -564,6 +564,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
+- **Members**: what an entity holds besides its id, kind, title and obligations, as every output writes it
+  (`specforge_graph::Members`, ADR 0222): its fields' values (`FieldJson`), the annotations written after them, by the
+  field's name (an entry of a block field's by `outer.key`), and its methods (`MethodJson`: name, parameters with their
+  type, `?` and annotations, return type; `MethodJson::signature` is the line `specforge format` writes). No position.
+  The graph, context and markdown exports, inspect, the context prompt, the hover and the outline read it; the graph
+  delta diffs it.
 - **Reference target**: the kind a reference field's ids must name, from its declaration
   (`FieldForm::target_kind`), and whether a loaded extension declares it (`FieldForms::target` gives a
   `specforge_graph::Target`: `Loaded` or `Absent`; an absent kind's owner is `GraphInputs::target_owners`). The linker

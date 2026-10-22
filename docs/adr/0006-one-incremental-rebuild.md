@@ -1,6 +1,6 @@
 # One incremental rebuild, inside the project session
 
-**Status:** accepted (2026-10-02); amended by [ADR 0032](0032-one-graph-build.md) (2026-10-07)
+**Status:** accepted (2026-10-02); amended by [ADR 0032](0032-one-graph-build.md) (2026-10-07); extended by [ADR 0222](0222-what-an-entity-holds-is-written-once.md): the delta diffs the written members
 
 The incremental rebuild was split three ways: `specforge-watch` picked the files to re-parse from
 an import DAG, the project session seeded that DAG and resolved imports again on its own, and MCP
