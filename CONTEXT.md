@@ -617,19 +617,24 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   **trust decision**), and only then is the binary downloaded and held to the served SHA-256, so the signature covers it
   (`ConfiguredRegistry::published` and `fetch`; ADR 0010, 0012, 0044, 0059, 0213). The fetch decides and
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
-  fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
-  re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
+  fetched it commits. Accepting an unsigned package (`--allow-unsigned`, the CLI only) is reported as W155 at
+  fetch, a re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch, signed or not
+  (R-TRUST-006). The
   check writes nothing to the terminal: a key change is put to the policy's **Asking**.
 - **Trust decision**: how a registry package's publisher is accepted, decided once from what the registry describes, before any
-  download, for a dry run as for an install: unsigned (R-TRUST-001 unless allowed), a denied key (R-TRUST-005, whatever the
-  consent), the expected key (the user's **key pin**, else the **locked pin**'s key, else first use), a key change (accepted for
+  download, for a dry run as for an install: the **expected key** first, for every package; unsigned with an expected key
+  (R-TRUST-007), unsigned with none (R-TRUST-001 unless allowed), a denied key (R-TRUST-005, whatever the consent), the
+  expected key matched or first use, a key change (accepted for
   a `trusted_keys` key, else put to **Asking**, R-TRUST-003). `specforge_ops::registry::TrustPolicy::decide`; the adapter
-  verifies the signature (R-TRUST-002) and reads the user's store (R-TRUST-006) (ADR 0213).
+  verifies the signature (R-TRUST-002) and reads the user's store whatever the signer (R-TRUST-006) (ADR 0213, 0221).
 - **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
   (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
   a committed lock plan, through `Registry::pin`, after the binaries and the lock
   (`specforge_ops::registry::KeyPin`, ADR 0059).
+- **Expected key**: the publisher key a package name is held to when it is fetched: the user's **key pin**, else the
+  **locked pin**'s key, else none (first use). A package signed by another key is a key change (R-TRUST-003); one
+  arriving unsigned is refused (R-TRUST-007), whatever `--allow-unsigned` or consent (ADR 0221).
 - **Locked pin**: what a project's `specforge.lock` entry records for a registry install, which every fetch of the name
   is held to: its publisher key at any version (the **key pin** when the user has none) and its SHA-256 at its own
   version. A registry serving that version as other bytes is refused (R014) before the download, any key question or any

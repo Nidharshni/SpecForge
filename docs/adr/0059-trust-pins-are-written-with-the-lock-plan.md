@@ -4,6 +4,7 @@
 **D3 and D5 extended by [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) (round 22):** the fetch is held to the lock entry's whole pin (its bytes at its version, R014), and contract clause C12 holds both adapters to it.
 **D5 amended by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (round 24):** the decision is `TrustPolicy::decide`; the allowlist and the deny list are in the contract (C14).
 D2's `commit_with(config, last)` sentence amended by [ADR 0128](0128-one-project-change-over-held-files.md): `last` is the operation's project change (`specforge.json`, the `Also` files, then the pins); the change no longer names the files.
+**D3 and D4 extended by [ADR 0221](0221-an-unsigned-package-is-held-to-its-names-expected-publisher.md) (round 25):** the lock's key and the user's pin hold against an unsigned package (R-TRUST-007), and an unreadable store refuses an unsigned install.
 
 The fetch policy pinned a publisher key while it checked the signature (`check_and_pin`), that is, while
 the lock plan was still building its installs and before its gate. An install the gate, the binary load or

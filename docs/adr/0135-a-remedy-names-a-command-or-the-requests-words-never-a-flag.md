@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-17, architecture round 14, plan 03). Extends ADR 0101 D4 and ADR 0072 D3; amends ADR
 0110 D4 (R-TRUST-003's text); amended by the round-14 follow-up F2 (D5).
+R-TRUST-001's text amended by [ADR 0221](0221-an-unsigned-package-is-held-to-its-names-expected-publisher.md): the MCP server takes no allow_unsigned.
 
 Below the surfaces, 15 string literals told the caller which CLI flag to pass. An operation does not know its
 caller, so 8 of them reached MCP callers whose arguments are spelled otherwise (`min`, `run`, `runner`, `force`,
