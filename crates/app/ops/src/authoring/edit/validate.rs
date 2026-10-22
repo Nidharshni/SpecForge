@@ -1,7 +1,8 @@
 //! Validating a plan (ADR 0151): the edited project is compiled from the planned texts; an error it reports that the
 //! project's checked report (`CompiledProject::checked_diagnostics`: every check run, even after an update that
-//! skipped them) does not have refuses the plan (E080), and so does a graph change its edits do not declare (ADR 0198). Diagnostics are matched without their positions, since an inserted
-//! block moves every later diagnostic of its file.
+//! skipped them) does not have refuses the plan (E080), and so does a graph change its edits do not declare (ADR 0198). Diagnostics are matched without their positions: neither the
+//! span nor the digits of a message are in the key, since a message may name a position (E002, E078) and an inserted
+//! block moves every later one.
 
 use super::EditField;
 use super::declared::Declared;
@@ -13,11 +14,22 @@ use std::collections::{BTreeMap, HashMap};
 
 type Key = (String, Severity, String, String);
 
+/// The message with each run of ASCII digits collapsed, so a line that moved is the same diagnostic.
+fn shape(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    for c in message.chars() {
+        if !c.is_ascii_digit() || !out.ends_with('#') {
+            out.push(if c.is_ascii_digit() { '#' } else { c });
+        }
+    }
+    out
+}
+
 fn key(d: &Diagnostic) -> Key {
     (
         d.code.clone(),
         d.severity,
-        d.message.clone(),
+        shape(&d.message),
         d.span.as_ref().map_or("", |s| s.file.as_str()).to_string(),
     )
 }

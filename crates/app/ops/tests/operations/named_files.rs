@@ -245,7 +245,43 @@ fn the_view_refuses_a_project_root_spelling_naming_its_key() {
         error.suggestion.as_deref().unwrap().contains("'a.spec'"),
         "{error:?}"
     );
-    assert_eq!(view.source_place("spec/new.spec").unwrap(), "spec/new.spec");
+    let error = view.source_place("spec/new.spec").unwrap_err();
+    assert_eq!(error.code, "not_a_source");
+    assert!(
+        error.suggestion.as_deref().unwrap().contains("'new.spec'"),
+        "{error:?}"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "a new spec file named from the project root is refused naming its spec-root spelling"
+)]
+fn the_view_refuses_a_new_file_named_from_the_project_root() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    for (named, key) in [
+        ("spec/new.spec", "'new.spec'"),
+        ("spec/types/x.spec", "'types/x.spec'"),
+        ("spec/sub/y.spec", "'sub/y.spec'"),
+    ] {
+        let error = view.source_place(named).unwrap_err();
+        assert_eq!(error.code, "not_a_source", "{named}");
+        assert_eq!(error.file(), Some(named), "{named}");
+        assert!(
+            error.suggestion.as_deref().unwrap().contains(key),
+            "{error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_new_file_not_repeating_the_spec_root_stays_a_place() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    for named in ["new/c.spec", "specs/x.spec", "sub/spec/z.spec"] {
+        assert_eq!(view.source_place(named).unwrap(), named);
+    }
 }
 
 #[specforge_test_macros::test(

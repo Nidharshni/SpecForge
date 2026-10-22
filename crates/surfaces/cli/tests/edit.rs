@@ -121,6 +121,35 @@ fn new_in_a_project_root_spelling_is_refused_naming_its_file() {
 }
 
 #[specforge_test(
+    behavior = "create_entity",
+    verify = "new --in refuses a new file named from the project root, naming its spec-root spelling"
+)]
+fn new_in_a_project_root_spelling_of_a_new_file_is_refused() {
+    let project = todo();
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive a Task",
+            "--in",
+            "spec/behaviors/archive.spec",
+            "--contract",
+            "The system MUST archive a done task.",
+        ],
+    )
+    .exits(1);
+    assert!(run.stderr.contains("error[not_a_source]"), "{}", run.stderr);
+    assert!(
+        run.stderr.contains("behaviors/archive.spec"),
+        "{}",
+        run.stderr
+    );
+    assert!(!project.root().join("spec/spec").exists());
+}
+
+#[specforge_test(
     behavior = "edit_entity_link",
     verify = "link appends the target and keeps the items as written"
 )]
