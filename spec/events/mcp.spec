@@ -120,6 +120,7 @@ event mcp_mutation_completed "MCP Mutation Completed" {
   verify integration "a mutation that fails after writing reports the files it wrote"
   verify integration "a mutation's reply lists in files_written the files files_changed counts"
   verify integration "a call whose arguments ask for a preview records nothing and lists no files_written, whatever its operation answered"
+  verify integration "a preview refused before its handler runs, for no project or a path naming none, lists no files_written and records nothing"
 }
 
 type McpMutationCompletedPayload "Mcp Mutation Completed Payload" {

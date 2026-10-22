@@ -35,6 +35,7 @@ mod option_tables;
 mod output_schemas;
 mod path_containment;
 mod path_spelling;
+mod preview_refusals;
 mod product_commands;
 mod project_file_containment;
 mod prompt_golden;
