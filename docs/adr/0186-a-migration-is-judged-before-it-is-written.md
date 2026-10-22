@@ -1,6 +1,6 @@
 # A migration is judged before it is written
 
-**Status:** accepted (2026-10-21, architecture round 20, plan 03). Amends [ADR 0171](0171-a-migration-writes-through-the-project-change.md) D1 (the hooks and the graph comparison are no longer the project change's last step) and D4 (an undone run is replaced by a refused run that writes nothing), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D4 (there is no post compile: the edited compile replaces it, and it reads no source) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F1 ("a change it undid" becomes "a migration it refused"). Amended by round 22 plan 04 (2026-10-21): D5 (the environment is loaded before the plan, whose defaults step reads its field forms) and D7. Cites [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) P1 and [ADR 0037](0037-the-sandbox-is-limits-the-host-enforces.md).
+**Status:** accepted (2026-10-21, architecture round 20, plan 03). Amends [ADR 0171](0171-a-migration-writes-through-the-project-change.md) D1 (the hooks and the graph comparison are no longer the project change's last step) and D4 (an undone run is replaced by a refused run that writes nothing), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D4 (there is no post compile: the edited compile replaces it, and it reads no source) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F1 ("a change it undid" becomes "a migration it refused"). Amended by round 22 plan 04 (2026-10-21): D5 (the environment is loaded before the plan, whose defaults step reads its field forms) and D7. Amended by round 23 plan 01 (2026-10-22): D6, see [ADR 0211](0211-a-migration-is-judged-by-the-errors-it-adds-whatever-its-graph.md). Cites [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) P1 and [ADR 0037](0037-the-sandbox-is-limits-the-host-enforces.md).
 
 ## Context
 
@@ -29,7 +29,7 @@
 - **D5. Order** *(amended, round 22: see D5 below the Amendment)*: plan; nothing pending or a file failed: return, nothing compiled; `pre`; judge; dry run or refused:
   return; stage; commit. Each source is read twice (the plan and `pre`), the environment loaded once.
 - **D6. A refusal for errors counts the errors the planned project has that the project has not**
-  (`edit::validate::added`).
+  (`edit::validate::added`). *(Amended, round 23: a refusal for errors is read before the graph delta, ADR 0211.)*
 
 ## Rejected
 
@@ -59,7 +59,7 @@
   `FileDefaults::entry` applies it under the environment's field forms (ADR 0154 D1), and writes its block above the
   file's first block (after an import only when that import stands above it, E078). A step that would change the graph
   is a defect the judge refuses, never a per-step retry.
-- **Left open (04-D3).** `Verdict::refusal` keeps a migration that adds an error while its graph is unchanged. This
+- **Left open (04-D3), closed by [ADR 0211](0211-a-migration-is-judged-by-the-errors-it-adds-whatever-its-graph.md).** `Verdict::refusal` keeps a migration that adds an error while its graph is unchanged. This
   amendment does not close it: refusing every added error would also refuse a migration that only moves lines in a
   file reporting a message that names a position (a duplicate ID). It stays a later card, to be settled with the
   key `edit::validate::added` compares by.
