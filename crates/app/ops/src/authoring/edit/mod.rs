@@ -44,7 +44,8 @@ pub enum Edit {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         verify: Vec<Obligation>,
     },
-    /// `field` (or `field.entry` inside a block field) holds `value`; `annotations` (`readonly`, `since=1.2`)
+    /// `field` (or `field.entry` inside a block field) holds `value`; `annotations` (`readonly`, or
+    /// `name=value`, written `@name "value"`)
     /// replace the field's when given.
     Set {
         entity_id: String,

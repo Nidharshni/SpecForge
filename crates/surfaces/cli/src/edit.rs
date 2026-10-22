@@ -100,7 +100,7 @@ pub(crate) struct SetArgs {
     #[arg(long, value_name = "TITLE")]
     title: Option<String>,
 
-    /// An annotation to write after the value (`readonly`, `since=1.2`); replaces the field's
+    /// An annotation to write after the value: `NAME` (`readonly`), or `NAME=VALUE`, written `@NAME "VALUE"`; replaces the field's
     #[arg(long = "annotation", value_name = "NAME[=VALUE]")]
     annotations: Vec<String>,
 
