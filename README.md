@@ -59,7 +59,7 @@ A **soft skill** is advice placed in the AI's context: a Markdown spec, a PRD, a
 A **hard skill** is a rule that a program enforces. The AI can't skip it, because the check fails.
 
 <p align="center">
-  <img src="assets/readme/soft-vs-hard.svg" width="100%" alt="Left, soft skill: a rule written in a Markdown spec is advice; the AI's refund code passes it by and ships with the rule skipped, found two weeks later. Right, hard skill: the same rule in a spec file; specforge check --strict stops the draft with W003, rule not enforced; the agent links the rule, the check passes, and it ships with the rule enforced.">
+  <img src="assets/readme/hard-skill.svg" width="100%" alt="An animated loop. A refund rule starts as advice in docs/refunds.md. The agent writes it as an invariant in spec/refund.spec. specforge check --strict fails: W003, invariant refund_within_capture is not enforced by any behavior, and the agent is blocked. specforge explain W003 says to reference it from the behaviors that must preserve it. The agent adds invariants [refund_within_capture] to issue_refund, the check passes with 0 errors, 0 warnings, 0 infos, and the agent goes from unsure to certain.">
 </p>
 
 |  | Soft skill<br>Markdown spec, PRD, skill file | Hard skill<br>SpecForge extension |
