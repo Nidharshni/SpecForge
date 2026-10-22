@@ -149,8 +149,8 @@ pub enum LoadProblem {
     NotInstalled,
     /// E028: specforge.lock is there and can't be read.
     LockUnreadable,
-    /// E072: the name is no package name, so no module can be installed
-    /// under it.
+    /// E072: the name an entry names, or the name a `.wasm` file entry's component declares, is no
+    /// package name: nothing can be installed or loaded under it.
     NotAPackageName { reason: String },
     /// E028: locked, no module.
     ModuleMissing { path: PathBuf },
@@ -253,6 +253,17 @@ impl LoadProblem {
             LoadProblem::NoDeclaration { reason } => {
                 return subject.says(format!("has no declaration the host can read: {reason}"));
             }
+            LoadProblem::NotAPackageName { reason } => {
+                let mut diagnostic = specforge_common::package::invalid(reason);
+                if let Subject::File { key, .. } = subject {
+                    // Every file-entry diagnostic names its entry (`Subject::says`).
+                    diagnostic.message = format!(
+                        "extension entry '{key}' in specforge.json: {}",
+                        diagnostic.message
+                    );
+                }
+                return diagnostic;
+            }
             _ => {}
         }
         match subject {
@@ -279,9 +290,6 @@ impl LoadProblem {
             .with_suggestion(format!(
                 "fix specforge.lock, or delete it and install the extension again: specforge add {name}"
             )),
-            LoadProblem::NotAPackageName { reason } => {
-                specforge_common::package::invalid(reason)
-            }
             LoadProblem::ModuleMissing { path } => Diagnostic::new(
                 codes::E028,
                 format!(
@@ -342,6 +350,7 @@ impl LoadProblem {
             | LoadProblem::NotTheNameWritten { .. }
             | LoadProblem::BuiltinsName { .. }
             | LoadProblem::AlreadyLoaded { .. }
+            | LoadProblem::NotAPackageName { .. }
             | LoadProblem::NotAComponent { .. }
             | LoadProblem::NoDeclaration { .. } => {
                 unreachable!("a named entry names no file, or the step's problem")
@@ -390,11 +399,11 @@ impl LoadProblem {
             ),
             LoadProblem::NotInstalled
             | LoadProblem::LockUnreadable
-            | LoadProblem::NotAPackageName { .. }
             | LoadProblem::ModuleMissing { .. }
             | LoadProblem::Changed { .. }
             | LoadProblem::NotItsLockEntry { .. }
             | LoadProblem::NotWhatItsEntryRecords { .. }
+            | LoadProblem::NotAPackageName { .. }
             | LoadProblem::NotAComponent { .. }
             | LoadProblem::NoDeclaration { .. } => {
                 unreachable!("a file entry is not installed, or the step's problem")

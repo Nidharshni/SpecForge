@@ -897,7 +897,8 @@ holds) or `name` alone (a local module); each part is lowercase letters, digits,
 inside `.specforge/extensions`. It is checked where a name does not come from
 the `add` argument (that is E054): the name a local module declares when
 `specforge add` installs it, a peer a declaration names, a `specforge.json`
-`extensions` entry (the entry is not loaded), the name `specforge remove` is
+`extensions` entry (the entry is not loaded), the name a `.wasm` file entry's
+component declares (the entry is not loaded), the name `specforge remove` is
 given when no `specforge.json` entry or lock entry has it, and the name and
 version of the declaration `specforge publish` uploads (which must also be
 scoped and a full version). Nothing is written or deleted. Fix the extension's

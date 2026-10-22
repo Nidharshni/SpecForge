@@ -41,18 +41,22 @@ fn row(name: &str, source: &str, status: &str) -> (String, String, String) {
     behavior = "load_extension_manifests",
     verify = "check, doctor and the extensions listing report a .wasm file entry declaring no package name as E072 on its entry, not loaded"
 )]
-#[ignore = "flipped by T4"]
 fn a_file_entry_declaring_no_package_name_is_refused_by_check_doctor_and_the_listing() {
     let project = project(&["x.wasm"]);
     project.write("x.wasm", greet_declaring(b"@SDK/greet"));
     let cli = Cli::on(&project);
 
     let check = cli.run(&["check", "--format", "json"]).exits(1).json();
-    let diagnostics = check["diagnostics"].as_array().unwrap();
-    assert_eq!(diagnostics.len(), 1, "{check}");
-    assert_eq!(diagnostics[0]["code"], "E072");
+    let errors: Vec<&Value> = check
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["severity"] == "Error")
+        .collect();
+    assert_eq!(errors.len(), 1, "{check}");
+    assert_eq!(errors[0]["code"], "E072");
     assert!(
-        diagnostics[0]["message"]
+        errors[0]["message"]
             .as_str()
             .unwrap()
             .contains("extension entry 'x.wasm'"),

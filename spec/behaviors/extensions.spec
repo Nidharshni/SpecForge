@@ -75,10 +75,14 @@ behavior load_extension_manifests "Load Extension Manifests" {
     declared one. Which extension each entry names is decided once (a
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
-    read that one decision. A file that does not exist, cannot be read, does not load as a
-    component, declares another name than the one written, declares the name of a
-    builtin (only the builtin loads under a builtin's name), or declares an
-    extension another entry already loads MUST produce E028 naming the entry.
+    read that one decision. A .wasm file entry's component MUST declare a
+    package name, as add and publish hold a declaration to one: one that
+    declares none MUST produce E072 naming the entry, checked before the name
+    written, and load nothing. A file that does not exist, cannot be read, does
+    not load as a component, declares another name than the one written,
+    declares the name of a builtin (only the builtin loads under a builtin's
+    name), or declares an extension another entry already loads (whatever the
+    entry's own text) MUST produce E028 naming the entry.
     Each entry's outcome MUST record where the load takes its extension from
     (builtin, the lock entry's source, file:<path>, or unknown; a repeated
     entry, the one it repeats') and whether it loaded, with or without a

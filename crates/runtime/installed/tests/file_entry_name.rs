@@ -21,7 +21,6 @@ fn handshake(runtime: &InProcessRuntime, name: &str) -> Option<serde_json::Value
     behavior = "load_extension_manifests",
     verify = "a .wasm file entry whose component declares no package name is E072 naming the entry, and nothing loads"
 )]
-#[ignore = "flipped by T4"]
 fn a_file_entry_declaring_no_package_name_is_e072_naming_the_entry() {
     for (entry, path, declared) in [
         ("x.wasm", "x.wasm", "@acme/Tool"),

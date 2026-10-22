@@ -35,8 +35,8 @@ pub struct PackageName {
 }
 
 impl PackageName {
-    /// The name `declaration` declares, read as a package name: `add` and `publish` require one
-    /// (ADR 0036); the load does not, so a guest may declare any text.
+    /// The name `declaration` declares, read as a package name: `add`, `publish` and the extension
+    /// load's admit of a `.wasm` file entry require one (ADR 0036, 0223).
     pub fn declared_by(declaration: &ExtensionDeclaration) -> Result<Self, PackageNameError> {
         Self::parse(declaration.name())
     }
