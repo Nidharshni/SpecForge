@@ -16,7 +16,7 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::Loaded;
 
-use super::{NOT_FOUND, builtin_name};
+use super::NOT_FOUND;
 use crate::{Containment, Held, OpError, OpErrorKind, ReadFailure};
 
 /// What `bytes` declare, loaded as every environment loads an extension (under
@@ -63,18 +63,19 @@ pub(crate) fn package(declaration: &ExtensionDeclaration) -> Result<PackageName,
 }
 
 /// The one rule an extension's declared name is held to beside the builtins this specforge embeds (ADR 0028 D7): it
-/// is none of theirs, since a builtin's name always enables the builtin. `add`, `update` and `init` refuse to install
-/// such a binary, `publish` and `extension validate` to read it, `extension init` to scaffold it: `extension_conflict`
-/// "the extension declares the name of the builtin '<name>'". Each caller adds what to do instead.
+/// is none of theirs, since only the builtin loads under a builtin's name (the predicate the extension load admits a
+/// `.wasm` file entry by, `Builtins::contains`, ADR 0214). `add`, `update` and `init` refuse to install such a
+/// binary, `publish` and `extension validate` to read it, `extension init` to scaffold it: `extension_conflict` "the
+/// extension declares the name of the builtin '<name>'". Each caller adds what to do instead.
 pub fn not_a_builtins_name(name: &str) -> Result<(), OpError> {
-    match builtin_name(name) {
-        None => Ok(()),
-        Some(builtin) => Err(OpError::new(
-            OpErrorKind::Conflict,
-            "extension_conflict",
-            format!("the extension declares the name of the builtin '{builtin}'"),
-        )),
+    if !specforge_project::builtins().contains(name) {
+        return Ok(());
     }
+    Err(OpError::new(
+        OpErrorKind::Conflict,
+        "extension_conflict",
+        format!("the extension declares the name of the builtin '{name}'"),
+    ))
 }
 
 /// A binary to install (`add`, `update`, `init`): its module and what it
