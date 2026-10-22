@@ -493,7 +493,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   and the migrate defaults step ask the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
   whether a field restates it, through one module of its own (**Own field**), so it never writes what W161 would
   flag (ADR 0154, ADR 0175). `FileDefaults::held` answers what a block holds for a field: own, inherited or absent
-  (ADR 0182).
+  (ADR 0182). A value a defaults block writes in the other form is one W159, at the default (ADR 0224).
+- **Body kind**: the kind a block's body is read as: its keyword, or for a `defaults <kind>` header the kind it
+  names (`specforge_common::structural::body_kind`, ADR 0224). The formatter writes a body's values in that kind's
+  forms; the editor completes, hovers and colours them as that kind; the graph's defaults module applies them to it.
 - **Own field**: a field a block writes, as opposed to one it inherits from its file's default (ADR 0149). A typed
   edit changes a field through one module (`edit::defaults::change`, ADR 0175): an inherited list or block field is
   copied into an own field first, the verb changes it, an own field that then holds what the default holds, as stored, is removed, and a
@@ -540,7 +543,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
   W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
   table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
-  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153).
+  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153). A `defaults` body's
+  values are written in the forms of its body kind (ADR 0224).
 - **Stored value**: a field value as the graph build stores it: coerced by its field form (`FieldForms::stored`,
   ADR 0182), so a list written as one value is a one-item list and `"100"` on an integer field is `100`. Every reader
   of references, derived names and inherited values reads it; what a file *writes* (W159, W161, the formatter) reads
