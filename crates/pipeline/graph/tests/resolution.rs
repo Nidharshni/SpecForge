@@ -242,3 +242,31 @@ fn a_wrong_kind_id_of_an_absent_kind_is_e022_naming_its_provider() {
         )
     );
 }
+
+#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a quoted reference is written at its ID, inside its quotes"
+)]
+fn a_quoted_reference_is_e003_and_e022_at_its_id() {
+    let source = "behavior b1 \"B1\" {\n  features [\"ghost\"]\n  peers \"ghost\"\n}\n\n\
+                  behavior b2 \"B2\" {\n  features [\"b1\"]\n}\n";
+    let (_, diagnostics) = build(source, &["behavior", "feature"], &[]);
+    let mut at: Vec<String> = diagnostics
+        .iter()
+        .filter_map(|d| {
+            let s = d.span.as_ref()?;
+            Some(format!(
+                "{} {}:{}-{}",
+                d.code, s.start_line, s.start_col, s.end_col
+            ))
+        })
+        .collect();
+    at.sort();
+    // A list item, a single value coerced to a list, and a mistyped id (b1 is a behavior).
+    assert_eq!(
+        at,
+        ["E003 2:14-19", "E003 3:10-15", "E022 7:14-16"],
+        "{diagnostics:?}"
+    );
+}

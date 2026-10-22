@@ -363,3 +363,21 @@ iface X \"X\" {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
         ]
     );
 }
+
+#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a quoted reference is written at its ID, inside its quotes"
+)]
+fn a_quoted_reference_is_a_token_at_its_id() {
+    let source = "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  base \"Wheel\"\n  parts [\"Wheel\", Wheel]\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Wheel Car base Single 5:9-5:14",
+            "Wheel Car parts Item 6:11-6:16",
+            "Wheel Car parts Item 6:19-6:24",
+        ]
+    );
+}
