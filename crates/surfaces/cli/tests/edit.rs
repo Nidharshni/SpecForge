@@ -124,7 +124,6 @@ fn new_in_a_project_root_spelling_is_refused_naming_its_file() {
     behavior = "create_entity",
     verify = "new --in refuses a new file named from the project root, naming its spec-root spelling"
 )]
-#[ignore = "flipped by T3"]
 fn new_in_a_project_root_spelling_of_a_new_file_is_refused() {
     let project = todo();
     let run = sf(

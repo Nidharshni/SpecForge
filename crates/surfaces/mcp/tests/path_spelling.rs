@@ -131,17 +131,20 @@ fn edit_reads_two_spellings_of_one_new_file_as_one_file() {
     behavior = "provide_mcp_edit_tool",
     verify = "specforge.edit refuses a new file named from the project root, naming its spec-root spelling"
 )]
-#[ignore = "flipped by T3"]
 fn edit_refuses_a_new_file_named_from_the_project_root() {
     let mut server = named_files();
-    let reply = tool(
+    let reply = call_tool(
         &mut server,
         "specforge.edit",
         json!({"edits": [{"op": "create", "kind": "type", "id": "alpha", "title": "alpha", "file": "spec/n.spec"}]}),
     );
     let error = crate::tool_errors::mcp_error(&reply);
-    assert_eq!(error["code"], "not_a_source", "{reply}");
-    assert_eq!(error["file"], "spec/n.spec", "{reply}");
+    assert_eq!(error["file"], "spec/n.spec", "{error}");
+    assert_eq!(
+        error["data"]["suggestion"],
+        "did you mean 'n.spec'? a spec file is named from the spec root",
+        "{error}"
+    );
     assert!(!server.root().join("spec/spec").exists());
 }
 

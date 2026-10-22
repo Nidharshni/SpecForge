@@ -448,7 +448,9 @@ behavior read_a_named_spec_file "Read a Spec File a Request Names" {
     read of a file that is none of the compiled sources MUST be
     file_not_found; a create MUST be refused as not_a_source unless the file
     is one discovery would keep. A spelling from the project root of an
-    existing source MUST be refused naming its spec-root spelling. A refusal
+    existing source, and of a new file whose spec-root spelling repeats the spec
+    root as a directory no source is in, MUST be refused naming its spec-root
+    spelling. A refusal
     MUST name the file as the request spelled it.
   """
   verify unit "every spelling of a spec file under the spec root reads as its source key"
