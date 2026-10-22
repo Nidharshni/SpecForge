@@ -120,6 +120,7 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
   verify unit "validation uses production sandbox policy"
   verify unit "validation failure reported as ExtensionError"
   verify unit "specforge extension validate reports the declaration's registry build diagnostics"
+  verify unit "specforge extension validate reports a declared name that is no package name (E072), as add and the extension load refuse it"
   verify unit "specforge extension validate errors when no built component is found"
   verify unit "specforge extension validate writes its diagnostics as check does"
   verify contract "Validate Wasm Extension Locally: local Wasm extension validation holds — wasm_binary_available, wasm_runtime_available, fixtures_available, production_sandbox_used, export_failures_diagnosed, extension_fixtures_validated_emitted"
