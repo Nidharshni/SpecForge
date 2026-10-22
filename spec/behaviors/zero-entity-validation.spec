@@ -473,5 +473,6 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a quoted word on a word field and a bare word on a text field are W159"
   verify unit "a bare word on a kind that takes members is not W159"
   verify unit "a value E061 refuses is not W159"
+  verify unit "a value a defaults block writes in the other form is W159 once, at the default"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, off_form_warned, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

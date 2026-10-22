@@ -366,6 +366,7 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "multiline string literals are kept byte-for-byte"
   verify unit "a value is written in its field's form, read from the project's declarations"
   verify unit "without the project's declarations no value is rewritten"
+  verify unit "a defaults block's values are written in the forms of the kind it names"
   verify unit "a document of the project the caller holds is written in its lent forms, without loading them again"
   verify unit "another project's forms load once per run"
   verify unit "a document outside any project is written as it is"

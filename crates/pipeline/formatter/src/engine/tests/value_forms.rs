@@ -99,3 +99,17 @@ fn a_triple_quoted_word_is_written_bare_as_a_quoted_one_is() {
         "behavior b \"B\" {\n  category cart\n}\n"
     );
 }
+
+#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "a defaults block's values are written in the forms of the kind it names"
+)]
+fn a_defaults_blocks_values_are_written_in_the_forms_of_the_kind_it_names() {
+    assert_eq!(
+        fmt_forms(
+            "defaults behavior {\n  category \"cart\"\n  types    [\"a\", b]\n  tags     [x]\n}\n"
+        ),
+        "defaults behavior {\n  category cart\n  types    [a, b]\n  tags     [\"x\"]\n}\n"
+    );
+}
