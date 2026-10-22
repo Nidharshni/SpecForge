@@ -31,6 +31,7 @@ mod extension_authoring;
 mod extension_origins;
 mod extension_surfaces;
 mod extensions;
+mod file_entry_names;
 mod format;
 mod format_corpus;
 mod hard_links;
