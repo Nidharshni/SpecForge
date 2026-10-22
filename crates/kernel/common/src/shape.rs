@@ -432,24 +432,34 @@ impl Shape for specforge_protocol_types::FieldType {
     }
 }
 
-/// A coverage status as serde writes it (`covered`, `partial`,
-/// `uncovered`): the `coverage_status` an export node carries.
+/// A coverage status as serde writes it (`covered`, `partial`, `uncovered`,
+/// `exempt`, `not_testable`): the `coverage_status` an export node carries.
 impl Shape for specforge_coverage::Status {
     fn body(_defs: &mut Definitions) -> Value {
         use specforge_coverage::Status;
         // Every variant, in declaration order; the match stops compiling when
         // one is added, so the list cannot fall behind.
         let every = |status: Status| match status {
-            Status::Covered | Status::Partial | Status::Uncovered => status,
+            Status::Covered
+            | Status::Partial
+            | Status::Uncovered
+            | Status::Exempt
+            | Status::NotTestable => status,
         };
-        let written: Vec<String> = [Status::Covered, Status::Partial, Status::Uncovered]
-            .map(every)
-            .iter()
-            .map(|status| match serde_json::to_value(status) {
-                Ok(Value::String(name)) => name,
-                other => unreachable!("a coverage status is written as a name: {other:?}"),
-            })
-            .collect();
+        let written: Vec<String> = [
+            Status::Covered,
+            Status::Partial,
+            Status::Uncovered,
+            Status::Exempt,
+            Status::NotTestable,
+        ]
+        .map(every)
+        .iter()
+        .map(|status| match serde_json::to_value(status) {
+            Ok(Value::String(name)) => name,
+            other => unreachable!("a coverage status is written as a name: {other:?}"),
+        })
+        .collect();
         names(written.iter().map(String::as_str))
     }
 }

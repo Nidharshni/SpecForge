@@ -1605,7 +1605,7 @@ fn every_published_format_admits_a_nodes_coverage_status() {
         };
         assert_eq!(
             node_schema["properties"]["coverage_status"],
-            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered"]}),
+            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered", "exempt", "not_testable"]}),
             "{format:?}"
         );
         let required = node_schema["required"].as_array().unwrap();

@@ -526,9 +526,13 @@ type McpSearchResult "Mcp Search Result" {
   verify unit "McpSearchResult schema is valid"
 }
 
-type CoverageStatus "Coverage Status" = "covered" | "uncovered" | "partial"
+type CoverageStatus "Coverage Status" = "covered"
+  | "uncovered"
+  | "partial"
+  | "exempt"
+  | "not_testable"
 
-type McpCoverageResults "P2 compliance: CoverageStatus is a structural computation, not domain vocabulary. An obligation is proven when a passing recorded test names its verify text, the same rule `analyze coverage` applies (A015), computable without extension input: covered   = every obligation proven AND no recorded test fails partial   = not covered, AND some obligation proven OR a recorded test fails uncovered = no obligation proven and no recorded test fails (incl. no verify declarations) Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant) via extension-contributed metadata fields on their entity kinds." {
+type McpCoverageResults "P2 compliance: CoverageStatus is a structural computation, not domain vocabulary. An obligation is proven when a passing recorded test names its verify text, the same rule `analyze coverage` applies (A015), computable without extension input: covered   = every obligation proven AND no recorded test fails partial   = not covered, AND some obligation proven OR a recorded test fails uncovered = no obligation proven and no recorded test fails (incl. no verify declarations) exempt = its kind is testable but it owes no obligations and declares none, so it does not count; not_testable = its kind is not testable, so it does not count (whatever its tests prove). Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant) via extension-contributed metadata fields on their entity kinds." {
   /// One row per entity that counts toward coverage (or the one named).
   entities McpCoverageResult[]
   verify unit "McpCoverageResults schema is valid"

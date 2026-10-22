@@ -363,7 +363,9 @@ expression: listing
                     "enum": [
                       "covered",
                       "partial",
-                      "uncovered"
+                      "uncovered",
+                      "exempt",
+                      "not_testable"
                     ],
                     "type": "string"
                   },
@@ -453,7 +455,9 @@ expression: listing
                     "enum": [
                       "covered",
                       "partial",
-                      "uncovered"
+                      "uncovered",
+                      "exempt",
+                      "not_testable"
                     ],
                     "type": "string"
                   },
@@ -531,7 +535,9 @@ expression: listing
                     "enum": [
                       "covered",
                       "partial",
-                      "uncovered"
+                      "uncovered",
+                      "exempt",
+                      "not_testable"
                     ],
                     "type": "string"
                   },
@@ -1967,7 +1973,9 @@ expression: listing
                 "enum": [
                   "covered",
                   "partial",
-                  "uncovered"
+                  "uncovered",
+                  "exempt",
+                  "not_testable"
                 ],
                 "type": "string"
               },
@@ -2505,7 +2513,9 @@ expression: listing
           "enum": [
             "covered",
             "partial",
-            "uncovered"
+            "uncovered",
+            "exempt",
+            "not_testable"
           ],
           "type": "string"
         },

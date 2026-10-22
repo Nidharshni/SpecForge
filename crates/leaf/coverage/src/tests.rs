@@ -301,8 +301,9 @@ fn the_rule_matches_the_shared_golden_vectors() {
             .iter()
             .map(|(id, v)| {
                 let mut view = serde_json::to_value(v).unwrap();
+                let entity = entities.iter().find(|e| &e.id == id).unwrap();
                 view["is_proven"] = json!(v.is_proven());
-                view["status"] = serde_json::to_value(v.status()).unwrap();
+                view["status"] = serde_json::to_value(entity.counting().status(v)).unwrap();
                 (id.clone(), view)
             })
             .collect();
@@ -399,6 +400,68 @@ fn counting_is_testable_and_owing_or_declaring() {
         }
     );
     assert!(entity.counts_toward_coverage());
+}
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
+    verify = "an entity's status is not_testable when its kind is not testable, exempt when it is testable and does not count, and otherwise how its verdict proves it"
+)]
+fn a_status_says_whether_the_entity_counts_then_how_it_is_proven() {
+    let verdicts = [
+        Verdict::default(),
+        Verdict {
+            obligations: 2,
+            proven: 1,
+            unproven: vec!["b".into()],
+            ..Verdict::default()
+        },
+        Verdict {
+            obligations: 1,
+            proven: 1,
+            ..Verdict::default()
+        },
+    ];
+    for testable in [false, true] {
+        for owes_obligations in [false, true] {
+            for declared in [0, 1] {
+                let counting = Counting {
+                    testable,
+                    owes_obligations,
+                    declared,
+                };
+                for verdict in &verdicts {
+                    let status = counting.status(verdict);
+                    assert_eq!(status.counts(), counting.counts(), "{counting:?}");
+                    assert_eq!(status == Status::Exempt, counting.exempt(), "{counting:?}");
+                    if !testable {
+                        assert_eq!(status, Status::NotTestable, "{counting:?}");
+                    } else if counting.counts() {
+                        assert_eq!(status, verdict.status(), "{counting:?}");
+                    }
+                }
+            }
+        }
+    }
+    let names: Vec<String> = [
+        Status::Covered,
+        Status::Partial,
+        Status::Uncovered,
+        Status::Exempt,
+        Status::NotTestable,
+    ]
+    .iter()
+    .map(|s| {
+        serde_json::to_value(s)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+    })
+    .collect();
+    assert_eq!(
+        names,
+        ["covered", "partial", "uncovered", "exempt", "not_testable"]
+    );
 }
 
 #[specforge_test(
