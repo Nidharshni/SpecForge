@@ -368,6 +368,10 @@ fn in_form(node: Node, source: &str, key: &str, forms: Forms) -> Option<String> 
     let text = node_text(node, source);
     let (written, word) = match node.kind() {
         kind::STRING => (Written::Quoted, text.strip_prefix('"')?.strip_suffix('"')?),
+        kind::TRIPLE_QUOTED_STRING => (
+            Written::Quoted,
+            text.strip_prefix("\"\"\"")?.strip_suffix("\"\"\"")?,
+        ),
         kind::IDENTIFIER => (Written::Bare, text),
         _ => return None,
     };
