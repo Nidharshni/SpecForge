@@ -5,6 +5,7 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Graph, Node};
 use specforge_ops::OpErrorKind;
+use specforge_ops::view::kinds_of_text;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration, HandshakeResponse};
 use specforge_registry::build_registries;
@@ -113,4 +114,30 @@ fn an_argument_needs_a_declared_kind() {
     let error = kinds.declared("ADR").unwrap_err();
     assert_eq!(error.message, "unknown entity kind 'ADR'");
     assert_eq!(error.suggestion.as_deref(), Some("did you mean 'adr'?"));
+}
+
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "a kinds list written as text names the items between its commas, each trimmed, an empty item kept as the empty kind"
+)]
+fn a_kinds_list_written_as_text_names_its_items_trimmed() {
+    let read = |text| kinds_of_text(text).collect::<Vec<_>>();
+    assert_eq!(read("behavior"), ["behavior"]);
+    assert_eq!(read("behavior, adr"), ["behavior", "adr"]);
+    assert_eq!(read(" behavior ,\tadr "), ["behavior", "adr"]);
+    assert_eq!(read("behavior,,adr"), ["behavior", "", "adr"]);
+    assert_eq!(read("behavior,"), ["behavior", ""]);
+    assert_eq!(read(""), [""]);
+    assert_eq!(read("Behavior"), ["Behavior"], "names stay exact");
+    // The empty item is a kind the project lacks: I020 '' (ADR 0177 S5).
+    let project = project();
+    let view = project.view();
+    let kinds: Vec<&str> = kinds_of_text("behavior, ").collect();
+    let filter = view.kind_filter(&kinds);
+    let messages: Vec<&str> = filter
+        .notices()
+        .iter()
+        .map(|n| n.message.as_str())
+        .collect();
+    assert_eq!(messages, ["unknown entity kind ''"]);
 }

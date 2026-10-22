@@ -1,5 +1,6 @@
-//! The entity kinds a project knows, and the one answer to "is this a known
-//! kind" (ADR 0015, section "Query").
+//! The entity kinds a project knows, the one answer to "is this a known
+//! kind" (ADR 0015, section "Query"), and the one reading of a kinds list
+//! written as text (ADR 0220).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -65,6 +66,15 @@ impl<'r> KindFilter<'r> {
     pub fn into_notices(self) -> Vec<Diagnostic> {
         self.notices
     }
+}
+
+/// The kinds a kinds list written as text names (ADR 0220): the items between its commas, in order, each
+/// without the whitespace around it. An empty item stays: it is the empty kind, which a kind filter reports as
+/// I020 and which keeps nothing (ADR 0177 S5). A list that arrives as a list (an MCP tool's `kinds`) is not
+/// text: its items are the kinds as given. A kind is an identifier (the grammar's `kind`), so the trim drops
+/// nothing a kind could hold.
+pub fn kinds_of_text(text: &str) -> impl Iterator<Item = &str> {
+    text.split(',').map(str::trim)
 }
 
 impl ProjectView<'_> {

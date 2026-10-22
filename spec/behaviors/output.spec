@@ -279,7 +279,10 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     it keeps; the entity itself is selected only when its kind is kept, and
     an export or a query draws it always (ADR 0190). A kind the project knows is one a
     loaded extension declares or an entity is written with; names are
-    exact. A kind filter that names another kind matches nothing and is
+    exact. A kinds list written as text (a command's --kinds, a graph
+    resource's kinds query) names the items between its commas, each
+    without the whitespace around it; an empty item is the empty kind,
+    which no project knows. A kind filter that names another kind matches nothing and is
     reported as I020; an argument that needs a kind's declaration refuses
     an undeclared one (unknown_kind). Both name the closest kind, a kind
     equal but for case first. The
@@ -339,6 +342,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "a kind filter reports each kind the project does not know with I020, naming the closest"
   verify unit "a read selection selects what its entity reaches within its depth, of its kinds; the entity is selected only when its kind is kept, and an export draws it always"
   verify unit "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
+  verify unit "a kinds list written as text names the items between its commas, each trimmed, an empty item kept as the empty kind"
   verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
 }
