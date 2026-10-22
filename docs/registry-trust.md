@@ -69,7 +69,8 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Manifest missing or unreadable | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)): it declares the peers the diamond check needs, so it is never read as "no peers" |
 | Manifest published before extension declarations (it carries `manifestVersion`) | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)), suggesting to re-publish the package with this version of `specforge publish` |
 | Binary declares other than the served declaration | **Always refused** ([R-TRUST-004](diagnostics.md#r-trust-004)), naming the first category that differs |
-| Package unsigned | Refused before the download; `--dry-run` reports it. `--allow-unsigned` accepts the risk explicitly |
+| Package unsigned, no key pinned or locked for its name | Refused before the download ([R-TRUST-001](diagnostics.md#r-trust-001)); `--dry-run` reports it. `--allow-unsigned` accepts the risk explicitly |
+| Package unsigned, but a key is pinned or locked for its name | **Always refused** ([R-TRUST-007](diagnostics.md#r-trust-007)) before the download; `--dry-run` reports it; neither `--allow-unsigned` nor `--yes` accepts it |
 | Signature doesn't verify (other digests or a swapped manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)) before the download; `--dry-run` reports it: `--allow-unsigned` does not bypass a broken signature |
 | Registry answer isn't the protocol's (e.g. a signature that isn't one, or a 404 without the protocol's NOT_FOUND error: the url isn't a registry's root) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
 | The version `specforge.lock` pins, served as other bytes | **Always refused** ([R014](diagnostics.md#r014)) before the download and before any key question; `--yes` does not accept it; `--dry-run` reports it. Remove the extension and add it again to take the new bytes |
@@ -145,7 +146,8 @@ new teammate, CI) holds the package to it, and the version it pins to the bytes 
   consistently across all users. Compare pins with your team out of band.
 - **Unsigned packages**: the reference registry refuses them, and refuses a
   signature that doesn't verify; another registry may not. `specforge add`
-  refuses an unsigned package unless you pass `--allow-unsigned`.
+  refuses an unsigned package unless you pass `--allow-unsigned`, and always
+  refuses one for a name whose key is pinned or locked.
 
 ## Runtime sandbox note
 

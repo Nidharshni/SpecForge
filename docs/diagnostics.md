@@ -1962,6 +1962,25 @@ Owner: core
 Level: error
 ```
 
+## R-TRUST-007
+
+```
+R-TRUST-007: Unsigned package for a pinned publisher
+
+The registry package carries no publisher signature, but a publisher key is
+expected for its name: the key you pinned when you first installed it, or, when
+you have no pin for it, the key the project's `specforge.lock` records. A
+package its publisher signs does not arrive unsigned, so this can be a mirror or
+a compromised registry serving other bytes. Nothing is downloaded, and neither
+`--allow-unsigned`, `--yes`, an interactive yes nor `trusted_keys` accepts it.
+Check the registry that serves the name. If its publisher really stopped signing
+it, remove the extension (`specforge remove <name>`) and its pin in
+`~/.specforge/known-keys.json`, then add it again.
+
+Owner: core
+Level: error
+```
+
 ## R001
 
 ```

@@ -1035,6 +1035,7 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     decided_before_download  "The publisher is decided from the reply before the binary is downloaded, and a dry run decides it as the add does"
     broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
+    unsigned_held_to_key     "An unsigned package for a name whose publisher key is pinned or locked is refused with R-TRUST-007, whatever --allow-unsigned or consent"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
     unsigned_reported        "An unsigned package accepted with --allow-unsigned is reported as W155"
   }
@@ -1049,8 +1050,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     digests or a swapped manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
     NOT bypass it; one that isn't a package signature makes the reply
     unreadable (R009, check_registry_reply). A package with no signature MUST
-    be refused with R-TRUST-001 unless the user passes --allow-unsigned;
-    one accepted that way pins no key. Accepting it is reported as W155 on
+    be refused with R-TRUST-007 when a key is expected for its name (the
+    user's pin, else the key specforge.lock records), whatever the user
+    passes or answers, and otherwise with R-TRUST-001 unless the user passes
+    --allow-unsigned; one accepted that way pins no key. Accepting it is reported as W155 on
     every surface; the check itself writes nothing to the terminal.
   """
   verify integration "a signature over other bytes is refused even with --allow-unsigned"
@@ -1082,7 +1085,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
     pinned_when_written "A key is pinned only when the install that fetched it is written, after its lock entry: a refused or failed operation pins nothing"
     store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
-    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin; the user's own pin wins over it"
+    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin, against an unsigned package as against another key; the user's own pin wins over it"
   }
   contract   """
     Trust on first use: a signed package's publisher key id MUST be pinned
@@ -1093,7 +1096,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
     refused with R-TRUST-003 naming both key ids (and specforge.lock when
     the lock's key is the one expected) unless the user consents (--yes, an
     interactive yes, or the key on trusted_keys); --allow-unsigned is not
-    consent. Consent MUST re-pin the new key. A key
+    consent, and accepts no unsigned package for a pinned or locked name. Consent MUST re-pin the new key. A key
     on denied_keys MUST be refused with R-TRUST-005 whatever the consent.
     Fetching a package only decides: its key is pinned when the
     operation's lock plan commits, after the binaries, the lock and

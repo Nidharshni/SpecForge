@@ -266,7 +266,6 @@ fn store(dir: &TestProject, text: &str) {
     behavior = "pin_publisher_key",
     verify = "an unsigned package for a pinned name is refused before its download"
 )]
-#[ignore = "flipped by T3"]
 fn an_unsigned_package_for_a_pinned_name_is_refused_before_its_download() {
     let served = serving(&["1.0.0"]); // unsigned
     let dir = project_with(&default_registry(served.root().as_str()));

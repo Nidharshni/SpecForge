@@ -472,6 +472,9 @@ catalog! {
     R_TRUST_006 = "R-TRUST-006": Error core,
         "Known-keys file unusable",
         "Your known-keys file (`~/.specforge/known-keys.json`) can't be read as the store of publisher pins, or the pins an install accepted can't be saved to it. Nothing is installed either way: a store read as empty would trust any key and lose your `denied_keys`, and an install whose pin can't be saved is put back. Fix the file's JSON, or move it aside (every package is then trusted on first use again), and check the permissions on the file and its directory.";
+    R_TRUST_007 = "R-TRUST-007": Error core,
+        "Unsigned package for a pinned publisher",
+        "The registry package carries no publisher signature, but a publisher key is expected for its name: the key you pinned when you first installed it, or, when you have no pin for it, the key the project's `specforge.lock` records. A package its publisher signs does not arrive unsigned, so this can be a mirror or a compromised registry serving other bytes. Nothing is downloaded, and neither `--allow-unsigned`, `--yes`, an interactive yes nor `trusted_keys` accepts it. Check the registry that serves the name. If its publisher really stopped signing it, remove the extension (`specforge remove <name>`) and its pin in `~/.specforge/known-keys.json`, then add it again.";
     R001: Error core,
         "Registry authentication failed",
         "The registry rejected the request as unauthenticated (HTTP 401). Log in again with `specforge login --registry <alias> --token <TOKEN>`. `specforge publish` refuses before any request when there is no credential for the registry that serves the package: none stored for its alias and `SPECFORGE_REGISTRY_TOKEN` unset or blank.";

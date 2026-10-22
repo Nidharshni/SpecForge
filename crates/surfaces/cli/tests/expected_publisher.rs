@@ -62,7 +62,6 @@ fn mcp_add(dir: &TestProject, arguments: Value) -> Value {
     invariant = "publisher_trust",
     verify = "an unsigned package is refused for a name whose publisher key is pinned, by add, its dry run and MCP add_extension, downloading nothing"
 )]
-#[ignore = "flipped by T3"]
 fn an_unsigned_package_for_a_pinned_name_is_refused_on_every_surface() {
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]); // unsigned
     let dir = project_on(&registry);
@@ -98,7 +97,6 @@ fn an_unsigned_package_for_a_pinned_name_is_refused_on_every_surface() {
     behavior = "pin_publisher_key",
     verify = "with no pin of the user's, an unsigned version of a name specforge.lock records a key for is refused by add and update, and the lock keeps its key"
 )]
-#[ignore = "flipped by T3"]
 fn an_unsigned_version_of_a_locked_name_is_refused_and_the_lock_keeps_its_key() {
     let key = specforge_registry_client::SigningKey::generate();
     let registry = serve(vec![

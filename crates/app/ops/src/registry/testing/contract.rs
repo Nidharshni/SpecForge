@@ -39,7 +39,7 @@ pub(super) fn refuse(allow_unsigned: bool) -> TrustPolicy<'static> {
 
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
 /// [`contract_packages`]) published, nothing pinned and the signer of `@contract/denied` on the user's deny list. Panics naming the clause that failed: C0 opens, C1–C7
-/// list, fetch and publish; R-S finds a package by its name and category; R-S2 lists a package once,
+/// list, fetch and publish; C15 holds an unsigned package to the key expected for its name; R-S finds a package by its name and category; R-S2 lists a package once,
 /// at the version `specforge add <name>` installs from it.
 pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]) {
     let find = |name: &str, version: &str| {
@@ -440,6 +440,36 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         error.is(codes::R_TRUST_005),
         "C13: a denied key beats consent: {error:?}"
     );
+
+    // C15: an unsigned package is held to the key expected for its name, whatever --allow-unsigned and consent
+    let held = |policy: fn() -> TrustPolicy<'static>, from: &str| {
+        let answers = [
+            registry.fetch(&plain, &one, policy()).map(|p| p.publisher),
+            registry
+                .published(&plain, &one, policy())
+                .map(|m| m.publisher),
+        ];
+        for answer in answers {
+            let error = answer.expect_err("C15: an unsigned package with an expected key");
+            assert!(error.is(codes::R_TRUST_007), "C15: {error:?}");
+            assert!(
+                error.message.contains(from),
+                "C15: names where the key comes from: {error:?}"
+            );
+        }
+    };
+    held(
+        || TrustPolicy::new(true, Asking::Yes).locked(Some(LockedPin::key("contract-other"))),
+        "specforge.lock",
+    );
+    registry
+        .pin(&[KeyPin {
+            name: plain.clone(),
+            key_id: "contract-other".into(),
+            replaces: None,
+        }])
+        .unwrap_or_else(|e| panic!("C15: pin fails: {e:?}"));
+    held(|| TrustPolicy::new(true, Asking::Yes), "pinned");
 
     // R-S
     let searched = registry

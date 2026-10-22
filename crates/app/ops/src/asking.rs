@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-/// Where the key a signed package was expected to have comes from.
+/// Where the key a package is expected to be signed with comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExpectedFrom {
     /// The user's pin in their known-keys store.

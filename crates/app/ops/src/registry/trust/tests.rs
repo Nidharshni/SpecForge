@@ -273,7 +273,6 @@ fn a_change_from_the_locked_key_names_specforge_lock() {
     behavior = "pin_publisher_key",
     verify = "an unsigned package is refused for a name with an expected key, whatever --allow-unsigned and consent"
 )]
-#[ignore = "flipped by T3"]
 fn an_unsigned_package_is_refused_for_a_name_with_an_expected_key() {
     let unsigned = |pin, locked, asking| Row {
         signer: Signer::Unsigned,

@@ -23,7 +23,7 @@ Options:
           [possible values: human, json]
 
       --allow-unsigned
-          Accept unsigned packages (publisher verification skipped)
+          Accept a package with no publisher signature, when no key is pinned or locked for its name
 
       --yes
           Accept key changes non-interactively (for CI)

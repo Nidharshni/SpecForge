@@ -33,7 +33,7 @@ pub struct UpdateRequest<'a> {
     /// How far each extension may move: within its locked version's caret range, or to any
     /// newer version (`--major`). Never to its locked version or below.
     pub reach: Reach,
-    /// Accept a registry package with no publisher signature.
+    /// Accept a registry package with no publisher signature, when no key is pinned or locked for its name.
     pub allow_unsigned: bool,
     /// What the update may reach (`caller.containment()`, ADR 0104: a file it would write that
     /// lands outside its project, by a symlink in it, refuses it, ADR 0137) and who can be asked about a
