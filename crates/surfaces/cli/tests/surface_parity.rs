@@ -8,9 +8,8 @@
 //! Diagnostics are compared as multisets of `"CODE severity file:line"`
 //! keys (`-` for a diagnostic without a span; the file is relative to the
 //! spec root). The LSP cannot say everything `check` says: it must attach
-//! a span-less diagnostic to some document, and puts one about entities
-//! (its data names them) at the first one's name and any other on the
-//! edited one at line 1, so `check`'s keys are projected onto that. Watch's events
+//! a span-less diagnostic to some document, and puts it on the edited
+//! one at line 1, so `check`'s keys are projected onto that. Watch's events
 //! carry the full list; its `rebuilt` event also gets a key when the debug
 //! build's check of the incremental graph against a cold build fails.
 //!
@@ -142,10 +141,9 @@ fn difference(a: &Keys, b: &Keys) -> Vec<String> {
 }
 
 /// What `check` reports, projected onto what the LSP publishes. A
-/// diagnostic without a span has to be attached to some document: one
-/// about entities (its data names them) goes at the first one's name (its
-/// file and line, as MCP find_definition answers them); one about none
-/// on the document being edited, at its first line.
+/// diagnostic without a span (one about no entity: the project locates
+/// one about entities itself, ADR 0227) has to be attached to some
+/// document: the one being edited, at its first line.
 fn as_published(project: &Project, edited: &str) -> Keys {
     let out = check_output(project);
     let diagnostics: Value =
@@ -159,47 +157,11 @@ fn as_published(project: &Project, edited: &str) -> Keys {
                 s["file"].as_str().unwrap().to_string(),
                 s["start_line"].as_u64().unwrap(),
             ),
-            None => subject_name(project, &d["data"]).unwrap_or((edited.to_string(), 1)),
+            None => (edited.to_string(), 1),
         };
         keys.push(key(code, severity, Some(location)));
     }
     multiset(keys)
-}
-
-/// The entities a diagnostic's data names, in order: an unresolved
-/// reference's holder, a cycle's path, a pass diagnostic's subject.
-fn data_entities(data: &Value) -> Vec<String> {
-    let names: Vec<&Value> = match data["kind"].as_str() {
-        Some("unresolved_reference" | "subject") => vec![&data["entity"]],
-        Some("reference_cycle") => data["path"].as_array().unwrap().iter().collect(),
-        _ => Vec::new(),
-    };
-    names
-        .into_iter()
-        .filter_map(|v| v.as_str().map(str::to_string))
-        .collect()
-}
-
-/// The file and line of the name of the first entity `data` names that
-/// the project declares (MCP find_definition's answer).
-fn subject_name(project: &Project, data: &Value) -> Option<(String, u64)> {
-    data_entities(data).into_iter().find_map(|entity| {
-        let mut server = crate::support::pairing::mcp_on(&project.root);
-        let resp = specforge_mcp::testing::rpc::call_tool(
-            &mut server,
-            "specforge.find_definition",
-            json!({"entity_id": entity}),
-        );
-        if resp["result"]["isError"] == true {
-            return None;
-        }
-        let found: Value =
-            serde_json::from_str(resp["result"]["content"][0]["text"].as_str()?).ok()?;
-        Some((
-            found["file_path"].as_str()?.to_string(),
-            found["line"].as_u64()?,
-        ))
-    })
 }
 
 // ── The project under test ──────────────────────────────────────────────
