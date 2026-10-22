@@ -3,7 +3,7 @@
 //! one whole file at a time (ADR 0032). `compute_graph_delta` says what changed between two graphs (`compute_graph_delta_over` the same for two builds that
 //! differ in named files), `FieldForm` how
 //! a declared field is written, `FileDefaults` what a file's `defaults` blocks give its blocks, `written_tokens` which
-//! tokens of a file name an entity, and `Obligation` how an entity's `verify` statements are written.
+//! tokens of a file name an entity, and `Members` and `Obligation` what an entity holds as every output writes it.
 
 mod build;
 mod defaults;
@@ -20,9 +20,9 @@ pub use delta::{
 mod derive;
 pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
-mod obligations;
+mod members;
 mod tokens;
-pub use obligations::Obligation;
+pub use members::{AnnotationJson, Members, MethodJson, Obligation, ParameterJson};
 pub use specforge_cycles::Cycle;
 pub use tokens::{Form, Holder, WrittenToken, written_tokens};
 

@@ -8,7 +8,6 @@ use specforge_test::prelude::*;
     behavior = "outline_view",
     verify = "an outline method's signature is the method as written, its parameters' annotations included"
 )]
-#[ignore = "flipped by T3"]
 fn an_outline_signature_carries_a_parameters_annotations() {
     let p = compile(
         SOFTWARE,
