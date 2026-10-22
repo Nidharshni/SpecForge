@@ -315,7 +315,6 @@ fn typed_edits_work_on_a_header_written_over_two_lines() {
     assert!(!unlinked.contains("[task_unique]"), "{unlinked}");
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test_macros::test(
     behavior = "edit_entity_field",
     verify = "retitle refuses a blank title before anything is planned, as create does"

@@ -65,14 +65,7 @@ impl Planner<'_> {
             .kinds()
             .declared(kind)
             .map_err(|e| e.about(EditField::Kind))?;
-        if title.trim().is_empty() {
-            return Err(OpError::new(
-                OpErrorKind::InvalidInput,
-                "invalid_title",
-                "a block needs a title",
-            )
-            .about(EditField::Title));
-        }
+        require_title(title)?;
         let file = self
             .view
             .source_place(file)
@@ -220,4 +213,17 @@ fn place(existing: &str, parsed: &specforge_parser::SpecFile, kind: &str, block:
         }
     }
     lines.join("\n")
+}
+
+/// A blank title, refused before anything is planned: the rule E076 asks (ADR 0225).
+pub(super) fn require_title(title: &str) -> Result<(), Refusal<EditField>> {
+    if specforge_graph::title::is_untitled(Some(title)) {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            "invalid_title",
+            "a block needs a title",
+        )
+        .about(EditField::Title));
+    }
+    Ok(())
 }

@@ -18,7 +18,8 @@ behavior create_entity "Create an Entity" {
     its kind in the file, or at the end of the file; a file that does not exist
     is created, unless the later edits of the list leave it empty: a file that does not
     exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
-    reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
+    reserved word (E013), and MUST NOT be taken, the kind MUST be declared, the title MUST NOT be blank (only whitespace; refused
+    invalid_title before the project is read; ADR 0225), and the file MUST be a project source.
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
@@ -83,7 +84,8 @@ behavior edit_entity_field "Edit an Entity Field" {
     holds what the default holds, as the graph stores both, is removed; a set of an entry of a block field the block writes as none, or not at all,
     writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
     included; a block field left with no entry over a default is written `{}`. An unset of an
-    entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
+    entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle to a blank title (only whitespace) is refused
+    invalid_title before anything is planned, as a create's is. A retitle edit
     replaces the header title where the parse read it, or writes one after
     the name when the header has none; a union's string variant is never its
     title; a spec block's title is its name, and a retitle of it is
