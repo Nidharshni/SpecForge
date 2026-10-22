@@ -330,12 +330,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision: a named entry names an
   extension by its text (`ExtensionEntry::names`), a `.wasm` file entry only by what its component declares, once
-  admitted (ADR 0160). Its declarations come in entry order; the registry
+  admitted (ADR 0160; never under a builtin's name, ADR 0214). Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
   enables what it names (`Installed::unloaded`); each entry records where the load takes it from, its **origin** (`Origin`: `builtin`, the lock entry's source, `file:<path>`, `unknown`; `Resolution::origin`, a repeated entry the one it repeats'), and whether it loaded, with or without a runtime; what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
+- **Builtin's name**: the name a builtin this specforge embeds declares. Only that builtin loads under it: a `.wasm` file entry whose component declares it is refused by the load's admit (E028), and add, update, init, publish, extension validate and extension init refuse a candidate declaring it (`extension_conflict`). One predicate, `Builtins::contains` (ADR 0028 D7, ADR 0214).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
   origin (the origin the load recorded on the entry that loaded it, else on the first entry the load tried, `EnabledExtension::loader`; else its lock entry's source; else `builtin` for a builtin's name; else `unknown`), its status (loaded, not loaded, not
