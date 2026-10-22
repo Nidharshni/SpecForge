@@ -200,8 +200,8 @@ type McpInspectResult "Mcp Inspect Result" {
   /// it): why an exempt entity is exempt.
   obligated           boolean
   source_span         SourceSpan   @readonly
-  /// The field the entity's extension declares headline and normative (a
-  /// behavior's contract); absent when its kind declares none.
+  /// The field text of the field the entity's extension declares headline and
+  /// normative (a behavior's contract); absent when its kind declares none.
   contract            string       @optional
   /// Every field the entity declares, by name (its verify statements are
   /// `verify_declarations`).
@@ -1012,8 +1012,8 @@ type McpSpecForSourceEntity "Mcp Spec For Source Entity" {
 type McpContextPromptResult "Context Prompt Result" {
   entity_id                      string       @readonly
   kind                           string       @readonly
-  /// The field the extension declares headline and normative (a behavior's
-  /// contract); empty when the entity's kind declares none.
+  /// The field text of the field the extension declares headline and normative
+  /// (a behavior's contract); empty when the entity's kind declares none.
   contract_text                  string
   /// Every field the entity declares, by name (an open value: an
   /// extension's fields).

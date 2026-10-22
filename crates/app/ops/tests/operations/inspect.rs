@@ -3,6 +3,7 @@
 //! render them (ADR 0015, section "Inspect").
 
 use specforge_common::{Diagnostic, DiagnosticData, Severity, SourceSpan, Sym};
+use specforge_emitter::context::Headline;
 use specforge_extension_sdk::prelude::FieldType;
 use specforge_ops::read::inspect::inspect;
 use specforge_ops::read::navigate::Reference;
@@ -211,7 +212,13 @@ fn facts_carry_the_node_kind_entry_headline_and_obligations() {
             .is_some_and(|d| !d.is_empty()),
         "the kind's description"
     );
-    assert_eq!(facts.headline, Some("The system MUST log a known user in"));
+    assert_eq!(
+        facts.headline,
+        Some(Headline {
+            field: Sym::new("contract"),
+            text: "The system MUST log a known user in".into(),
+        })
+    );
     assert_eq!(facts.obligations.len(), 1);
     assert_eq!(
         specforge_ops::read::inspect::obligation_text(&facts.obligations[0]),
@@ -316,7 +323,10 @@ fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
     );
     let view = ProjectView::of(&p.project);
     let facts = inspect(&view, "beh").unwrap();
-    assert_eq!(facts.headline, Some("first contract"));
+    assert_eq!(
+        facts.headline.map(|h| h.text).as_deref(),
+        Some("first contract")
+    );
     let fields = facts.members.fields.clone();
     assert_eq!(
         serde_json::to_value(&fields["contract"]).unwrap(),
@@ -324,7 +334,6 @@ fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
     );
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test(
     behavior = "inspect_entity_facts",
     verify = "an entity's headline is its headline field's text, whatever its written shape"

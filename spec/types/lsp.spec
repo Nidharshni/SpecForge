@@ -24,7 +24,7 @@ type HoverContent "Hover Content" {
   title                    string
   source_extension         string
   testable                 boolean      @optional
-  /// The statement the entity's extension declares headline and normative.
+  /// The field text of the field the entity's extension declares headline and normative.
   summary                  string       @optional
   /// As specforge.inspect's coverage_status; every entity has one.
   coverage_status          string

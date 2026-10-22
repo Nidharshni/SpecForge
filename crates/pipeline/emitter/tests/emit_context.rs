@@ -341,7 +341,6 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
     assert_eq!(parsed["nodes"][0]["coverage_status"], "covered");
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test(
     behavior = "export_agent_context_format",
     verify = "context format lifts a headline field as its field text, whatever its written shape"

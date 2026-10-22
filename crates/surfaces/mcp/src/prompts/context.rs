@@ -102,7 +102,11 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
 
     // The statement the extension declares (headline and normative), e.g.
     // a behavior's `contract`; empty for a kind that declares none.
-    let contract_text = facts.headline.unwrap_or_default();
+    let contract_text = facts
+        .headline
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_default();
     let upstream: Vec<String> = facts
         .references
         .incoming

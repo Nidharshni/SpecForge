@@ -492,7 +492,8 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   }
   contract   """
     Inspect MUST answer one entity's facts: its node and kind entry, its
-    headline statement, its standing and obligations, its references in both
+    headline statement (the field text of the field its extension declares
+    headline and normative, whatever its written shape), its standing and obligations, its references in both
     directions, and the diagnostics about it: those its data names it in,
     else those inside its block, never one whose message merely quotes it or
     whose id contains its id. Its coverage is the coverage view's verdict and
@@ -1160,7 +1161,7 @@ behavior export_agent_context_format "Export Agent Context Format" {
     a decision's decision text), so every kind keeps the text that states
     what it promises; core reads the flag and knows no field by name. The
     fields an extension declares headline (a behavior's contract, a status)
-    sit at the entity's top level instead; a field no extension declares
+    sit at the entity's top level instead, each as its field text; a field no extension declares
     headline is never lifted, whatever its name. The output MUST omit
     verbose fields (full descriptions, prose) to minimize token consumption.
     The format MUST be valid JSON conforming to the Graph Protocol schema.

@@ -5,6 +5,7 @@
 //! show coverage ask [`coverage`] for it.
 
 use specforge_common::Diagnostic;
+use specforge_emitter::context::Headline;
 use specforge_graph::{Members, Node};
 use specforge_project::coverage::{Status, Verdict};
 use specforge_registry::{KindRegistryEntry, ObligationRecord, Standing};
@@ -31,9 +32,9 @@ pub struct EntityFacts<'v> {
     /// loaded extension declares.
     pub kind: Option<&'v KindRegistryEntry>,
     /// The statement its extension declares headline and normative (a
-    /// behavior's `contract`), borrowed from the node's field; `None` when
-    /// its kind declares none.
-    pub headline: Option<&'v str>,
+    /// behavior's `contract`): the field and its field text, whatever its
+    /// written shape (ADR 0228); `None` when its kind declares none.
+    pub headline: Option<Headline>,
     /// How the coverage rule counts it: its standing in the view's entity
     /// snapshot (ADR 0019), `testable`, `obligated()`, `exempt()`.
     /// Independent of the recorded report.

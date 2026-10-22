@@ -119,8 +119,8 @@ pub fn entity(
         }
         header_section.push_str(&format!("\n{}", ext_line));
     }
-    if let Some(headline) = facts.headline {
-        header_section.push_str(&format!("\n\n{}", quote(headline)));
+    if let Some(headline) = &facts.headline {
+        header_section.push_str(&format!("\n\n{}", quote(&headline.text)));
     }
 
     let mut sections: Vec<String> = vec![header_section];
@@ -173,7 +173,7 @@ pub fn entity(
         .fields
         .entries()
         .iter()
-        .filter(|entry| !is_headline(&entry.value, facts.headline))
+        .filter(|entry| facts.headline.as_ref().is_none_or(|h| h.field != entry.key))
         .map(|entry| {
             let key = entry.key.as_str();
             let annotations = facts.members.annotations.get(key).into_iter().flatten();
@@ -239,15 +239,6 @@ fn obligations_section(node: &Node) -> Option<String> {
         })
         .collect();
     Some(format!("**Obligations**\n{}", lines.join("\n")))
-}
-
-/// Whether `value` is the headline statement: the very string the read
-/// view borrowed from the node, not merely an equal one.
-fn is_headline(value: &FieldValue, headline: Option<&str>) -> bool {
-    match (value, headline) {
-        (FieldValue::String(s), Some(headline)) => std::ptr::eq(s.as_str(), headline),
-        _ => false,
-    }
 }
 
 /// The Coverage line after `**Coverage** · `: the status `specforge.inspect`

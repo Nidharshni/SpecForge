@@ -174,7 +174,7 @@ Optional flags, `false` and omitted from the wire unless set (ADR 0007): on
 a kind, `contract_target` (a reference field that targets the kind is a
 contract obligation, A010) and `declares_types` (its entity ids are the type
 names custom validators receive as `declared_types`); on a field, `normative`
-(the context export keeps it), `headline` (the context export lifts it to the
+(the context export keeps it), `headline` (the context export lifts it, as its field text, to the
 node's top level; with `normative`, it is the statement MCP `inspect` reports
 as `contract`) and `exempts_obligations` (an entity that sets it owes no
 `verify` obligations).
