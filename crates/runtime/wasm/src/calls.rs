@@ -487,22 +487,19 @@ pub fn pass_diagnostics(
                 suggestion,
                 entity,
             } = diagnostic;
-            let span = span
-                .map(source_span)
-                .or_else(|| entity.as_deref().and_then(&span_of));
             let severity = match severity {
                 PassSeverity::Error => Severity::Error,
                 PassSeverity::Warning => Severity::Warning,
                 PassSeverity::Info => Severity::Info,
             };
             let mut reported = Diagnostic::from_extension(extension, code, severity, message);
-            reported.span = span;
+            reported.span = span.map(source_span);
             reported.suggestion = suggestion;
             // The entity the guest names is the diagnostic's subject,
             // even one the graph lacks: navigation reads data, never the
             // message (ADR 0016). A guest's own `data` is not carried.
             reported.data = entity.map(|entity| Box::new(DiagnosticData::Subject { entity }));
-            reported
+            reported.placed_at_subject(&span_of)
         })
         .collect();
     diagnostics.sort_by(|a, b| {

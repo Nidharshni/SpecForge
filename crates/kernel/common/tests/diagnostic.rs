@@ -6,7 +6,9 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
-use specforge_common::{Diagnostic, Severity, codes};
+use specforge_common::{
+    CustomRuleFailure, Diagnostic, DiagnosticData, Severity, SourceSpan, Sym, codes,
+};
 use specforge_test::prelude::*;
 
 #[specforge_test(
@@ -88,4 +90,58 @@ fn is_compares_the_code() {
     assert!(diagnostic.is(codes::E003));
     assert!(!diagnostic.is(codes::E001));
     assert!(Diagnostic::untyped("E001", Severity::Info, "m").is(codes::E001));
+}
+
+fn at(line: usize) -> SourceSpan {
+    SourceSpan {
+        file: Sym::new("a.spec"),
+        start_line: line,
+        start_col: 1,
+        end_line: line,
+        end_col: 2,
+    }
+}
+
+#[specforge_test(
+    behavior = "present_diagnostics_as_json",
+    verify = "a diagnostic without a span takes the span of the first entity its data names that is known; one with a span keeps it"
+)]
+fn placed_at_subject_takes_the_first_known_subjects_span() {
+    let known = |id: &str| match id {
+        "b" => Some(at(2)),
+        "c" => Some(at(3)),
+        _ => None,
+    };
+    let path = ["ghost", "b", "c", "ghost"].map(String::from).to_vec();
+    let cycle =
+        Diagnostic::new(codes::W061, "m").with_data(DiagnosticData::ReferenceCycle { path });
+    assert_eq!(cycle.placed_at_subject(known).span, Some(at(2)));
+
+    let failure = |entity: &str| CustomRuleFailure {
+        entity: entity.into(),
+        error: "e".into(),
+    };
+    let failures =
+        Diagnostic::new(codes::W148, "m").with_data(DiagnosticData::CustomRuleFailures {
+            rule: "r".into(),
+            function: "f".into(),
+            failures: vec![failure("ghost"), failure("c")],
+        });
+    assert_eq!(failures.placed_at_subject(known).span, Some(at(3)));
+
+    let spanned = Diagnostic::new(codes::W061, "m")
+        .with_span(at(9))
+        .with_data(DiagnosticData::Subject { entity: "b".into() });
+    assert_eq!(spanned.placed_at_subject(known).span, Some(at(9)));
+
+    let shadowed = Diagnostic::new(codes::E013, "m").with_data(DiagnosticData::ShadowedKeyword {
+        keyword: "b".into(),
+    });
+    assert_eq!(shadowed.placed_at_subject(known).span, None);
+    assert_eq!(
+        Diagnostic::new(codes::W061, "m")
+            .placed_at_subject(known)
+            .span,
+        None
+    );
 }
