@@ -189,7 +189,6 @@ fn with_duplicate_id() -> String {
     format!("{TASKS}\n{}", &TASKS[last..])
 }
 
-#[ignore = "flipped by T3"]
 #[specforge_test_macros::test(
     behavior = "validate_typed_edit",
     verify = "an error whose message names a position is the same error after an edit moves it"
@@ -200,4 +199,21 @@ fn an_edit_above_a_duplicate_id_does_not_count_it_as_new() {
     // The edit removes a line above the duplicate: its message now names another line, the error is the same.
     let planned = plan(&c, &[unset("complete_task", "category")]);
     assert!(planned.is_ok(), "{:?}", planned.err().map(|e| e.error));
+}
+
+#[test]
+fn a_second_error_that_differs_in_digits_is_still_new() {
+    // `ghost1` is unresolved already; `ghost2` has the same digit-collapsed message: two against one.
+    let broken = TASKS.replace("[done_stamped]", "[done_stamped, ghost1]");
+    let c = project(&[("tasks.spec", &broken)]);
+    assert!(c.project.diagnostics().iter().any(|d| d.code == "E003"));
+    let error = plan(&c, &[link("complete_task", "invariants", "ghost2")])
+        .unwrap_err()
+        .error;
+    assert!(error.is(codes::E080), "{error:?}");
+    assert!(
+        error.message.contains("1 error it does not have"),
+        "{}",
+        error.message
+    );
 }

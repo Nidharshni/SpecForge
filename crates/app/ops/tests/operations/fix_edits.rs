@@ -47,7 +47,8 @@ fn indent_four() -> FormatConfig {
     }
 }
 
-/// The errors (code, message) `file` = `text` adds to `p`'s project, compared as E080 compares (without positions).
+/// The errors (code, message) `file` = `text` adds to `p`'s project, compared by exact message on purpose: an oracle
+/// independent of `validate::added`, which collapses the digits of a message.
 fn added_errors(p: &Compiled, file: &str, text: &str) -> Vec<(String, String)> {
     let mut had: Vec<_> = p
         .project
