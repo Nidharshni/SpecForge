@@ -1,7 +1,7 @@
 //! Where a block writes its title and its verify statements: where the parse read them (ADR 0187, amended).
 
 use super::*;
-use specforge_ops::authoring::fix::FixQuery;
+use specforge_ops::authoring::fix::{self, FixQuery};
 
 const TESTING: &[&str] = &["@specforge/software", "@specforge/testing"];
 
@@ -132,4 +132,46 @@ fn add_verify_on_a_union_is_refused_as_not_editable() {
         .map_err(|r| r.error.code.to_string())
         .unwrap_err();
     assert_eq!(refusal, "not_editable");
+}
+
+/// A braced type with a member that happens to be named like the union's variants, beside a real union.
+const FEATURE: &str = "type Feature \"Feature\" {\n  name     string\n  variants string[]\n}\n\n\
+                       type Status = open | done\n";
+
+#[test]
+#[ignore = "flipped by T4"]
+fn add_verify_on_a_braced_block_with_a_member_named_variants_writes_the_statement() {
+    let c = compile(TESTING, &[("types.spec", FEATURE)]);
+    assert_eq!(
+        after(
+            &c,
+            "types.spec",
+            &[add("Feature", Some("unit"), "has a name")]
+        ),
+        FEATURE.replace(
+            "  variants string[]\n}\n",
+            "  variants string[]\n  verify unit \"has a name\"\n}\n"
+        )
+    );
+}
+
+#[test]
+#[ignore = "flipped by T4"]
+fn a_verify_stub_is_offered_for_a_braced_block_with_a_member_named_variants() {
+    let c = compile(TESTING, &[("types.spec", FEATURE)]);
+    let navigator = c.navigator();
+    // Every verify stub the standing wants plans: the union is offered none, the braced block one.
+    let planned: Vec<String> =
+        fix::offers(&navigator, &c.project.diagnostics(), &FixQuery::default())
+            .into_iter()
+            .filter(|offer| offer.title().starts_with("Add verify stub"))
+            .map(|offer| {
+                let title = offer.title().to_string();
+                offer
+                    .fix(&navigator)
+                    .map(|_| title.clone())
+                    .unwrap_or_else(|refusal| panic!("{title}: {}", refusal.error.message))
+            })
+            .collect();
+    assert_eq!(planned, ["Add verify stub for Feature"]);
 }
