@@ -66,7 +66,6 @@ fn a_file_entry_declaring_no_package_name_is_e072_naming_the_entry() {
     behavior = "load_extension_manifests",
     verify = "a .wasm file entry loads under a key no extension is admitted under, so it never replaces what another entry loaded"
 )]
-#[ignore = "flipped by T2"]
 fn a_file_entrys_load_never_replaces_another_entrys_extension() {
     for order in [["first.wasm", "second.wasm"], ["second.wasm", "first.wasm"]] {
         let dir = TempDir::new().unwrap();

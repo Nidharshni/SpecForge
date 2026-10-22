@@ -47,7 +47,7 @@ pub enum Resolved<'a> {
     /// (`NotInstalled`, E028) or a lock that can't be read (`LockUnreadable`, E028).
     Unloadable { name: &'a str, problem: LoadProblem },
     /// A `.wasm` file entry: it loads from its file under the name the component declares, after
-    /// every named entry.
+    /// every named entry (under the key `file:<entry>` until that name is admitted).
     File(FileEntry<'a>),
     /// An entry naming what the entry at `first` enables (the same name, or the same `.wasm` file
     /// entry text): loaded once, by `first`.
@@ -57,8 +57,8 @@ pub enum Resolved<'a> {
 /// A `.wasm` file entry of `specforge.json`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileEntry<'a> {
-    /// The entry as written, trimmed: what its diagnostics name, and the key its component loads
-    /// under until the name it declares is admitted.
+    /// The entry as written, trimmed: what its diagnostics name. Its component loads under `file:`
+    /// and this text until the name it declares is admitted (`load_key`).
     pub key: &'a str,
     /// The path as written.
     pub path: &'a str,

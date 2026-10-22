@@ -86,8 +86,11 @@ behavior load_extension_manifests "Load Extension Manifests" {
     An entry whose declaration can't be read (its handshake, a describe
     category or its protocol major) MUST produce one E028 that says so and
     names what failed, in the same words for every kind of entry. Each
-    entry's bytes are read once and loaded under one key, and its
-    declaration is read once (one handshake, then each describe category).
+    entry's bytes are read once and loaded under one key — a named entry's
+    name, a .wasm file entry's file:<entry>, which no package name can be,
+    so loading one entry never replaces an extension another entry loaded —
+    and its declaration is read once (one handshake, then each describe
+    category).
     An entry refused at any step — its bytes not a component, its
     declaration unreadable, or the name it declares not the one its entry
     admits — MUST leave nothing loaded. A .wasm file entry's load warnings

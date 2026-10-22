@@ -4,7 +4,7 @@
 //! file under the name it declares. What does not load is a typed
 //! [`LoadFailure`] on its entry with one diagnostic; the runtime keeps no
 //! load state. Each entry is loaded by one step: its bytes read once and
-//! loaded under its key, its declaration read once, the name it declares
+//! loaded under a key of its own, its declaration read once, the name it declares
 //! admitted or refused; a refused entry leaves nothing loaded.
 
 use std::path::{Path, PathBuf};
@@ -403,6 +403,21 @@ impl LoadProblem {
     }
 }
 
+/// The key `resolved`'s component is loaded under while its declaration is read (ADR 0223 D3): a
+/// builtin's or a locked entry's name (a package name, the name it is admitted under), or, for a
+/// `.wasm` file entry, `file:` and the entry as written: a text no package name can be (`:` is in
+/// no name part), so never the name another entry was admitted under, nor `__candidate`. Admitted,
+/// a file entry's component is renamed to the name it declares.
+fn load_key(resolved: &Resolved) -> String {
+    match resolved {
+        Resolved::Builtin { name, .. } | Resolved::Locked { name, .. } => (*name).to_string(),
+        Resolved::File(file) => format!("file:{}", file.key),
+        Resolved::Unloadable { .. } | Resolved::Again { .. } => {
+            unreachable!("only a read entry has a key")
+        }
+    }
+}
+
 /// Who a resolved entry's diagnostics are about.
 fn subject<'a>(resolved: &'a Resolved) -> Subject<'a> {
     match resolved {
@@ -453,7 +468,8 @@ impl Installed {
     ///   SHA-256 is the one its lock entry pins;
     /// - a `.wasm` file entry from its file, under the name it declares,
     ///   after every named entry (one that declares a name already loaded
-    ///   is refused).
+    ///   is refused); its component loads under a key of its own
+    ///   (`file:<entry>`) until that name is admitted.
     ///
     /// The bytes compiled are the bytes hashed. Never fails: what does not
     /// load is a [`LoadFailure`] on its entry with its diagnostic, and what an
@@ -609,8 +625,8 @@ impl Installed {
         let fail = |problem: LoadProblem| self.failure(&subject, problem);
         let mut notices = Vec::new();
         let module;
-        let (key, bytes): (&str, &[u8]) = match resolved {
-            Resolved::Builtin { name, bytes } => (name, bytes),
+        let bytes: &[u8] = match resolved {
+            Resolved::Builtin { bytes, .. } => bytes,
             Resolved::Locked { name, entry } => {
                 module = self.check_module(entry, disk).map_err(fail)?;
                 if entry.wasm_hash.is_empty() {
@@ -627,22 +643,23 @@ impl Installed {
                         )),
                     );
                 }
-                (name, module.bytes())
+                module.bytes()
             }
             Resolved::Unloadable { problem, .. } => return Err(fail(problem.clone())),
             Resolved::File(file) => {
                 module = self
                     .read_module(disk, &file.file, |path| LoadProblem::FileMissing { path })
                     .map_err(fail)?;
-                (file.key, module.bytes())
+                module.bytes()
             }
             Resolved::Again { .. } => unreachable!("left out of the load order"),
         };
+        let key = load_key(resolved);
         runtime
-            .load(key, bytes)
+            .load(&key, bytes)
             .map_err(|reason| fail(LoadProblem::NotAComponent { reason }))?;
-        let read = load_declaration(runtime, key).map_err(|error| {
-            runtime.unload(key);
+        let read = load_declaration(runtime, &key).map_err(|error| {
+            runtime.unload(&key);
             fail(LoadProblem::NoDeclaration {
                 reason: error.to_string(),
             })
@@ -672,22 +689,16 @@ impl Installed {
         verdict: Result<&str, LoadProblem>,
         runtime: &dyn WasmRuntime,
     ) -> Result<(String, Done), LoadFailure> {
-        let key = match resolved {
-            Resolved::Builtin { name, .. } | Resolved::Locked { name, .. } => name,
-            Resolved::File(file) => file.key,
-            Resolved::Unloadable { .. } | Resolved::Again { .. } => {
-                unreachable!("only a loaded entry is settled")
-            }
-        };
+        let key = load_key(resolved);
         match verdict {
             Ok(name) => {
                 if name != key {
-                    runtime.rename(key, name);
+                    runtime.rename(&key, name);
                 }
                 Ok((name.to_string(), done))
             }
             Err(problem) => {
-                runtime.unload(key);
+                runtime.unload(&key);
                 Err(self.failure(&subject(resolved), problem))
             }
         }

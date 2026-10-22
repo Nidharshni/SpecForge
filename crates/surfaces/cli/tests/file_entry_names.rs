@@ -67,7 +67,6 @@ fn a_file_entry_declaring_no_package_name_is_refused_by_check_doctor_and_the_lis
     behavior = "load_extension_manifests",
     verify = "two .wasm file entries each run their own component in either order, when one declares the other's entry text"
 )]
-#[ignore = "flipped by T2"]
 fn two_file_entries_keep_their_own_extensions_in_either_order() {
     for entries in [["first.wasm", "second.wasm"], ["second.wasm", "first.wasm"]] {
         let project = project(&entries);
