@@ -850,10 +850,10 @@ E070: Installed extension does not match its lock entry
 An installed extension's binary, `.specforge/extensions/<name>/extension.wasm`,
 is not the one its `specforge.lock` entry pins: its SHA-256 differs from the
 recorded hash (it was changed or replaced after install), or it declares another
-extension than the entry names. It is not loaded, and `check` fails. Reinstall
-it with the command the suggestion names (`specforge add <path>` for a local
-install, `specforge add <name>@<version>` for a registry one); `specforge
-doctor` lists it as `stale_hash`.
+extension, another version or other peers than the entry records. It is not
+loaded, and `check` fails. Reinstall it with the command the suggestion names
+(`specforge add <path>` for a local install, `specforge add <name>@<version>`
+for a registry one); `specforge doctor` lists it as `stale_hash`.
 
 Owner: core
 Level: error

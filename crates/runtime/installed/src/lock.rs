@@ -5,6 +5,8 @@ use specforge_registry::Disk;
 use std::path::Path;
 
 use crate::layout::lock_path;
+use crate::load::{LoadProblem, Recorded};
+use crate::resolve::Declared;
 
 /// The lock file format for extension resolution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -29,11 +31,55 @@ pub struct LockFileEntry {
     /// one, or a lock written before signing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_id: Option<String>,
-    /// Peer requirements recorded at install from the extension's manifest
-    /// (C8-05: doctor verifies these across the other lock entries). Defaults
-    /// on deserialize for lock files written before this existed.
+    /// The peers its module declares, recorded at install; the load refuses an entry whose module
+    /// declares others (E070, ADR 0217). Defaults on deserialize for lock files written before
+    /// this existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub peer_dependencies: Vec<specforge_protocol_types::PeerDependency>,
+}
+
+impl LockFileEntry {
+    /// Whether a component declaring `declared` is the extension this entry records: the one rule
+    /// the load's admit and the lock plan's "the project already has it" both ask (ADR 0217). It
+    /// must declare the entry's name (`NotItsLockEntry`), then its version, then its peers, as
+    /// text and in order (`NotWhatItsEntryRecords`).
+    pub fn declares(&self, declared: &Declared) -> Result<(), LoadProblem> {
+        if self.name.as_str() != declared.name {
+            return Err(LoadProblem::NotItsLockEntry {
+                declared: declared.name.clone(),
+            });
+        }
+        if self.version != declared.version {
+            return Err(LoadProblem::NotWhatItsEntryRecords {
+                what: Recorded::Version,
+                declared: declared.version.clone(),
+                recorded: self.version.clone(),
+            });
+        }
+        if self.peer_dependencies != declared.peers {
+            return Err(LoadProblem::NotWhatItsEntryRecords {
+                what: Recorded::Peers,
+                declared: peers_text(&declared.peers),
+                recorded: peers_text(&self.peer_dependencies),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// `peers` as a message says them: `@a/b ^1.0, @c/d ^2 (optional)`, or `none`.
+fn peers_text(peers: &[specforge_protocol_types::PeerDependency]) -> String {
+    if peers.is_empty() {
+        return "none".to_string();
+    }
+    peers
+        .iter()
+        .map(|peer| {
+            let optional = if peer.optional { " (optional)" } else { "" };
+            format!("{} {}{optional}", peer.name, peer.version)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Where a lock entry's binary came from. Serialized as the lock's string:
@@ -243,6 +289,63 @@ mod tests {
     use super::*;
     use specforge_registry::PlainDisk;
     use tempfile::TempDir;
+
+    #[test]
+    fn a_lock_entry_declares_its_name_then_its_version_then_its_peers() {
+        let peer = |range: &str, optional| specforge_protocol_types::PeerDependency {
+            name: "@acme/b".to_string(),
+            version: range.to_string(),
+            optional,
+        };
+        let entry = LockFileEntry {
+            name: PackageName::parse("@acme/a").unwrap(),
+            version: "1.0.0".to_string(),
+            source: LockSource::Registry,
+            wasm_hash: String::new(),
+            key_id: None,
+            peer_dependencies: vec![peer("^1.0", false)],
+        };
+        let declared = |name: &str, version: &str, peers| Declared {
+            name: name.to_string(),
+            version: version.to_string(),
+            peers,
+        };
+        let refused = |declared: Declared| entry.declares(&declared).unwrap_err();
+
+        assert_eq!(
+            entry.declares(&declared("@acme/a", "1.0.0", vec![peer("^1.0", false)])),
+            Ok(())
+        );
+        // The name is checked first, whatever else differs.
+        assert_eq!(
+            refused(declared("@acme/x", "9.9.9", vec![])),
+            LoadProblem::NotItsLockEntry {
+                declared: "@acme/x".to_string()
+            }
+        );
+        assert_eq!(
+            refused(declared("@acme/a", "7.7.7", vec![])),
+            LoadProblem::NotWhatItsEntryRecords {
+                what: Recorded::Version,
+                declared: "7.7.7".to_string(),
+                recorded: "1.0.0".to_string(),
+            }
+        );
+        for (peers, text) in [
+            (vec![], "none"),
+            (vec![peer("^2.0", false)], "@acme/b ^2.0"),
+            (vec![peer("^1.0", true)], "@acme/b ^1.0 (optional)"),
+        ] {
+            assert_eq!(
+                refused(declared("@acme/a", "1.0.0", peers)),
+                LoadProblem::NotWhatItsEntryRecords {
+                    what: Recorded::Peers,
+                    declared: text.to_string(),
+                    recorded: "@acme/b ^1.0".to_string(),
+                }
+            );
+        }
+    }
 
     // -- write_lock_file + read_lock_file --
 

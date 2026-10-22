@@ -54,7 +54,7 @@ fn load(runtime: InProcessRuntime, extensions: &[&str]) -> Environment {
         .config(|c| c["name"] = "p".into())
         .enabling(extensions)
         .installing_enabled();
-    Environment::load(&dir.project_root(), Some(std::sync::Arc::new(runtime)))
+    dir.environment_in(std::sync::Arc::new(runtime))
 }
 
 fn w021(env: &Environment) -> Vec<Diagnostic> {

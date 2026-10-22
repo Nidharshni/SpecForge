@@ -628,10 +628,7 @@ mod declared_in_process {
             serde_json::json!({ "name": "p", "version": "0.1.0", "extensions": extensions }),
             &[],
         );
-        Environment::load(
-            &specforge_common::ProjectRoot::of(dir.root()).unwrap(),
-            Some(runtime),
-        )
+        dir.environment_in(runtime)
     }
 
     #[specforge_test_macros::test(
@@ -730,7 +727,6 @@ mod passes_of_the_declaration {
 
     use super::served_project as project;
     use specforge_extension_sdk::prelude::*;
-    use specforge_project::Environment;
     use specforge_wasm::WasmCallResult;
     use specforge_wasm::testing::InProcessRuntime;
     use std::sync::Arc;
@@ -767,10 +763,7 @@ mod passes_of_the_declaration {
             serde_json::json!({ "name": "p", "version": "0.1.0", "extensions": ["@acme/audit"] }),
             &[],
         );
-        let env = Environment::load(
-            &specforge_common::ProjectRoot::of(dir.root()).unwrap(),
-            Some(runtime.clone()),
-        );
+        let env = dir.environment_in(runtime.clone());
         let e028: Vec<&str> = env
             .diagnostics()
             .filter(|d| d.code == "E028")
@@ -837,10 +830,7 @@ mod passes_of_the_declaration {
             }),
             &[],
         );
-        let env = Environment::load(
-            &specforge_common::ProjectRoot::of(dir.root()).unwrap(),
-            Some(runtime.clone()),
-        );
+        let env = dir.environment_in(runtime.clone());
         let codes: Vec<&str> = env.diagnostics().map(|d| d.code.as_str()).collect();
         assert_eq!(codes, ["E028", "E030"], "{codes:?}");
     }

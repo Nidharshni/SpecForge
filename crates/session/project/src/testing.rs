@@ -267,6 +267,12 @@ impl TestProject {
         CompiledProject::compile(&self.project_root(), Some(runtime))
     }
 
+    /// The project's environment loaded in `runtime`, as [`Self::compile_in`] loads it.
+    pub fn environment_in(&self, runtime: SharedRuntime) -> crate::Environment {
+        self.record_declarations(&*runtime);
+        crate::Environment::load(&self.project_root(), Some(runtime))
+    }
+
     /// The project compiled with no runtime: no extension loads (structure only).
     pub fn compile_bare(&self) -> CompiledProject {
         CompiledProject::compile(&self.project_root(), None)

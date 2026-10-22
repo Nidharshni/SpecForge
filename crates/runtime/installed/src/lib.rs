@@ -24,7 +24,9 @@ pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
 pub use health::Health;
 pub use layout::{LOCK_FILE, lock_path};
-pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded};
+pub use load::{
+    Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded, Recorded,
+};
 pub use lock::{LockFile, LockFileEntry, LockSource, LockState, read_lock_file, write_lock_file};
 pub use module::{Module, hex_sha256};
 pub use resolve::{Declared, FileEntry, Origin, Resolution, Resolved};
@@ -114,13 +116,23 @@ impl Installed {
     /// <name>@<version>` for a registry one (the name alone when the
     /// version is not semver).
     pub fn reinstall(&self, name: &str) -> String {
+        let version = self
+            .lock
+            .entries()
+            .iter()
+            .find(|e| e.name.as_str() == name)
+            .map_or("", |e| e.version.as_str());
+        self.reinstall_at(name, version)
+    }
+
+    /// [`Self::reinstall`] at `version`: the version its module declares when that is not the one
+    /// the entry records, so the command fetches the right one.
+    pub fn reinstall_at(&self, name: &str, version: &str) -> String {
         let entry = self.lock.entries().iter().find(|e| e.name.as_str() == name);
         let specifier = match entry {
             Some(e) => match e.source.local_path() {
                 Some(path) => path.to_string(),
-                None if semver::Version::parse(&e.version).is_ok() => {
-                    format!("{name}@{}", e.version)
-                }
+                None if semver::Version::parse(version).is_ok() => format!("{name}@{version}"),
                 None => name.to_string(),
             },
             None => name.to_string(),

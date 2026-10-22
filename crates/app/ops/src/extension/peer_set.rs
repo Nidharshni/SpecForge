@@ -34,7 +34,7 @@ pub(crate) enum Modules<'s> {
     /// By its lock entry (ADR 0041 B1).
     Locked,
     /// By its lock entry only when its module on disk is the one pinned
-    /// ([`Installed::verified`]), as the extension load answers it; a name in `staged` by its
+    /// ([`Installed::pinned_module`]), as the extension load answers it; a name in `staged` by its
     /// staged pin, whose module the change writes. The project as it is stages nothing (ADR 0160
     /// D2); the set a change leaves stages its installs.
     OnDisk { staged: &'s [String] },
@@ -87,7 +87,7 @@ impl ProjectPeers {
                     Resolved::Locked { entry, name } => {
                         if let Modules::OnDisk { staged } = modules
                             && !staged.iter().any(|staged| staged == name)
-                            && installed.verified(name, read.disk()).is_none()
+                            && installed.pinned_module(entry, read.disk()).is_none()
                         {
                             return Err(());
                         }

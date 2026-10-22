@@ -37,10 +37,7 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
     let target = outside.join("target.md");
     std::os::unix::fs::symlink(&target, root.join("link.md")).unwrap();
     let ext = Arc::new(passes_extension());
-    let mut session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::clone(&ext) as SharedRuntime),
-    );
+    let mut session = dir.session_in(Arc::clone(&ext) as SharedRuntime);
     assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
     assert!(
         session
@@ -91,10 +88,7 @@ fn a_check_input_link_pointed_elsewhere_reruns_the_checks() {
     let link = root.join("link.md");
     std::os::unix::fs::symlink(outside.join("target.md"), &link).unwrap();
     let ext = Arc::new(passes_extension());
-    let mut session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::clone(&ext) as SharedRuntime),
-    );
+    let mut session = dir.session_in(Arc::clone(&ext) as SharedRuntime);
     assert_eq!(e016(&session), 0, "{:?}", session.project().diagnostics());
 
     fs::remove_file(&link).unwrap();
@@ -122,10 +116,7 @@ fn a_file_beside_a_missing_file_exists_file_changes_its_suggestion() {
     let root = dir.root();
     let ext = Arc::new(file_rule_extension());
     specforge_installed::testing::install(root, &*ext, &["@test/files"]);
-    let mut session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::clone(&ext) as SharedRuntime),
-    );
+    let mut session = dir.session_in(Arc::clone(&ext) as SharedRuntime);
     let suggestion = |session: &ProjectSession| {
         session
             .project()
@@ -162,6 +153,7 @@ fn the_check_inputs_are_the_paths_the_checks_asked() {
     let root = fs::canonicalize(dir.root()).unwrap();
     fs::write(root.join("a.md"), "# a\n").unwrap();
     let ext = Arc::new(passes_extension());
+    dir.record_declarations(&*ext);
     let session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(&root).unwrap(),
         Some(Arc::clone(&ext) as SharedRuntime),

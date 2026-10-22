@@ -239,8 +239,8 @@ impl Resolution<'_> {
 
 impl Resolved<'_> {
     /// Whether a component declaring `declared` is what this entry enables: the one place the
-    /// admit rules live. A builtin admits any name; a locked entry must declare its own name
-    /// (`NotItsLockEntry`); a `.wasm` file entry follows [`FileEntry::admit`]: the name written,
+    /// admit rules live. A builtin admits any name; a locked entry must declare what it records
+    /// ([`LockFileEntry::declares`]: its name, version and peers, E070); a `.wasm` file entry follows [`FileEntry::admit`]: the name written,
     /// never a builtin's, not one already loaded. `Unloadable` and
     /// `Again` never reach a component, so they admit nothing to refuse.
     pub(crate) fn admit(
@@ -250,11 +250,7 @@ impl Resolved<'_> {
         loaded: impl Fn(&str) -> bool,
     ) -> Result<(), LoadProblem> {
         match self {
-            Resolved::Locked { name, .. } if *name != declared.name => {
-                Err(LoadProblem::NotItsLockEntry {
-                    declared: declared.name.clone(),
-                })
-            }
+            Resolved::Locked { entry, .. } => entry.declares(declared),
             Resolved::File(file) => file.admit(&declared.name, builtins, loaded),
             _ => Ok(()),
         }

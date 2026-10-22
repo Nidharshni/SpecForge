@@ -435,8 +435,16 @@ impl<'a> LockPlan<'a> {
     ) -> Option<&LockFileEntry> {
         let entry = self
             .installed
-            .verified(name.as_str(), self.declarations.disk())
-            .filter(|e| same(e))?;
+            .lock()
+            .entries()
+            .iter()
+            .find(|e| e.name == *name)
+            .filter(|e| same(e))
+            .filter(|e| {
+                self.installed
+                    .pinned_module(e, self.declarations.disk())
+                    .is_some()
+            })?;
         let enabled = self
             .config
             .entries()
