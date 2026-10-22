@@ -118,6 +118,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   """
   verify unit "installed extension manifest is loaded"
   verify unit "an installed extension loads only when its binary is the one its specforge.lock entry pins"
+  verify unit "an installed extension loads only when its binary declares the version and peers its specforge.lock entry records"
   verify integration "tampered installed binary refused via lockfile hash pin (E070)"
   verify unit "an unreadable specforge.lock is reported once (E033) and each installed extension it leaves unloaded is E028 naming it"
   verify integration "an extension installed from a registry loads through check"

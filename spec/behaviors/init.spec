@@ -411,6 +411,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
   verify unit "a required builtin peer the embedded builtin does not satisfy is refused before anything is written"
   verify unit "add duplicate extension is a no-op with info message"
+  verify unit "an add of an installed extension whose lock entry records other than its module declares rewrites the entry from the module"
   verify unit "a dry run of an extension already present answers as the add would, whatever its source"
   verify unit "add extension with no specforge.json rejects with error and exit code 1"
   verify unit "add unresolvable extension rejects with diagnostic"

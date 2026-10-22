@@ -48,6 +48,7 @@ behavior load_wasm_module "Load Wasm Module" {
   produces   [extension_loaded]
   verify unit "loads .wasm binary from manifest path"
   verify unit "tampered installed binary refused via E070 lockfile pin"
+  verify integration "a lock entry whose binary declares another version or other peers is refused with E070 through check, and add of its file rewrites it"
   verify unit "legacy lockfile entry without hash loads with W149"
   verify unit "the hash is checked over the bytes the runtime compiles"
   verify unit "missing .wasm produces ExtensionError"

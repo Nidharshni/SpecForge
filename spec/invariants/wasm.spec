@@ -45,6 +45,7 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
   verify unit "add, init, update and remove judge the set check judges: the extensions the project's entries load"
   verify unit "the lock plan's peer set of the project as it is names what the extension load loads, in entry order, from the entries it loads them by"
+  verify unit "the lock plan judges a locked extension by what its module declares, and one whose lock entry records another version or other peers is no member, as the load refuses it"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------

@@ -40,6 +40,7 @@ mod inspect_views;
 mod installed_extensions;
 mod isolation;
 mod listing_wording;
+mod lock_records;
 mod mcp;
 mod mcp_add;
 mod migrate;
