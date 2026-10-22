@@ -284,6 +284,14 @@ impl Report {
                         self.log_dir.display()
                     )?;
                     writeln!(out, "{:<18}         fix: {}", "", fix_of(name))?;
+                    let log = std::fs::read_to_string(self.log_dir.join(format!("{name}.log")));
+                    if log.is_ok_and(|text| text.contains("No space left on device")) {
+                        writeln!(
+                            out,
+                            "{:<18}         the disk filled, not the code: cargo run -p xtask --bin clean-target, then re-run",
+                            ""
+                        )?;
+                    }
                 }
                 Outcome::Blocked(by) => writeln!(out, "{name:<18} {secs:>5}s  blocked (by {by})")?,
             }
