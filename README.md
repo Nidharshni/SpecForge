@@ -200,10 +200,6 @@ This writes a `specforge.json` and a first file in `spec/`. In a Cargo or vitest
 claude mcp add specforge -- specforge mcp /path/to/your/project
 ```
 
-In Cursor, one click adds it for the open project (`${workspaceFolder}`):
-
-[![Add SpecForge to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=specforge&config=eyJjb21tYW5kIjoic3BlY2ZvcmdlIiwiYXJncyI6WyJtY3AiLCIke3dvcmtzcGFjZUZvbGRlcn0iXX0%3D)
-
 <details>
 <summary>Other MCP clients</summary>
 
