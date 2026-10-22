@@ -9,6 +9,32 @@
   <a href="docs/guides/authoring-spec-files.md">Docs</a>
 </p>
 
+<p align="center">
+  <img src="assets/readme/one-letter.gif" width="400" alt="A spec says the refund behavior produces 'refund_isued', one letter short. specforge check fails with E003 unresolved reference, help: did you mean 'refund_issued'? After the one-letter fix: 0 errors, 0 warnings, 0 infos.">
+</p>
+
+**See it in 60 seconds**, no agent needed. Install, create a project, drop one letter, check:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/leaderiop/SpecForge/main/install.sh | sh
+mkdir sf-demo && cd sf-demo
+specforge init --extensions @specforge/software          # spec/hello.spec, which checks clean
+sed -i.bak 's/\[user_logged_in\]/[user_loged_in]/' spec/hello.spec   # drop one letter
+specforge check
+```
+
+```text
+[E003] Error: unresolved reference 'user_loged_in' in entity 'authenticate_user'
+ 20 │   produces [user_loged_in]
+    │ Help: did you mean 'user_logged_in'?
+
+[W007] Warning: event 'user_logged_in' is not produced by any behavior
+
+1 error, 1 warning, 0 infos
+```
+
+A reviewer reads. A check resolves.
+
 ## The problem
 
 You ask an AI agent to add refunds to your payment service. It writes clean code, the tests pass, the pull request looks fine. Two weeks later, finance finds a refund larger than the payment it refunded.
