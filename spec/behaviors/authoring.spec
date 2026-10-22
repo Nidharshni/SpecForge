@@ -88,6 +88,8 @@ behavior edit_entity_field "Edit an Entity Field" {
     title; a spec block's title is its name, and a retitle of it is
     refused not_editable. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
+    A set, unset, link or unlink of a field the block writes twice first removes its later entries, which the
+    graph does not hold (E081, ADR 0215).
   """
   verify unit "set writes the value in the form its field declares"
   verify unit "a multi-line value is laid out with the project's format configuration"

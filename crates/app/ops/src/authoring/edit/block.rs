@@ -121,12 +121,27 @@ impl Block {
         self.entity().span.end_line - 1
     }
 
-    pub fn entry(&self, name: &str) -> Option<&FieldEntry> {
-        self.entity()
+    /// Removes the later entries of `name` (and, inside its first entry, of each key it holds) that the graph build
+    /// drops (E081, ADR 0215); whether a line went. The spans are stale after it: the block is opened again.
+    pub fn drop_repeats(&mut self, name: &str) -> bool {
+        let nested = format!("{name}.");
+        let mut spans: Vec<SourceSpan> = self
+            .entity()
             .fields
-            .entries()
-            .iter()
-            .find(|e| e.key.as_str() == name)
+            .repeats()
+            .into_iter()
+            .filter(|r| r.path == name || r.path.starts_with(&nested))
+            .filter_map(|r| r.later.value_span.clone())
+            .collect();
+        spans.sort_by_key(|s| std::cmp::Reverse(s.start_line));
+        for span in &spans {
+            self.remove(span.start_line - 1, span.end_line - 1);
+        }
+        !spans.is_empty()
+    }
+
+    pub fn entry(&self, name: &str) -> Option<&FieldEntry> {
+        self.entity().fields.entry(name)
     }
 
     /// The leading whitespace of `line`.
