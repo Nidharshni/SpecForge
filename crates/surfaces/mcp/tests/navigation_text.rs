@@ -228,7 +228,6 @@ fn find_references_and_rename_agree_on_a_duplicate_declaration() {
 }
 
 /// A quoted reference is a reference: find_references lists it and rename edits it, at its ID inside the quotes (ADR 0218).
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "provide_mcp_rename_tool",
     verify = "a quoted reference is renamed inside its quotes, where find_references answers it"

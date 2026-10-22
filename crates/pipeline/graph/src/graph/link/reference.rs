@@ -80,14 +80,18 @@ impl Resolution<'_> {
         matches!(self, Self::Linked | Self::Mistyped { .. })
     }
 
-    /// Its diagnostic, if any, at the reference's span, else the entity's (the one span policy).
+    /// Its diagnostic, if any, at the reference's span (its ID, inside any quotes), else the entity's (the one span
+    /// policy).
     pub(super) fn diagnostic(
         &self,
         node: &Node,
         field: Sym,
         reference: &Reference<'_>,
     ) -> Option<Diagnostic> {
-        let span = reference.span.unwrap_or(&node.source_span).clone();
+        let span = reference
+            .span
+            .clone()
+            .unwrap_or_else(|| node.source_span.clone());
         match self {
             Self::Linked => None,
             Self::Mistyped {

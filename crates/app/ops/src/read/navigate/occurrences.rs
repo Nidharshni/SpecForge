@@ -32,7 +32,9 @@ pub struct Token {
     /// The entity it names.
     pub target: Sym,
     pub span: SourceSpan,
-    /// [`Precision::Entity`] when the compiled text does not spell the ID there (a stale or unread text).
+    /// [`Precision::Entity`] when the compiled text does not spell the ID there (a stale or unread text, or a
+    /// reference whose value has no bytes that spell its ID: an escape, a padded or multi-line triple-quoted string;
+    /// ADR 0218).
     pub precision: Precision,
 }
 
@@ -91,7 +93,8 @@ pub enum Role {
 
 /// `Token` when the span is the identifier as written; `Entity` when the compile holds no parse or text of the
 /// file, the parse read no name, or the text does not spell the ID there (a stale text, a spec block's quoted
-/// name), and the span falls back to the holder's block.
+/// name, a reference whose value has no bytes that spell its ID: an escape, a padded or multi-line triple-quoted
+/// string; ADR 0218), and the span falls back to the holder's block.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Shape)]
 #[serde(rename_all = "lowercase")]
 pub enum Precision {
@@ -183,8 +186,8 @@ impl Navigator<'_> {
 
     /// The occurrences of `id`, sorted by (file, line, column): each token the graph's finder reads, once per block
     /// that holds it (`held_by`: an inherited reference once per block that takes it; a default no block takes not at
-    /// all), and the declaration when asked. A token the compiled text does not spell is its holder's block with
-    /// [`Precision::Entity`].
+    /// all), and the declaration when asked. A token the compiled text does not spell (a reference whose value has no
+    /// bytes that spell its ID, ADR 0218, among them) is its holder's block with [`Precision::Entity`].
     ///
     /// shortcut: this walks every compiled file per call; add a per-project token index if a project of ~20k
     /// entities makes find_references slow.

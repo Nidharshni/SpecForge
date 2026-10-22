@@ -157,7 +157,9 @@ behavior link_entity_references "Link Entity References" {
     match exists. A reference whose field declares a target kind and that
     names an existing entity of another kind MUST be E022 at the
     reference, whether or not a loaded extension declares that kind; it
-    still links, so navigation and rename reach it.
+    still links, so navigation and rename reach it. A quoted reference is
+    written at its ID, inside its quotes: its E003, E022 or I004 is there,
+    and so is the token navigation reads (ADR 0218).
   """
   verify unit "reference list IDs create graph edges"
   verify unit "unresolvable reference produces E003"

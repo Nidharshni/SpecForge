@@ -364,7 +364,6 @@ iface X \"X\" {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
     );
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "link_entity_references",
     verify = "a quoted reference is written at its ID, inside its quotes"

@@ -91,7 +91,7 @@ fn references_of_a_reference_list_are_its_items_with_their_spans() {
     let references = forms.reading("doc", "see_also").references(&entry);
     let read: Vec<(&str, usize)> = references
         .iter()
-        .map(|r| (r.id, r.span.unwrap().start_col))
+        .map(|r| (r.id, r.span.as_ref().unwrap().start_col))
         .collect();
     assert_eq!(read, [("a", 3), ("b", 6)]);
 }

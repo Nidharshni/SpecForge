@@ -468,7 +468,8 @@ behavior rename_entity_id "Rename Entity ID" {
     a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
-    is not a reference and is not edited. The edits are positions in the
+    is not a reference and is not edited; a quoted reference is a reference,
+    edited inside its quotes. The edits are positions in the
     text the project was compiled from: a rename over a file whose text (an
     open buffer, else the file on disk) is no longer that text MUST be
     refused as ContentModified (-32801), never applied from stale positions;
@@ -953,7 +954,8 @@ behavior code_action_replace_unresolved "Code Action: Replace an Unresolved Refe
   contract   """
     For an unresolved reference (E003) or import (E025) whose data names a
     close match (did_you_mean), the LSP and MCP specforge.suggest_fixes MUST
-    offer one quick fix that replaces the unresolved token with the match.
+    offer one quick fix that replaces the unresolved token with the match
+    (inside its quotes for a quoted reference).
     Target, path and match MUST be read from the diagnostic's data, never
     its message or suggestion text.
   """

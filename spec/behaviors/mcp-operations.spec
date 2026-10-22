@@ -147,7 +147,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     written in a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
-    is not a reference and is not edited. The response MUST include the list of
+    is not a reference and is not edited; a quoted reference is a reference,
+    edited inside its quotes. The response MUST include the list of
     TextEdit operations applied, each a span as find_references returns it
     (1-based lines and byte columns). When dry_run is true, the tool MUST return
     the rename plan (affected files and TextEdit operations) without applying

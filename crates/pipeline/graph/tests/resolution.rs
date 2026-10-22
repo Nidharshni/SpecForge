@@ -243,7 +243,6 @@ fn a_wrong_kind_id_of_an_absent_kind_is_e022_naming_its_provider() {
     );
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "link_entity_references",
     verify = "a quoted reference is written at its ID, inside its quotes"

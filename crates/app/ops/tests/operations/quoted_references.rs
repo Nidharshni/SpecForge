@@ -24,7 +24,6 @@ fn quoted() -> Compiled {
     compile(SOFTWARE, &[("main.spec", QUOTED)])
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "rename_entity_id",
     verify = "rename edits a quoted reference inside its quotes"
@@ -44,7 +43,6 @@ fn rename_edits_a_quoted_reference_inside_its_quotes() {
     assert!(text.contains("produces [\"ev_first\", ev_two]"), "{text}");
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "provide_mcp_find_references_tool",
     verify = "find_references answers a quoted reference at its ID, token-precise"
@@ -74,7 +72,6 @@ fn references_answer_a_quoted_reference_at_its_id() {
     );
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "prepare_rename",
     verify = "prepare rename answers on a quoted reference, inside its quotes"
@@ -89,7 +86,6 @@ fn the_token_at_a_quoted_reference_is_its_id() {
     assert!(nav.occurrence_at("main.spec", 5, 11).is_none());
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "code_action_replace_unresolved",
     verify = "a quoted unresolved reference with a close match is replaced inside its quotes"

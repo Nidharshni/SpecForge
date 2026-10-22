@@ -492,11 +492,12 @@ impl<'f> Target<'f> {
     }
 }
 
-/// One id a field's value references and where it is written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One id a field's value references and where it writes it: the ID's own bytes, inside the quotes of a quoted
+/// value ([`spell::id_span`], ADR 0218); `None` for a value built without a position.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reference<'v> {
     pub id: &'v str,
-    pub span: Option<&'v SourceSpan>,
+    pub span: Option<SourceSpan>,
 }
 
 /// How a (kind, field) reads: see [`FieldForms::reading`].
@@ -523,18 +524,27 @@ impl Reading<'_> {
     /// | declared `string_list` | none | a scheme ref ID |
     /// | other declared types, a member | none | none |
     /// | undeclared | none | a bare word or a scheme ref ID |
+    ///
+    /// Each reference's span is where it writes its ID ([`spell::id_span`]): inside the quotes of a quoted value.
     pub fn references<'v>(&self, entry: &'v FieldEntry) -> Vec<Reference<'v>> {
         let item = |item: &'v ListItem| Reference {
             id: item.text.as_str(),
-            span: Some(&item.span),
+            span: Some(spell::id_span(item.written, &item.span, &item.text)),
         };
         match (self, &entry.value) {
             (Self::Declared(form), FieldValue::Identifier(id) | FieldValue::String(id))
                 if form.field_type() == FieldType::Reference =>
             {
+                let written = match entry.value {
+                    FieldValue::String(_) => Written::Quoted,
+                    _ => Written::Bare,
+                };
                 vec![Reference {
                     id: id.as_str(),
-                    span: entry.value_span.as_ref(),
+                    span: entry
+                        .value_span
+                        .as_ref()
+                        .map(|span| spell::id_span(written, span, id)),
                 }]
             }
             (Self::Declared(form), FieldValue::List(items)) => match form.field_type() {

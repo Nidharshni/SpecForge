@@ -43,6 +43,8 @@ pub struct WrittenToken {
     pub held_by: Vec<Sym>,
     /// The entry's key, or the derived field a type name links through.
     pub field: Sym,
+    /// Where it writes the ID: the ID's own bytes, inside the quotes of a quoted reference (ADR 0218).
+    /// Where it writes the ID: the ID's own bytes, inside the quotes of a quoted reference (ADR 0218).
     pub span: SourceSpan,
     pub form: Form,
 }
@@ -200,7 +202,7 @@ fn read_entry(
                 holder,
                 held_by: Vec::new(),
                 field: entry.key,
-                span: span.clone(),
+                span,
                 form,
             });
         }
