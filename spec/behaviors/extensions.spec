@@ -1126,6 +1126,10 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "a known-keys store that can't be read refuses the install and is left as it was"
   verify integration "with no pin of the user's, the key specforge.lock records is the pin"
   verify integration "a user's pin wins over the key specforge.lock records"
+  verify unit "an unsigned package is refused for a name with an expected key, whatever --allow-unsigned and consent"
+  verify integration "an unsigned package for a pinned name is refused before its download"
+  verify integration "a known-keys store that can't be read refuses an unsigned install too"
+  verify integration "with no pin of the user's, an unsigned version of a name specforge.lock records a key for is refused by add and update, and the lock keeps its key"
 }
 
 behavior configure_registries "Configure Registries" {

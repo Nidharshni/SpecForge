@@ -22,6 +22,7 @@ mod determinism;
 mod docs_relations;
 mod docs_truth;
 mod edit;
+mod expected_publisher;
 mod explain;
 mod export;
 mod export_markdown;

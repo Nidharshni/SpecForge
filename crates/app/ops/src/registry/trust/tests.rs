@@ -268,3 +268,53 @@ fn a_change_from_the_locked_key_names_specforge_lock() {
         "key change rejected for '@acme/tool': pinned 'k1' but package is signed 'k2' (the key specforge.lock records)"
     );
 }
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "an unsigned package is refused for a name with an expected key, whatever --allow-unsigned and consent"
+)]
+#[ignore = "flipped by T3"]
+fn an_unsigned_package_is_refused_for_a_name_with_an_expected_key() {
+    let unsigned = |pin, locked, asking| Row {
+        signer: Signer::Unsigned,
+        allow_unsigned: true,
+        pin,
+        locked,
+        asking,
+        ..ROW
+    };
+    for (what, row) in [
+        ("user pin", unsigned(Some("k1"), None, Asking::Nobody)),
+        ("lock key", unsigned(None, Some("k1"), Asking::Nobody)),
+        ("user pin, consent", unsigned(Some("k1"), None, Asking::Yes)),
+        ("lock key, consent", unsigned(None, Some("k1"), Asking::Yes)),
+        (
+            "user pin, not allowed",
+            Row {
+                allow_unsigned: false,
+                ..unsigned(Some("k1"), None, Asking::Nobody)
+            },
+        ),
+    ] {
+        let error = decide(&row).expect_err(what);
+        assert_eq!(error.code, "R-TRUST-007", "{what}: {error:?}");
+        assert_eq!(error.kind, OpErrorKind::PermissionDenied, "{what}");
+    }
+    assert_eq!(
+        decide(&unsigned(Some("k1"), Some("k2"), Asking::Nobody))
+            .unwrap_err()
+            .message,
+        "package '@acme/tool' is not signed, but its publisher key is pinned to 'k1'"
+    );
+    assert_eq!(
+        decide(&unsigned(None, Some("k1"), Asking::Nobody))
+            .unwrap_err()
+            .message,
+        "package '@acme/tool' is not signed, but specforge.lock records its publisher key 'k1'"
+    );
+    // Nothing expected: --allow-unsigned decides, as today.
+    assert_eq!(
+        decide(&unsigned(None, None, Asking::Nobody)).unwrap(),
+        Publisher::Unsigned
+    );
+}
