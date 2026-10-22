@@ -59,6 +59,8 @@ names the chain that does. The rule judges workspace crates. The members that de
 ed25519 today are the client and the wire crate; a new direct dependency on one of them from another member
 would escape the rule.
 
+**Amended by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (2026-10-22):** `published` takes the `TrustPolicy`; the publisher decision is `TrustPolicy::decide`.
+
 **Amended by ADR 0086 (2026-10-14):** `Trust` is defined in `specforge_ops::registry`, beside `TrustPolicy`, and named `registry::Trust`; the port names no extension module.
 
 **Amended in architecture round 20 (plan 10):** the port also opens (`Registry::open`): the refusal of the whole project, once (ADR 0044 as amended).

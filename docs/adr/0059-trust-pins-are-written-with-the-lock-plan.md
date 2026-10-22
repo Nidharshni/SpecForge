@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-12). Amends ADR 0010, ADR 0028 D4, ADR 0041 (amendment A1), ADR 0044 D4.
 **D3 and D5 extended by [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) (round 22):** the fetch is held to the lock entry's whole pin (its bytes at its version, R014), and contract clause C12 holds both adapters to it.
+**D5 amended by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (round 24):** the decision is `TrustPolicy::decide`; the allowlist and the deny list are in the contract (C14).
 D2's `commit_with(config, last)` sentence amended by [ADR 0128](0128-one-project-change-over-held-files.md): `last` is the operation's project change (`specforge.json`, the `Also` files, then the pins); the change no longer names the files.
 
 The fetch policy pinned a publisher key while it checked the signature (`check_and_pin`), that is, while

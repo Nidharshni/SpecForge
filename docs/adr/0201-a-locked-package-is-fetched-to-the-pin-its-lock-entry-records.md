@@ -4,6 +4,7 @@
 D3 (the lock's pin, not its key alone) and D5 (contract clause C12), [ADR 0065](0065-every-extension-change-is-one-lock-plan-change.md)
 D3 (a dry run refuses a locked version's other bytes from the manifest) and [ADR 0138](0138-the-lock-plan-answers-what-a-project-already-has.md)
 D1 (an entry that pins no hash is never already installed).
+**D3 amended by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (round 24):** the preview's R014 is the adapter's, in `Registry::published`.
 
 ## Context
 

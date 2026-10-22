@@ -33,25 +33,26 @@ registries it trusts in `specforge.json`:
 
 ## What is verified
 
-Every registry install performs four checks, in order:
+Every registry install performs four checks, in order. The first two are decided from the registry's reply, **before the
+binary is downloaded**, and `specforge add --dry-run` runs them too:
 
-1. **Integrity** — the downloaded wasm bytes must match the `sha256` the
-   registry reports (transfer-level check).
-2. **Publisher signature** — packages uploaded via `specforge publish` carry an
+1. **Publisher signature** — packages uploaded via `specforge publish` carry an
    Ed25519 signature object `{sig, public_key, signed_at}` over the canonical payload
    `{name, version, wasmSha256, manifestSha256, signedAt}`. The registry refuses an upload
    whose signature isn't one or doesn't verify over it (`INVALID_SIGNATURE`), so a stored
    package's signature verified once already. The client
-   re-derives the payload from the **downloaded wasm bytes** and the
+   re-derives the payload from the **`sha256` the registry reports** and the
    **manifest the registry serves** (the package's extension declaration,
    which `specforge publish` derives from the binary; ADR 0012) and verifies the signature with the public
-   key carried inside the signature object. A tampered binary *or* a swapped
-   manifest breaks verification.
-3. **Key policy (TOFU)** — a package must be signed by its pinned key: yours in
+   key carried inside the signature object. A swapped manifest or other digests
+   break verification.
+2. **Key policy (TOFU)** — a package must be signed by its pinned key: yours in
    `~/.specforge/known-keys.json`, or, when you have none, the key the project's
    `specforge.lock` records for it. With neither, the first verified key is
    trusted on first use. The key is pinned in both places when the install is
    written; an install that is refused or fails pins nothing.
+3. **Integrity** — the downloaded wasm bytes must match the `sha256` the
+   registry reports, which the signature covered, so it covers the bytes.
 4. **Declaration** — once loaded, the binary's own declaration must equal the
    served one, field for field; the peers the served one declares are what the
    version-diamond check decided on before anything was loaded.
@@ -68,14 +69,14 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Manifest missing or unreadable | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)): it declares the peers the diamond check needs, so it is never read as "no peers" |
 | Manifest published before extension declarations (it carries `manifestVersion`) | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)), suggesting to re-publish the package with this version of `specforge publish` |
 | Binary declares other than the served declaration | **Always refused** ([R-TRUST-004](diagnostics.md#r-trust-004)), naming the first category that differs |
-| Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
-| Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
+| Package unsigned | Refused before the download; `--dry-run` reports it. `--allow-unsigned` accepts the risk explicitly |
+| Signature doesn't verify (other digests or a swapped manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)) before the download; `--dry-run` reports it: `--allow-unsigned` does not bypass a broken signature |
 | Registry answer isn't the protocol's (e.g. a signature that isn't one, or a 404 without the protocol's NOT_FOUND error: the url isn't a registry's root) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
 | The version `specforge.lock` pins, served as other bytes | **Always refused** ([R014](diagnostics.md#r014)) before the download and before any key question; `--yes` does not accept it; `--dry-run` reports it. Remove the extension and add it again to take the new bytes |
-| Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
+| Key differs from the pinned key | Refused with both key ids before the download; `--dry-run` reports it; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
 | Key differs from the key `specforge.lock` records (no pin of yours) | Refused like a pinned key change, naming `specforge.lock`; `--yes` or a yes at the prompt accepts it |
-| `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)); the file is never overwritten |
-| Key on your `denied_keys` list | Refused outright (config-level revocation) |
+| `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)) before the download; `--dry-run` reports it; the file is never overwritten |
+| Key on your `denied_keys` list | Refused outright (config-level revocation) before the download; `--dry-run` reports it |
 | Key on your `trusted_keys` allowlist | Accepted without a prior pin (pre-seeded trust) |
 
 ## Managing keys

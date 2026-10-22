@@ -391,8 +391,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `specforge.json` included, whose last step pins the publisher keys its fetches accepted
   (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
   checked and not committed: it answers what the operation would, its refusal included, and writes,
-  pins and downloads nothing; a registry package is judged by its published manifest
-  (`Registry::published`). The lock the change leaves is built when the plan is checked, from the lock as read and what
+  pins and downloads nothing; a registry package is judged by its published manifest and its
+  publisher decided (`Registry::published`). The lock the change leaves is built when the plan is checked, from the lock as read and what
   it staged; a change that stages nothing accepts any lock (ADR 0165). A change that installs or uninstalls refuses a
   `specforge.lock` that is there and can't be read once, before anything is read (E033, the lock's own remedy,
   `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
@@ -602,14 +602,20 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registry root), `secrets/`, `signing-key.json` and `known-keys.json`, each written by **private replace**. `User::current()` is `~/.specforge`,
   `User::at(dir)` any other; nothing else reads them, and login, logout, doctor, fetch, search and publish ask it (ADR 0178).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
-  a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
-  package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with the
-  expected key: the user's **key pin** for the name, else the key the project's `specforge.lock` records, else
-  any (trust on first use), and, at the version the project's lock pins, the bytes it pins (**locked pin**) (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044, 0059). The fetch decides and
+  a malformed signature is that) and names the package and version asked for, the served manifest reads as that
+  package's declaration (one from before ADR 0012 is refused), at the version the project's lock pins the bytes it pins
+  (**locked pin**), the publisher signature verifies over what the reply describes and the publisher is decided (the
+  **trust decision**), and only then is the binary downloaded and held to the served SHA-256, so the signature covers it
+  (`ConfiguredRegistry::published` and `fetch`; ADR 0010, 0012, 0044, 0059, 0213). The fetch decides and
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
   fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
   re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
   check writes nothing to the terminal: a key change is put to the policy's **Asking**.
+- **Trust decision**: how a registry package's publisher is accepted, decided once from what the registry describes, before any
+  download, for a dry run as for an install: unsigned (R-TRUST-001 unless allowed), a denied key (R-TRUST-005, whatever the
+  consent), the expected key (the user's **key pin**, else the **locked pin**'s key, else first use), a key change (accepted for
+  a `trusted_keys` key, else put to **Asking**, R-TRUST-003). `specforge_ops::registry::TrustPolicy::decide`; the adapter
+  verifies the signature (R-TRUST-002) and reads the user's store (R-TRUST-006) (ADR 0213).
 - **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
   (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
