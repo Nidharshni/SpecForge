@@ -143,7 +143,6 @@ pub(crate) const SHAPES: &str = "behavior dated \"Dated\" {\n  contract 2026-10-
     behavior bare \"Bare\" {\n  contract widget\n  produces [logged_in]\n}\n\
     event logged_in \"Logged in\" {\n}\n";
 
-#[ignore = "flipped by T3"]
 #[specforge_test(
     behavior = "select_entities_over_the_view",
     verify = "the text search reads every field by the field-text rule, as the field filter does"

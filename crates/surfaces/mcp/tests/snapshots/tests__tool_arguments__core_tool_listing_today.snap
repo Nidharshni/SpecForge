@@ -1476,7 +1476,7 @@ expression: listing
   },
   {
     "name": "specforge.search",
-    "description": "Find entities by id, title or string field text, ranked as the LSP ranks them (exact, prefix, substring, field text, then fuzzy)",
+    "description": "Find entities by id, title or field text, ranked as the LSP ranks them (exact, prefix, substring, field text, then fuzzy)",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

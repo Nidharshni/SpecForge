@@ -422,11 +422,12 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   }
   contract   """
     Search MUST find the entities whose id or title matches the text, or
-    whose string field text contains it, ranked exact, prefix, substring,
-    field text, then Jaro-Winkler similarity of at least 0.8 over id and
-    title. An empty text matches every entity. Every filter is ANDed: kinds,
-    a field's text (by the one field-text rule: a list by its items, an
-    expression by its written form, a block by its keys), and references
+    whose field text (by the one field-text rule: a list by its items, an
+    expression by its written form, a block by its keys) contains it,
+    ranked exact, prefix, substring, field text, then Jaro-Winkler
+    similarity of at least 0.8 over id and title. An empty text matches
+    every entity. Every filter is ANDed: kinds, a field's text (by the same
+    rule), and references
     (the entities that reference the named one; an entity the graph lacks is
     E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
