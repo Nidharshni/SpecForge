@@ -384,7 +384,8 @@ impl<'d> Cursor<'d> {
     /// What the cursor names, asked in this order: a `use` binding's
     /// imported name that names an entity; the `use` statement it is on;
     /// the declaration or reference token under it (navigation's
-    /// occurrence, token-precise); an identifier or scheme ref ID at a
+    /// occurrence, token-precise; a quoted reference's ID inside its string
+    /// included); an identifier or scheme ref ID at a
     /// reference position that names an entity of the graph; the field
     /// whose name it is on. `None` otherwise: a word in a string or a
     /// comment, a kind keyword, a keyword and a value of a field typed as
@@ -435,14 +436,16 @@ impl<'d> Cursor<'d> {
                 path: path.to_string(),
             });
         }
-        if self.place() != Place::Code {
-            return None;
-        }
+        // Navigation's token answers wherever it is written: a quoted reference's ID is one, inside a string
+        // (ADR 0218). Any other word of a string or a comment names nothing.
         if let Some(occurrence) = occurrence() {
             return Some(Target::Entity {
                 id: occurrence.target,
                 origin: self.index.range(&occurrence.span),
             });
+        }
+        if self.place() != Place::Code {
+            return None;
         }
         let word = word?;
         let forms = view.registries().field_forms();

@@ -51,7 +51,6 @@ fn prepare_rename_on_a_quoted_reference_is_its_id() {
     assert_eq!(range(r), "1:10-1:14");
 }
 
-#[ignore = "flipped by T6"]
 #[spec(
     invariant = "cursor_names_one_entity",
     verify = "a quoted reference under the cursor names its entity"
