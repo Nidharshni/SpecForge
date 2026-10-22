@@ -1124,6 +1124,7 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
   verify unit "the presented JSON is valid and parseable"
   verify unit "the span is nested beside the flat location, with its end positions"
   verify unit "a typed payload is presented under data, and its absence adds no key"
+  verify unit "a diagnostic about entities without a span of its own is located at the first one's block"
   verify integration "check and MCP validate present the same diagnostics identically"
   verify contract "Present Diagnostics as JSON: JSON diagnostic presentation holds — diagnostics_collected, one_shape_everywhere, location_both_ways, data_only_when_typed"
 }
