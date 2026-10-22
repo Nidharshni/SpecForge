@@ -16,7 +16,8 @@ struct Pair {
     cli: &'static [&'static str],
     /// `specforge`'s exit: 0 answered, 1 refused by the operation or a failed verdict, 2 refused by clap.
     exit: i32,
-    /// A tool, or a prompt (`specforge://prompts/...`).
+    /// A tool, a prompt (`specforge://prompts/...`), or a resource (`specforge://<view>?<query>`), whose
+    /// arguments are none.
     tool: &'static str,
     arguments: fn() -> Value,
 }
@@ -430,6 +431,55 @@ const PAIRS: &[Pair] = &[
         tool: "specforge.edit",
         arguments: || json!({"dry_run": true, "edits": [{"op": "delete", "entity_id": "rule_one"}]}),
     },
+    Pair {
+        label: "export_kinds_list_spaced",
+        project: rv1,
+        cli: &[
+            "export",
+            "--path",
+            "{root}",
+            "--format",
+            "brief",
+            "--kinds",
+            "behavior, type",
+        ],
+        exit: 0,
+        tool: "specforge://brief?kinds=behavior,%20type",
+        arguments: || Value::Null,
+    },
+    Pair {
+        label: "export_kinds_list_empty_item",
+        project: rv1,
+        cli: &[
+            "export",
+            "--path",
+            "{root}",
+            "--format",
+            "brief",
+            "--kinds",
+            "behavior,",
+        ],
+        exit: 0,
+        tool: "specforge://brief?kinds=behavior,",
+        arguments: || Value::Null,
+    },
+    Pair {
+        label: "query_kinds_list",
+        project: rv1,
+        cli: &[
+            "query",
+            "Color",
+            "--path",
+            "{root}",
+            "--format",
+            "brief",
+            "--kinds",
+            "type, behavior",
+        ],
+        exit: 0,
+        tool: "specforge.query",
+        arguments: || json!({"entity_id": "Color", "format": "brief", "kinds": ["type", "behavior"]}),
+    },
 ];
 
 /// `rv1` with a behavior that has a category, an invariant link and two verify lines, and the invariants.
@@ -507,6 +557,8 @@ fn pair(label: &str) -> (Outcome, Outcome) {
     );
     let call = if row.tool.starts_with("specforge://prompts/") {
         json!({"method": "prompts/get", "params": {"name": row.tool, "arguments": (row.arguments)()}})
+    } else if row.tool.starts_with("specforge://") {
+        json!({"method": "resources/read", "params": {"uri": row.tool}})
     } else {
         json!({"name": row.tool, "arguments": (row.arguments)()})
     };
@@ -661,4 +713,45 @@ fn every_edit_verb_is_one_request_on_both_surfaces() {
         assert!(!document["diff"].as_str().unwrap().is_empty(), "{label}");
     }
     assert_eq!(pair("edit_delete_referenced").0, Outcome::Refused);
+}
+
+/// The kinds of the nodes a row's surfaces both answered.
+fn kinds_of(label: &str) -> std::collections::BTreeSet<String> {
+    answered(label)["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["kind"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "export_agent_graph_format",
+    verify = "a kinds list written as text names the same kinds on the command line and in a graph resource's query: the items between commas, each trimmed, an empty item a kind the project does not know"
+)]
+fn a_kinds_list_written_as_text_is_one_filter_on_every_surface() {
+    assert_eq!(
+        kinds_of("export_kinds_list_spaced"),
+        ["behavior", "type"].map(String::from).into()
+    );
+    assert_eq!(
+        kinds_of("export_kinds_list_empty_item"),
+        ["behavior"].map(String::from).into()
+    );
+}
+
+#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "query_graph_multi_resolution",
+    verify = "specforge query --kinds reads a kinds list as specforge export --kinds does, and answers what specforge.query answers for its items"
+)]
+fn query_kinds_is_a_kinds_list_as_exports_is() {
+    let ids: Vec<String> = answered("query_kinds_list")["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids.len(), 3, "Color and its two variants: {ids:?}");
 }
