@@ -7,7 +7,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, SourceSpan};
-use specforge_graph::FieldJson;
+use specforge_graph::{AnnotationJson, FieldJson, MethodJson};
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts, obligation_text};
 use std::collections::BTreeMap;
 
@@ -52,6 +52,12 @@ pub struct Reply {
     /// Every field, whatever the kind names its text, as every output
     /// writes it (`FieldJson`).
     fields: BTreeMap<String, FieldJson>,
+    /// Each annotated field's annotations, by its name (a block field's entry's by `outer.key`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    annotations: BTreeMap<String, Vec<AnnotationJson>>,
+    /// Its methods, as the graph export writes them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    methods: Vec<MethodJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     verify_declarations: Option<Vec<String>>,
     referenced_by: Vec<String>,
@@ -81,7 +87,7 @@ impl CoreTool for Tool {
         group: ToolGroup::Navigation,
     };
     const SPEC: ReplySpec = ReplySpec::Type("McpInspectResult");
-    const OPEN_VALUES: &'static [&'static str] = &["$.fields"];
+    const OPEN_VALUES: &'static [&'static str] = &["$.fields", "$.annotations"];
     type Args = Args;
     type Input = View;
     type Returns = Answered<Reply>;
@@ -111,7 +117,9 @@ impl Reply {
             source_extension: facts.kind.map(|kind| kind.source_extension.to_string()),
             source_span: node.source_span.clone(),
             contract: facts.headline.as_ref().map(ToString::to_string),
-            fields: specforge_graph::field_form::write_fields(&node.fields),
+            fields: facts.members.fields.clone(),
+            annotations: facts.members.annotations.clone(),
+            methods: facts.members.methods.clone(),
             verify_declarations: declared
                 .then(|| facts.obligations.iter().map(obligation_text).collect()),
             referenced_by: refs.referenced_by().into_iter().map(String::from).collect(),

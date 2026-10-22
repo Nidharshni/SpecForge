@@ -3,7 +3,6 @@
 
 use super::*;
 use serde_json::{Value, json};
-use specforge_graph::field_form;
 
 const SOFTWARE_FORMAL: &[&str] = &["@specforge/software", "@specforge/formal"];
 
@@ -133,7 +132,8 @@ fn every_verb_leaves_a_field_written_twice_written_once() {
         let after = compile(SOFTWARE_FORMAL, &[("g.spec", &text)]);
         // The graph JSON, as export and query write a node's fields.
         let value = after.project.graph().node(id).map_or(Value::Null, |n| {
-            field_form::write_fields(&n.fields)
+            specforge_graph::Members::new(&n.fields, &[])
+                .fields
                 .get(field)
                 .map_or(Value::Null, |v| {
                     serde_json::to_value(v).unwrap_or(Value::Null)

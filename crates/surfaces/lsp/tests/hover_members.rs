@@ -18,7 +18,6 @@ port order_store "Order store" {
     behavior = "provide_extension_entity_hover",
     verify = "hover lists the entity's methods and each field's annotations"
 )]
-#[ignore = "flipped by T5"]
 fn hover_lists_methods_and_annotations() {
     let project = Served::new(&[("main.spec", TEXT)])
         .extension("@t/soft", |c| {

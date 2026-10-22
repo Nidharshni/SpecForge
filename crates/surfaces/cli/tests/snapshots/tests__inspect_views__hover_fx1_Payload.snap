@@ -24,7 +24,7 @@ A data structure or domain model definition
 ---
 
 **Fields**
-- `verify` = `string`
+- `verify` = `string` @optional
 
 ---
 

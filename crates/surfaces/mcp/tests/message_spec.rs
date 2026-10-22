@@ -691,6 +691,9 @@ macro_rules! reply_type {
 
 reply_type! {
     mcp_inspect_result => "McpInspectResult", "McpInspectResult schema is valid",
+    annotation_json => "AnnotationJson", "AnnotationJson schema is valid",
+    parameter_json => "ParameterJson", "ParameterJson schema is valid",
+    method_json => "MethodJson", "MethodJson schema is valid",
     mcp_definition_result => "McpDefinitionResult", "McpDefinitionResult schema is valid",
     mcp_reference_location => "McpReferenceLocation", "McpReferenceLocation schema is valid",
     mcp_reference_result => "McpReferenceResult", "McpReferenceResult schema is valid",

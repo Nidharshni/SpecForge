@@ -32,7 +32,6 @@ fn tool(server: &mut Served, name: &str, args: Value) -> Value {
     behavior = "inspect_entity_facts",
     verify = "an entity's facts carry its methods and its fields' annotations as the graph export writes them"
 )]
-#[ignore = "flipped by T5"]
 fn inspect_answers_methods_and_annotations() {
     let mut server = served();
     for (id, key) in [("order_store", "methods"), ("Order", "annotations")] {
@@ -54,7 +53,6 @@ fn inspect_answers_methods_and_annotations() {
     behavior = "provide_mcp_context_prompt",
     verify = "the context prompt carries the entity's methods and its fields' annotations, a structural constraint's too"
 )]
-#[ignore = "flipped by T5"]
 fn the_context_prompt_carries_methods_and_annotations() {
     let mut server = served();
     let resp = get_prompt(

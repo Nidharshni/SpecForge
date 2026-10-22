@@ -1,9 +1,7 @@
 //! What an entity holds is written once (ADR 0222): the delta reports a changed annotation as its
 //! field's change and a method edit as the methods aspect, at any depth.
 
-use specforge_graph::{
-    GraphDelta, Members, NodeAspect, build_graph, compute_graph_delta, field_form::write_fields,
-};
+use specforge_graph::{GraphDelta, Members, NodeAspect, build_graph, compute_graph_delta};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -89,7 +87,6 @@ fn members_are_written_without_positions() {
     for position in ["span", "start_line", "file"] {
         assert!(!annotations.contains(position) && !methods.contains(position));
     }
-    assert_eq!(order.fields, write_fields(&entities[0].fields));
     let paths: Vec<&str> = order.annotations.keys().map(String::as_str).collect();
     assert_eq!(paths, ["address.street", "id", "note"]);
     // A key written twice is its first entry.

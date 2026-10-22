@@ -317,7 +317,7 @@ fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
     let view = ProjectView::of(&p.project);
     let facts = inspect(&view, "beh").unwrap();
     assert_eq!(facts.headline, Some("first contract"));
-    let fields = specforge_graph::field_form::write_fields(&facts.node.fields);
+    let fields = facts.members.fields.clone();
     assert_eq!(
         serde_json::to_value(&fields["contract"]).unwrap(),
         serde_json::json!("first contract")

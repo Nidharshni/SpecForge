@@ -276,6 +276,31 @@ fn assert_hover_and_inspect_agree(served: &mut Served, file: &str) {
             "{id}: reference counts"
         );
 
+        // The members (ADR 0222): the Methods lines are inspect's methods, and a top-level
+        // field's line ends with its annotations as inspect lists them.
+        let methods = inspect["methods"].as_array().map_or(0, Vec::len);
+        let listed = section("**Methods**").map_or(0, |s| s.lines().count() - 1);
+        assert_eq!(listed, methods, "{id}: methods\n{hover}");
+        for (path, annotations) in inspect["annotations"].as_object().into_iter().flatten() {
+            if path.contains('.') {
+                continue;
+            }
+            let spelled: String = annotations
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| match a["value"].as_str() {
+                    Some(value) => format!(" @{} {value:?}", a["name"].as_str().unwrap()),
+                    None => format!(" @{}", a["name"].as_str().unwrap()),
+                })
+                .collect();
+            let line = hover
+                .lines()
+                .find(|l| l.starts_with(&format!("- `{path}` = ")))
+                .unwrap_or_else(|| panic!("{id}: no line for `{path}`\n{hover}"));
+            assert!(line.ends_with(&spelled), "{id}: {line} vs {spelled}");
+        }
+
         // The diagnostics: those under the cursor and those listed, as a
         // multiset, are inspect's.
         let mut shown: Vec<String> = sections[..header_at].iter().map(|s| code_of(s)).collect();

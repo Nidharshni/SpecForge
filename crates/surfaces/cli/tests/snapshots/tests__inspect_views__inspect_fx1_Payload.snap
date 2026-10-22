@@ -3,6 +3,13 @@ source: crates/surfaces/cli/tests/inspect_views.rs
 expression: "normalized(result, root)"
 ---
 {
+  "annotations": {
+    "verify": [
+      {
+        "name": "optional"
+      }
+    ]
+  },
   "coverage_status": "covered",
   "declared": true,
   "diagnostics": [

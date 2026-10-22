@@ -2290,6 +2290,21 @@ expression: listing
     },
     "outputSchema": {
       "$defs": {
+        "AnnotationJson": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
         "Diagnostic": {
           "additionalProperties": false,
           "properties": {
@@ -2561,6 +2576,53 @@ expression: listing
             }
           ]
         },
+        "MethodJson": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "params": {
+              "items": {
+                "$ref": "#/$defs/ParameterJson"
+              },
+              "type": "array"
+            },
+            "returns": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "params"
+          ],
+          "type": "object"
+        },
+        "ParameterJson": {
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "items": {
+                "$ref": "#/$defs/AnnotationJson"
+              },
+              "type": "array"
+            },
+            "name": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
         "SourceSpan": {
           "additionalProperties": false,
           "properties": {
@@ -2596,6 +2658,15 @@ expression: listing
       },
       "additionalProperties": false,
       "properties": {
+        "annotations": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/AnnotationJson"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
         "contract": {
           "type": "string"
         },
@@ -2629,6 +2700,12 @@ expression: listing
         },
         "kind": {
           "type": "string"
+        },
+        "methods": {
+          "items": {
+            "$ref": "#/$defs/MethodJson"
+          },
+          "type": "array"
         },
         "obligated": {
           "type": "boolean"

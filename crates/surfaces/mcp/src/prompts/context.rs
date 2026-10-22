@@ -4,8 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_graph::FieldJson;
-use specforge_graph::field_form::write_fields;
+use specforge_graph::{AnnotationJson, FieldJson, Members, MethodJson};
 
 use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
@@ -29,8 +28,12 @@ impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/context";
     const DESCRIPTION: &'static str = "Get structured context for implementing an entity";
     const SPEC: &'static str = "McpContextPromptResult";
-    const OPEN_VALUES: &'static [&'static str] =
-        &["$.fields", "$.structural_constraint_entities[].fields"];
+    const OPEN_VALUES: &'static [&'static str] = &[
+        "$.fields",
+        "$.annotations",
+        "$.structural_constraint_entities[].fields",
+        "$.structural_constraint_entities[].annotations",
+    ];
     type Args = Args;
     type Payload = Payload;
 
@@ -49,6 +52,12 @@ pub struct Payload {
     pub contract_text: String,
     /// Every field the entity declares, by name: an open value.
     pub fields: BTreeMap<String, FieldJson>,
+    /// Each annotated field's annotations, by its name: an open value.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub annotations: BTreeMap<String, Vec<AnnotationJson>>,
+    /// Its methods, as the graph export writes them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub methods: Vec<MethodJson>,
     pub upstream_entities: Vec<String>,
     pub downstream_entities: Vec<String>,
     pub verify_expectations: Vec<String>,
@@ -67,6 +76,10 @@ pub struct ConstraintEntity {
     pub title: String,
     /// Every field it declares, by name: an open value.
     pub fields: BTreeMap<String, FieldJson>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub annotations: BTreeMap<String, Vec<AnnotationJson>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub methods: Vec<MethodJson>,
 }
 
 /// `specforge://prompts/context`'s arguments.
@@ -119,11 +132,18 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     .with_argument("structural_constraints"),
             ));
         };
+        let Members {
+            fields,
+            annotations,
+            methods,
+        } = Members::of(constraint);
         constraint_entities.push(ConstraintEntity {
             entity_id: constraint.id.raw.to_string(),
             kind: constraint.kind.raw.to_string(),
             title: constraint.title.clone().unwrap_or_default(),
-            fields: write_fields(&constraint.fields),
+            fields,
+            annotations,
+            methods,
         });
     }
 
@@ -133,7 +153,9 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         contract_text: contract_text.to_string(),
         // Every field, whatever the kind names its text: an invariant's
         // `guarantee`, a decision's `rationale`.
-        fields: write_fields(&node.fields),
+        fields: facts.members.fields,
+        annotations: facts.members.annotations,
+        methods: facts.members.methods,
         upstream_entities: upstream,
         downstream_entities: downstream,
         verify_expectations,
