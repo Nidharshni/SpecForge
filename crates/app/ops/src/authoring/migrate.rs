@@ -309,21 +309,21 @@ pub struct Verdict {
 }
 
 impl Verdict {
-    /// Why the migration is refused, or `None` when it is kept: a hook that failed; else a graph that changed, as
-    /// "does not compile" when the planned project has errors the project has not, else as W054s.
+    /// Why the migration is refused, or `None` when it is kept: a hook that failed; else errors the planned
+    /// project has that the project has not; else a graph that changed (as W054s).
     pub fn refusal(&self) -> Option<Failure> {
         if !self.hook_failures.is_empty() {
             return Some(Failure::HookFailed {
                 hooks: self.hook_failures.clone(),
             });
         }
-        if self.graph_delta.is_empty() {
-            return None;
-        }
         if self.added_errors > 0 {
             return Some(Failure::DoesNotCompile {
                 errors: self.added_errors,
             });
+        }
+        if self.graph_delta.is_empty() {
+            return None;
         }
         Some(Failure::ChangedGraph {
             differences: structural_differences(&self.graph_delta).len(),

@@ -355,9 +355,11 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     change the delta names MUST be reported as one W054 warning: an
     entity removed or added, an entity whose content changed (naming
     what changed, in the delta's words), and an edge removed or added.
-    A non-empty delta refuses the migration: nothing is written. New
-    diagnostics introduced by migration MUST be reported, and a refusal for
-    errors counts only those. A dry run reports the verdict the run reaches
+    A non-empty delta refuses the migration: nothing is written. A
+    migration that adds an error is refused whether or not its graph
+    changed, and a refusal for errors counts only the errors it adds (a
+    diagnostic that only moves is not added). New diagnostics introduced by
+    migration MUST be reported. A dry run reports the verdict the run reaches
     and fails exactly when the run would be refused.
   """
   verify unit "post-migration check runs automatically"

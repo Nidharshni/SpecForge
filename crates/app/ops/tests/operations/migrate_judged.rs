@@ -197,7 +197,6 @@ fn the_hooks_run_before_any_file_is_written() {
     assert!(outcome.ok(), "{outcome:?}");
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
     verify = "a planned text that adds an error is refused even when the graph is unchanged"
