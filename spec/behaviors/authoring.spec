@@ -32,6 +32,7 @@ behavior create_entity "Create an Entity" {
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
+  verify unit "new refuses a blank title"
   verify unit "new refuses a file that is not a project source"
   verify unit "new reads every spelling of a file under the spec root as that file"
   verify unit "two spellings of one new file in one list are one file"
@@ -114,6 +115,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "retitle of an untitled union writes the title after its name, never over a variant"
   verify unit "every member edit of a union is refused as one not_editable, before its field is read"
   verify unit "retitle and delete take a union"
+  verify unit "retitle refuses a blank title before anything is planned, as create does"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {

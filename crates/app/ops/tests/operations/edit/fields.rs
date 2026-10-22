@@ -314,3 +314,38 @@ fn typed_edits_work_on_a_header_written_over_two_lines() {
     );
     assert!(!unlinked.contains("[task_unique]"), "{unlinked}");
 }
+
+#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "retitle refuses a blank title before anything is planned, as create does"
+)]
+fn retitle_to_a_blank_title_is_refused_as_create_is() {
+    let c = project(&[
+        ("tasks.spec", TASKS),
+        ("loose.spec", "type Loose {\n  id string\n}\n"),
+    ]);
+    let failures: Vec<String> = [
+        ("list_tasks", ""),
+        ("list_tasks", "   "),
+        ("Loose", ""),
+        ("Loose", "\t"),
+    ]
+    .into_iter()
+    .filter_map(|(entity, title)| {
+        let edits = [Edit::Retitle {
+            entity_id: entity.into(),
+            title: title.into(),
+        }];
+        let outcome = match plan(&c, &edits) {
+            Ok(_) => "planned".to_string(),
+            Err(e) if e.error.code == "invalid_title" && e.subject == Some(EditField::Title) => {
+                return None;
+            }
+            Err(e) => e.error.code.to_string(),
+        };
+        Some(format!("{entity} {title:?}: {outcome}"))
+    })
+    .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}

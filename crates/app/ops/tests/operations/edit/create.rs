@@ -247,3 +247,29 @@ fn new_omits_a_field_equal_to_the_default() {
     let text = after(&c, "d.spec", &[other]);
     assert!(text.contains("invariants [other_rule]"), "{text}");
 }
+
+#[specforge_test_macros::test(behavior = "create_entity", verify = "new refuses a blank title")]
+fn new_refuses_a_blank_title() {
+    let c = tasks();
+    for blank in ["", "  "] {
+        let Edit::Create { kind, id, file, .. } = archive("tasks.spec") else {
+            unreachable!()
+        };
+        let edit = Edit::Create {
+            kind,
+            id,
+            title: blank.into(),
+            file,
+            fields: Default::default(),
+            verify: vec![],
+        };
+        assert_eq!(
+            refused(&c, &[edit]),
+            (
+                "invalid_title".to_string(),
+                "a block needs a title".to_string()
+            ),
+            "{blank:?}"
+        );
+    }
+}
