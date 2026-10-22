@@ -28,6 +28,7 @@ mod navigation;
 mod protocol;
 mod publish;
 mod published;
+mod quoted_references;
 mod reaction;
 mod rebuilding;
 mod recorder;

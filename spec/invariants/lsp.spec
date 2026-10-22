@@ -137,4 +137,5 @@ invariant cursor_names_one_entity "One Entity Under the Cursor" {
   verify unit "a scheme ref ID under the cursor names its ref"
   verify unit "a value of a field typed as no reference names no entity"
   verify unit "a cursor in a buffer typed since the compile names what its own word names, never the compiled text's token at its position"
+  verify unit "a quoted reference under the cursor names its entity"
 }
