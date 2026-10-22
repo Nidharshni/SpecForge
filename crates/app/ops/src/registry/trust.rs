@@ -41,8 +41,7 @@ impl TrustPolicy<'_> {
     /// refused as R-TRUST-003 when nobody consents.
     ///
     /// Call it once the reply names `name@version` and after [`TrustPolicy::admits`] (R014 precedes any
-    /// question, ADR 0201); pass [`UserKeys::default`] for an unsigned package (R-TRUST-006 is only for a
-    /// signed one). It asks at most once and pins nothing: [`Publisher::pin`] names what `Registry::pin`
+    /// question, ADR 0201); pass what the user's store says about the name, whatever the signer. It asks at most once and pins nothing: [`Publisher::pin`] names what `Registry::pin`
     /// saves when the plan commits.
     pub fn decide(
         &self,

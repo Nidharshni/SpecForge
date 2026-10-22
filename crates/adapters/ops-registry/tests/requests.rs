@@ -293,7 +293,6 @@ fn an_unsigned_package_for_a_pinned_name_is_refused_before_its_download() {
     behavior = "pin_publisher_key",
     verify = "a known-keys store that can't be read refuses an unsigned install too"
 )]
-#[ignore = "flipped by T2"]
 fn an_unreadable_known_keys_store_refuses_an_unsigned_package_before_its_download() {
     let served = serving(&["1.0.0"]); // unsigned
     let dir = project_with(&default_registry(served.root().as_str()));

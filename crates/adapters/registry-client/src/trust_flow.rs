@@ -13,8 +13,8 @@ use std::path::Path;
 
 use specforge_common::{Diagnostic, codes};
 
-/// The store at `path`, read (R-TRUST-006 when it exists and can't be). Only a signed package needs it:
-/// an unsigned one reads no store.
+/// The store at `path`, read (R-TRUST-006 when it exists and can't be). Every registry package needs it,
+/// signed or not: its pin holds an unsigned package too (ADR 0221).
 pub fn keys(path: &Path) -> Result<KnownKeys, Diagnostic> {
     load_known_keys_at(path).map_err(|why| unusable_store(path, &why))
 }
