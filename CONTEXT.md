@@ -521,8 +521,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   The pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
   input's entities (`specforge_coverage::Entity::from`), on the host as in every extension pass.
   Never read a graph node to answer what an entity says or owes.
-- **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
-  (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
+- **Field text**: the one string a field value is to a rule, a custom validator, a compiler pass
+  and every read view that asks what a field says (search, the headline; ADR 0019, ADR 0228): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
   block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
 - **Field type**: how the host reads a field's value, one of nine names an extension declares:
@@ -766,6 +766,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   and the reported diagnostics about it (`specforge_ops::read::inspect::EntityFacts`); its coverage is asked
   for apart (`specforge_ops::read::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
   renders both as JSON and the LSP hover as markdown, so the two cannot disagree.
+- **Headline**: the field an entity's extension declares headline and normative, and its field text
+  (`specforge_emitter::context::Headline`), whatever the value's written shape: the context export lifts
+  it, MCP inspect reports it as `contract`, the context prompt as `contract_text`, the hover quotes it as
+  its summary (ADR 0228).
 - **Known kind**: a kind a loaded extension declares, or that an entity is written with (an
   undeclared one is E024's). A kind filter (over entities, or the model's `kinds`) knows both and
   reports any other kind as I020; an argument that needs a kind's declaration (a schema entry, an
