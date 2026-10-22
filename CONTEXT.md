@@ -1269,6 +1269,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   an extension pass named). Consumers that act on a diagnostic (the LSP's quick fixes, MCP's
   suggest_fixes, and navigation's attribution of a diagnostic to the entities it is about) read it;
   none parses the message, which is presentation.
+- **Diagnostic placement**: where a diagnostic about entities with no span of its own sits: the block
+  of the first entity its data names that the project holds (`Diagnostic::placed_at_subject`, applied once in
+  `CompiledProject::reported` and to a pass's findings); every surface shows it there, the LSP adds related
+  information at each other's name (ADR 0227).
 - **Reference**: an id a field's declared type reads as a reference (a `reference` field's value, a
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge; where it is written is a written token the graph's finder reads). The references *to* an entity are incoming; what an entity
