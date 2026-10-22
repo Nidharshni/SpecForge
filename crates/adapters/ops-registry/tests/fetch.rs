@@ -313,7 +313,7 @@ fn an_unsigned_package_is_refused_without_allow_unsigned() {
             .suggestion
             .as_deref()
             .unwrap_or_default()
-            .contains("allow unsigned packages"),
+            .contains("`specforge add --allow-unsigned`"),
         "{error:?}"
     );
 }

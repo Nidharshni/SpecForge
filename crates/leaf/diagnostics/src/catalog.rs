@@ -456,7 +456,7 @@ catalog! {
         "An extension being installed or updated requires a peer at a version the lock does not have, or a locked extension requires a version of the package being installed or updated that it would not have. The message names a version of the peer that would satisfy every requirer. Install the peer at that version (`specforge add @scope/peer@<version>`) and retry; when a locked extension holds the peer back, `specforge update --major` moves them together.";
     R_TRUST_001 = "R-TRUST-001": Error core,
         "Unsigned package",
-        "The registry package carries no publisher signature, so where it came from can't be verified. Install it anyway only if you trust the source, with `--allow-unsigned`.";
+        "The registry package carries no publisher signature, so where it came from can't be verified. Install it anyway only if you trust the source, with `--allow-unsigned`; the MCP server never accepts an unsigned package.";
     R_TRUST_002 = "R-TRUST-002": Error core,
         "Invalid package signature",
         "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes the registry's answer unreadable: R009.)";

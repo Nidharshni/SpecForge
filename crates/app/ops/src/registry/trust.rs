@@ -65,7 +65,9 @@ impl TrustPolicy<'_> {
                 return Err(refused(
                     codes::R_TRUST_001,
                     format!("package '{name}' is not signed"),
-                    "allow unsigned packages for this install to accept the risk".to_string(),
+                    "if you trust its source, install it with `specforge add --allow-unsigned` (or \
+                     `specforge update --allow-unsigned`) in a terminal"
+                        .to_string(),
                 ));
             }
             (Signer::Key(key_id), _) => key_id,

@@ -4622,11 +4622,6 @@ expression: listing
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "allow_unsigned": {
-          "default": false,
-          "description": "Accept a registry package with no publisher signature (publisher verification skipped)",
-          "type": "boolean"
-        },
         "dry_run": {
           "default": false,
           "description": "Preview the install without changing any file",

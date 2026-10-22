@@ -82,10 +82,7 @@ fn an_unsigned_package_for_a_pinned_name_is_refused_on_every_surface() {
         assert!(!ok, "{extra:?}: {json}");
         assert_eq!(json["code"], "R-TRUST-007", "{extra:?}: {json}");
     }
-    let error = mcp_add(
-        &dir,
-        json!({"specifiers": ["@sdk/greet@0.1.0"], "allow_unsigned": true}),
-    );
+    let error = mcp_add(&dir, json!({"specifiers": ["@sdk/greet@0.1.0"]}));
     assert_eq!(error["diagnostic"]["code"], "R-TRUST-007", "{error}");
 
     assert!(!dir.root().join("specforge.lock").exists());
@@ -144,4 +141,38 @@ fn an_unsigned_version_of_a_locked_name_is_refused_and_the_lock_keeps_its_key() 
         "{:?}",
         registry.requests()
     );
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "add_extension takes no allow_unsigned: an unsigned package is refused with R-TRUST-001 naming the terminal command"
+)]
+fn mcp_add_extension_accepts_no_unsigned_package() {
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]); // unsigned
+    let dir = project_on(&registry);
+
+    let error = mcp_add(&dir, json!({"specifiers": ["@sdk/greet@0.1.0"]}));
+    assert_eq!(error["diagnostic"]["code"], "R-TRUST-001", "{error}");
+    let suggestion = error["diagnostic"]["suggestion"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        suggestion.contains("`specforge add --allow-unsigned`")
+            && suggestion.contains("in a terminal"),
+        "{error}"
+    );
+
+    let error = mcp_add(
+        &dir,
+        json!({"specifiers": ["@sdk/greet@0.1.0"], "allow_unsigned": true}),
+    );
+    assert_eq!(error["code"], "invalid_input", "{error}");
+    assert!(
+        error
+            .to_string()
+            .contains("unknown argument 'allow_unsigned'"),
+        "{error}"
+    );
+    assert!(!dir.root().join("specforge.lock").exists());
+    assert_eq!(downloads(&registry), Vec::<String>::new());
 }

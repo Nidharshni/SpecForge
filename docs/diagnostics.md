@@ -1885,7 +1885,7 @@ R-TRUST-001: Unsigned package
 
 The registry package carries no publisher signature, so where it came from can't
 be verified. Install it anyway only if you trust the source, with
-`--allow-unsigned`.
+`--allow-unsigned`; the MCP server never accepts an unsigned package.
 
 Owner: core
 Level: error

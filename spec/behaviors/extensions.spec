@@ -1108,7 +1108,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
     the outcome. The decision on a key change belongs to the surface: it hands the
     operation who can be asked (the CLI's terminal; nobody under
     `--format json` or over MCP), and the CLI asks on its terminal (y or yes,
-    in any case, consents; any other answer refuses).
+    in any case, consents; any other answer refuses). Accepting an unsigned
+    package (--allow-unsigned) is the CLI's only.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
