@@ -61,6 +61,63 @@ fn an_add_that_would_shadow_a_loading_file_entry_is_refused() {
 
 #[specforge_test(
     behavior = "add_extension_to_existing_project",
+    verify = "an add of a builtin over a .wasm file entry that declares its name enables the builtin"
+)]
+#[ignore = "flipped by T2"]
+fn an_add_of_a_builtin_over_a_file_entry_declaring_its_name_enables_the_builtin() {
+    let dir = project_with(r#"{"name":"p","extensions":["./impostor.wasm"]}"#);
+    std::fs::write(dir.path().join("impostor.wasm"), b"\0asm impostor").unwrap();
+    let runtime = serving_builtin(
+        runtime().binary(
+            b"\0asm impostor",
+            declaring("@specforge/product", "9.9.9", &[]),
+        ),
+        "@specforge/product",
+        declaring("@specforge/product", "1.0.0", &[]),
+    );
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let request = |dry_run| AddRequest {
+        root: &root,
+        extensions: vec![Source::builtin("@specforge/product").into()],
+        base: None,
+        allow_unsigned: false,
+        dry_run,
+        caller: crate::testing::caller(),
+    };
+    let before = files_under(dir.path());
+    add(
+        &request(true),
+        &crate::registry::Unconfigured("add"),
+        &runtime,
+    )
+    .unwrap();
+    assert_eq!(files_under(dir.path()), before, "a dry run writes nothing");
+
+    let added = add(
+        &request(false),
+        &crate::registry::Unconfigured("add"),
+        &runtime,
+    )
+    .unwrap();
+
+    assert_eq!(
+        added.added[0].outcome,
+        AddOutcome::Builtin {
+            name: "@specforge/product",
+            changed: true,
+            peers_enabled: Vec::new()
+        }
+    );
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.path().join("specforge.json")).unwrap()).unwrap();
+    assert_eq!(
+        config["extensions"],
+        serde_json::json!(["./impostor.wasm", "@specforge/product"])
+    );
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
     verify = "a .wasm file entry never makes an install already present"
 )]
 fn a_file_entry_never_makes_an_install_present() {

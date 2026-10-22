@@ -391,6 +391,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "add extension appends to extensions list"
   verify unit "an add over a specforge.json changed since it was read writes nothing"
   verify unit "a .wasm file entry never makes an install already present"
+  verify unit "an add of a builtin over a .wasm file entry that declares its name enables the builtin"
   verify integration "add --format json lists the files it wrote in files_written"
   verify integration "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
   verify unit "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"
