@@ -760,6 +760,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   inference guide, the model's root) knows only the declared ones and refuses others with
   `unknown_kind`. Names are exact; both name the closest kind, a kind equal but for case first
   (`specforge_ops::view::KnownKinds`, `ProjectView::kinds`).
+- **Kinds list**: a kind filter written as text (`--kinds a,b` on the CLI, `?kinds=a,b` on a graph resource): the
+  items between its commas, each trimmed, in order; an empty item is the empty kind (I020). Read by one rule,
+  `specforge_ops::view::kinds_of_text` (ADR 0220). An MCP tool's `kinds` array is a list already, not text.
 - **Unconnected entity**: an entity no edge links to another entity, in either direction
   (`ProjectView::connectivity`, `Graph::degree`, `Degree::is_unconnected`). A reference that does not resolve is no edge
   (E003 or I004 reports it), and an edge from an entity to itself links it to nothing else. Stats counts
