@@ -69,11 +69,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`with_format_version`), so a rewritten header stands where the parser reads it. It is
   distinct from the Graph Protocol's schema version; it is never a block's doc comment.
 - **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
-  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
-  `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
-  migrate` lifts a block's doc comment into a missing title. Where it is written is the parse's
+  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise; a blank one (only
+  whitespace) is none. A `spec` block's name is its title; a `define` block has none. A `//` comment is never a title.
+  `specforge migrate` lifts a block's doc comment into a missing or blank title (a spec block's never). Where it is written is the parse's
   (`Entity::title_span`): a typed retitle replaces it there, and the titles step writes a missing one after the name
   (ADR 0187, amended).
+- **Untitled**: a block that becomes a node whose title is absent or only whitespace (`graph::title::owes_title`, ADR
+  0225): E076 reports it, the titles step writes its title, and a typed create or retitle refuses to make one.
 - **Doc comment**: the whole-line `//` comments directly above a block's first line, no blank line between; a
   comment ending the line of the item above trails it, and the format header is never one. Where it is written is
   the parse's (`specforge_parser::Entity::doc_span`): a typed delete removes it with its block, `specforge migrate`'s
