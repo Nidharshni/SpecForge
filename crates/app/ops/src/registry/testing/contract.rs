@@ -12,8 +12,10 @@ use crate::asking::{Asking, ExpectedFrom};
 
 /// The packages the contract runs over, the signed ones signed by `key_id`:
 /// `@contract/base` 1.0.0, 1.1.0 and 2.0.0-beta.1 (signed); `@contract/app` 1.0.0 (signed, a required peer
-/// `@contract/base ^1.0`); `@contract/plain` 1.0.0 (unsigned). Each binary is `"\0asm {name} {version}"`.
-pub fn contract_packages(key_id: &str) -> Vec<Published> {
+/// `@contract/base ^1.0`); `@contract/plain` 1.0.0 (unsigned); `@contract/denied` 1.0.0 (signed by
+/// `denied_key_id`, which the adapter under test must be set up to find on the user's deny list). Each binary
+/// is `"\0asm {name} {version}"`.
+pub fn contract_packages(key_id: &str, denied_key_id: &str) -> Vec<Published> {
     let package = |name: &str, version: &str, peers: &[(&str, &str)]| {
         Published::new(
             format!("\0asm {name} {version}").into_bytes(),
@@ -26,6 +28,7 @@ pub fn contract_packages(key_id: &str) -> Vec<Published> {
         package("@contract/base", "2.0.0-beta.1", &[]).signed_by(key_id),
         package("@contract/app", "1.0.0", &[("@contract/base", "^1.0")]).signed_by(key_id),
         package("@contract/plain", "1.0.0", &[]),
+        package("@contract/denied", "1.0.0", &[]).signed_by(denied_key_id),
     ]
 }
 
@@ -35,7 +38,7 @@ pub(super) fn refuse(allow_unsigned: bool) -> TrustPolicy<'static> {
 }
 
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
-/// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed: C0 opens, C1–C7
+/// [`contract_packages`]) published, nothing pinned and the signer of `@contract/denied` on the user's deny list. Panics naming the clause that failed: C0 opens, C1–C7
 /// list, fetch and publish; R-S finds a package by its name and category; R-S2 lists a package once,
 /// at the version `specforge add <name>` installs from it.
 pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]) {
@@ -134,6 +137,16 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         allowed.publisher,
         Publisher::Unsigned,
         "C6: an unsigned package has no key"
+    );
+
+    // C14: a key on the user's deny list is refused, whatever the consent and --allow-unsigned
+    let denied = PackageName::parse("@contract/denied").unwrap();
+    let error = registry
+        .fetch(&denied, &one, TrustPolicy::new(true, Asking::Yes))
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_005),
+        "C14: a denied key beats consent: {error:?}"
     );
 
     // C7

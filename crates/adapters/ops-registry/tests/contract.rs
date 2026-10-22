@@ -13,16 +13,27 @@ use specforge_registry_client::{RegistryConfig, SigningKey};
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_registry_wire::{PackageMetadata, RegistryRoot};
 
-/// What a registry stores for `published`, signed by `key` when it names a signer.
-fn stored(published: &Published, key: &SigningKey) -> PackageMetadata {
+/// What a registry stores for `published`, signed by the one of `keys` whose id it names as its signer.
+fn stored(published: &Published, keys: &[&SigningKey]) -> PackageMetadata {
     let manifest = serde_json::to_string(&published.declaration).unwrap();
+    let signer = published
+        .key_id
+        .as_ref()
+        .map(|id| *keys.iter().find(|key| &key.key_id() == id).unwrap());
     package(
         published.name().as_str(),
         &published.version().to_string(),
         &published.wasm,
         &manifest,
-        published.key_id.is_some().then_some(key),
+        signer,
     )
+}
+
+/// The user's `known-keys.json`, denying `key`: what the contract's precondition asks of the adapter.
+fn denying(home: &std::path::Path, key: &SigningKey) {
+    let mut known = specforge_registry_client::KnownKeys::default();
+    known.denied_keys.push(key.key_id());
+    specforge_registry_client::save_known_keys_at(&home.join("known-keys.json"), &known).unwrap();
 }
 
 /// A project whose only registry is `registry`, and a temporary known-keys store.
@@ -36,12 +47,13 @@ fn project(registry: serde_json::Value) -> TestProject {
 #[specforge_test_macros::test(port = "Registry", verify = "Registry contract is satisfied")]
 fn the_configured_registry_over_http_keeps_the_registry_contract() {
     let server = LocalRegistry::start();
-    let key = SigningKey::generate();
-    let published = contract_packages(&key.key_id());
+    let (key, denied) = (SigningKey::generate(), SigningKey::generate());
+    let published = contract_packages(&key.key_id(), &denied.key_id());
     for p in &published {
-        server.store(&stored(p, &key), &p.wasm);
+        server.store(&stored(p, &[&key, &denied]), &p.wasm);
     }
     let dir = project(server.config_entry());
+    denying(dir.home(), &denied);
     let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
         .as_user(User::at(dir.home(), Some(server.token().to_string())));
 
@@ -57,14 +69,15 @@ fn the_configured_registry_over_memory_keeps_the_registry_contract() {
         default_registry: true,
     };
     let client = MemoryClient::new().accepting("token");
-    let key = SigningKey::generate();
-    let published = contract_packages(&key.key_id());
+    let (key, denied) = (SigningKey::generate(), SigningKey::generate());
+    let published = contract_packages(&key.key_id(), &denied.key_id());
     for p in &published {
-        client.store(&config, stored(p, &key), p.wasm.clone());
+        client.store(&config, stored(p, &[&key, &denied]), p.wasm.clone());
     }
     let dir = project(serde_json::json!([
         { "alias": "local", "url": "https://local.invalid", "default_registry": true }
     ]));
+    denying(dir.home(), &denied);
     let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
         .with_client(client)
         .as_user(User::at(dir.home(), Some("token".to_string())));
@@ -85,14 +98,15 @@ fn a_published_manifest_is_read_without_downloading_the_binary() {
         default_registry: true,
     };
     let client = MemoryClient::new().accepting("token");
-    let key = SigningKey::generate();
-    let published = contract_packages(&key.key_id());
+    let (key, denied) = (SigningKey::generate(), SigningKey::generate());
+    let published = contract_packages(&key.key_id(), &denied.key_id());
     for p in &published {
-        client.store(&config, stored(p, &key), p.wasm.clone());
+        client.store(&config, stored(p, &[&key, &denied]), p.wasm.clone());
     }
     let dir = project(serde_json::json!([
         { "alias": "local", "url": "https://local.invalid", "default_registry": true }
     ]));
+    denying(dir.home(), &denied);
     let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
         .with_client(client.clone())
         .as_user(User::at(dir.home(), Some("token".to_string())));

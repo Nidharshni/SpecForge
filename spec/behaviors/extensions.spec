@@ -1103,6 +1103,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
   verify unit "a refused key change names the commands that can consent"
+  verify unit "a publisher is decided once, by the trust policy, from the signer and the user's keys"
+  verify unit "the memory registry refuses a denied key and accepts a trusted key's change without asking, as the configured registry does"
   verify integration "consent to a key change re-pins the new key"
   verify integration "a denied key is refused even with consent"
   verify integration "consent to a key change is reported as W156"

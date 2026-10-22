@@ -9,11 +9,12 @@ use specforge_protocol_types::DeclaredCategory;
 
 #[specforge_test_macros::test(port = "Registry", verify = "Registry contract is satisfied")]
 fn the_memory_registry_keeps_the_registry_contract() {
-    let published = contract_packages("memory-key");
+    let published = contract_packages("memory-key", "memory-denied");
     let registry = published
         .iter()
         .cloned()
-        .fold(MemoryRegistry::new(), MemoryRegistry::serving);
+        .fold(MemoryRegistry::new(), MemoryRegistry::serving)
+        .denying("memory-denied");
     assert_registry_contract(&registry, &published);
 }
 
@@ -235,6 +236,49 @@ fn it_decides_a_key_change_by_the_policy_and_pins_only_through_pin() {
             first_use: false
         }
     );
+}
+
+#[specforge_test_macros::test(
+    behavior = "pin_publisher_key",
+    verify = "the memory registry refuses a denied key and accepts a trusted key's change without asking, as the configured registry does"
+)]
+fn it_decides_a_denied_or_trusted_key_as_the_configured_registry_does() {
+    let package = |name: &str, key: &str| {
+        Published::new(b"\0asm tool".to_vec(), declaration(name, "1.0.0", &[])).signed_by(key)
+    };
+    let registry = MemoryRegistry::new()
+        .serving(package("@acme/denied", "k2"))
+        .serving(package("@acme/tool", "k2"))
+        .denying("k2")
+        .pinning("@acme/tool", "k1");
+    let version = Version::new(1, 0, 0);
+    let denied = PackageName::parse("@acme/denied").unwrap();
+    let error = registry
+        .fetch(&denied, &version, TrustPolicy::new(true, Asking::Yes))
+        .unwrap_err();
+    assert!(error.is(codes::R_TRUST_005), "{error:?}");
+
+    let registry = MemoryRegistry::new()
+        .serving(package("@acme/tool", "k2"))
+        .pinning("@acme/tool", "k1")
+        .trusting("k2");
+    let asker = crate::asking::testing::Scripted::answering(false);
+    let tool = PackageName::parse("@acme/tool").unwrap();
+    let fetched = registry
+        .fetch(
+            &tool,
+            &version,
+            TrustPolicy::new(false, Asking::Ask(&asker)),
+        )
+        .unwrap();
+    assert_eq!(
+        fetched.publisher,
+        Publisher::Repinned {
+            key_id: "k2".into(),
+            previous: "k1".into()
+        }
+    );
+    assert!(asker.asked().is_empty(), "a trusted key is not asked about");
 }
 
 #[test]

@@ -11,19 +11,19 @@ mod reports;
 
 use reports::PolicyReports;
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_ops::asking::{ExpectedFrom, Question};
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME, Package,
-    Published, Publisher, Registry, Searched, TrustPolicy, UNREADABLE_MANIFEST, no_registry,
+    Published, Publisher, Registry, Searched, Signer, TrustPolicy, UNREADABLE_MANIFEST, UserKeys,
+    no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_package::Version;
 use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::{
-    Accepted, CredentialStore, HttpRegistryClient, KeyChange, NewPin, PinSource, PublishError,
-    RegistryClient, RegistryConfig, RegistryCredential, RegistryError, Retrying,
-    parse_registries_from_config, publish_to_registry, verify_registry_integrity,
+    CredentialStore, HttpRegistryClient, NewPin, PublishError, RegistryClient, RegistryConfig,
+    RegistryCredential, RegistryError, Retrying, TrustCheck, parse_registries_from_config,
+    publish_to_registry, verify_package_signature, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::sync::OnceLock;
@@ -328,28 +328,32 @@ impl Registry for ConfiguredRegistry {
         verify_registry_integrity(&wasm, &metadata.sha256)
             .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 2
 
-        // Publisher signature and the TOFU pin policy; a key change is put to the policy's asking.
-        let decide = |change: &KeyChange| {
-            policy.asking.answers(&Question::KeyChange {
-                package: &change.package,
-                expected: &change.pinned,
-                offered: &change.offered,
-                from: match change.source {
-                    PinSource::User => ExpectedFrom::UserPin,
-                    PinSource::Lock => ExpectedFrom::Lock,
-                },
-            })
-        };
-        let trusted = specforge_registry_client::trust_flow::check(
-            &metadata.name,
-            &metadata,
-            policy.allow_unsigned,
-            &decide,
-            &self.user.known_keys(),
-            policy.locked_key(),
-        )
-        .map_err(refused_by_trust)?; // 4: R-TRUST-001..006, writes nothing
-        self.reported_by_policy.extend(trusted.diagnostics); // W155
+        // The publisher: signature (R-TRUST-002) and the user's store (R-TRUST-006) are read here, the
+        // decision over them is the policy's (R-TRUST-001, -003, -005).
+        let publisher = match verify_package_signature(&metadata).map_err(refused_by_trust)? {
+            TrustCheck::Unsigned => policy.decide(name, Signer::Unsigned, UserKeys::default()),
+            TrustCheck::Verified { key_id } => {
+                let known = specforge_registry_client::trust_flow::keys(&self.user.known_keys())
+                    .map_err(refused_by_trust)?;
+                policy.decide(
+                    name,
+                    Signer::Key(&key_id),
+                    UserKeys {
+                        pin: known.pin_for(name.as_str()),
+                        trusted: known.is_trusted(&key_id),
+                        denied: known.is_denied(&key_id),
+                    },
+                )
+            }
+        }?; // 4: R-TRUST-001..006, writes nothing
+        if publisher == Publisher::Unsigned {
+            self.reported_by_policy.extend([
+                specforge_registry_client::trust_flow::unsigned_accepted(
+                    &metadata.name,
+                    &metadata.version,
+                ),
+            ]); // W155
+        }
 
         Ok(Package {
             name: name.clone(),
@@ -357,11 +361,7 @@ impl Registry for ConfiguredRegistry {
             sha256: metadata.sha256,
             wasm,
             declaration,
-            publisher: match trusted.accepted {
-                Accepted::Unsigned => Publisher::Unsigned,
-                Accepted::Signed { key_id, first_use } => Publisher::Signed { key_id, first_use },
-                Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
-            },
+            publisher,
         })
     }
 

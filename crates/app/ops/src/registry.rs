@@ -154,8 +154,8 @@ impl<'a> LockedPin<'a> {
 pub const LOCKED_BYTES_CHANGED: Code = codes::R014;
 
 /// How a fetch decides a package's publisher: the caller's two choices, and the pin the project's
-/// lock already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes
-/// nothing; what it decided is the package's [`Publisher`].
+/// lock already records for the name. [`TrustPolicy::decide`] holds the rules (ADR 0213) and both
+/// adapters ask it; it writes nothing, and what it decided is the package's [`Publisher`].
 #[derive(Debug, Clone, Copy)]
 pub struct TrustPolicy<'a> {
     /// Accept a package with no publisher signature (reported as W155).
@@ -478,6 +478,9 @@ pub trait Registry {
         contributes: Option<DeclaredCategory>,
     ) -> Result<Searched, OpError>;
 }
+
+mod trust;
+pub use trust::{Signer, UserKeys};
 
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
