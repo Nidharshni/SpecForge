@@ -372,8 +372,8 @@ pub struct PassEntity {
     /// protocol 1.1.0): scalars as written; lists of strings or references
     /// and mixed lists joined by `", "`; variant lists and type unions by
     /// `" | "`; expressions by `", "`; a block's keys by `", "`. A written
-    /// empty list or block is `""`, never absent. A name written twice keeps
-    /// its last text. The entity's `verify` statements are not a field (ADR
+    /// empty list or block is `""`, never absent. A name written twice
+    /// in one block arrives as its first entry (E081). The entity's `verify` statements are not a field (ADR
     /// 0094, protocol 1.5.0): they are `verify_kinds` and `verify_texts`.
     #[serde(default)]
     pub fields: BTreeMap<String, String>,

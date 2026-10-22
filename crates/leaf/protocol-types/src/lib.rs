@@ -683,8 +683,8 @@ pub struct ValidatorContext {
 pub struct ValidatorEntity {
     pub id: String,
     pub kind: String,
-    /// Every field the entity writes, in declaration order (a name written
-    /// twice appears twice); `value` is the field's text (ADR 0019,
+    /// Every field the entity writes, once each, in declaration order (a name
+    /// written twice in one block is E081 and arrives as its first entry); `value` is the field's text (ADR 0019,
     /// protocol 1.1.0), always a JSON string.
     pub fields: Vec<ValidatorField>,
     /// Declared methods (populated for entity kinds that have them, e.g.
