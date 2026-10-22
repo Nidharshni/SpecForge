@@ -182,3 +182,22 @@ fn an_edit_planned_while_the_checks_are_skipped_is_not_refused_for_an_error_the_
         planned.err().map(|r| r.error.message)
     );
 }
+
+/// `TASKS` with its last block written twice: one E002, whose message names the line of the first.
+fn with_duplicate_id() -> String {
+    let last = TASKS.rfind("behavior list_tasks").unwrap();
+    format!("{TASKS}\n{}", &TASKS[last..])
+}
+
+#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "validate_typed_edit",
+    verify = "an error whose message names a position is the same error after an edit moves it"
+)]
+fn an_edit_above_a_duplicate_id_does_not_count_it_as_new() {
+    let c = project(&[("tasks.spec", &with_duplicate_id())]);
+    assert!(c.project.diagnostics().iter().any(|d| d.code == "E002"));
+    // The edit removes a line above the duplicate: its message now names another line, the error is the same.
+    let planned = plan(&c, &[unset("complete_task", "category")]);
+    assert!(planned.is_ok(), "{:?}", planned.err().map(|e| e.error));
+}

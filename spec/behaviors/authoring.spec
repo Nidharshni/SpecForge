@@ -190,7 +190,8 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     the project could not read; an edit that leaves an error-severity
     diagnostic the project did not have, with every check run (after an
     editor update that skipped the checks they are run for the comparison),
-    is refused with E080 and writes nothing. Each edit declares what it may
+    is refused with E080 and writes nothing (an error is the same error after
+    an edit moves it, even when its message names a position). Each edit declares what it may
     change in the graph: set and unset their field (a field.entry path's
     field), link and unlink their field, retitle the title, add-verify and
     remove-verify the obligations, create and delete their entity, a delete
@@ -208,6 +209,7 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "a graph change no edit declares is beyond the declaration"
   verify unit "every verb's graph change is what it declares"
   verify unit "an edit that adds an error is E080 and writes nothing"
+  verify unit "an error whose message names a position is the same error after an edit moves it"
   verify unit "an edit that adds a warning is written and reports it"
   verify unit "a preview refuses what the write would"
   verify unit "every block an edit touches is format-clean"
