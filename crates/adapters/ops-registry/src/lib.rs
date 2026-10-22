@@ -343,7 +343,6 @@ impl Registry for ConfiguredRegistry {
         let trusted = specforge_registry_client::trust_flow::check(
             &metadata.name,
             &metadata,
-            &wasm,
             policy.allow_unsigned,
             &decide,
             &self.user.known_keys(),

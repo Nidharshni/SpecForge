@@ -439,3 +439,30 @@ fn a_receipt_for_another_upload_is_refused() {
     assert_eq!(error.code, "R009", "{error:?}");
     assert!(error.message.contains("receipt"), "{error:?}");
 }
+
+#[specforge_test_macros::test(
+    behavior = "verify_publisher_signature",
+    verify = "a signature is verified over the digests the reply describes, before any download"
+)]
+fn a_signature_is_verified_over_the_digests_the_reply_describes() {
+    use specforge_registry_client::{TrustCheck, verify_package_signature};
+    let wasm = b"fake-wasm-bytes";
+    let reply = package("@test/ext", "1.0.0", wasm, "{}", Some(&key()));
+
+    // No bytes at hand: the reply's own SHA-256 is what the signature covers.
+    assert_eq!(
+        verify_package_signature(&reply).unwrap(),
+        TrustCheck::Verified {
+            key_id: key().key_id()
+        }
+    );
+
+    let other = PackageMetadata {
+        sha256: specforge_registry_wire::sha256_hex(b"other"),
+        ..reply
+    };
+    assert_eq!(
+        verify_package_signature(&other).unwrap_err().code,
+        "R-TRUST-002"
+    );
+}

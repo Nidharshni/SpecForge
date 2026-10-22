@@ -90,7 +90,7 @@ pub struct Trusted {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// Verify `metadata`'s publisher signature over `wasm_bytes`, then decide the publisher against the
+/// Verify `metadata`'s publisher signature over the digests it describes, then decide the publisher against the
 /// user's store at `known_keys` (pins, `trusted_keys`, `denied_keys`) and `locked`, the key the
 /// project's lock records for the name. The expected key is the user's pin, else `locked`; with
 /// neither, the key is accepted on first use. A key change is accepted when the key is on
@@ -103,13 +103,12 @@ pub struct Trusted {
 pub fn check(
     name: &str,
     metadata: &PackageMetadata,
-    wasm_bytes: &[u8],
     allow_unsigned: bool,
     decide: &dyn Fn(&KeyChange) -> bool,
     known_keys: &Path,
     locked: Option<&str>,
 ) -> Result<Trusted, Diagnostic> {
-    match verify_package_signature(metadata, wasm_bytes)? {
+    match verify_package_signature(metadata)? {
         TrustCheck::Unsigned => {
             if !allow_unsigned {
                 return Err(Diagnostic::new(
@@ -306,26 +305,16 @@ mod tests {
     /// `check` with no key locked for the name.
     fn check_unlocked(
         metadata: &PackageMetadata,
-        wasm: &[u8],
         allow_unsigned: bool,
         decide: &dyn Fn(&KeyChange) -> bool,
         store: &Path,
     ) -> Result<Trusted, Diagnostic> {
-        check(
-            "@acme/tool",
-            metadata,
-            wasm,
-            allow_unsigned,
-            decide,
-            store,
-            None,
-        )
+        check("@acme/tool", metadata, allow_unsigned, decide, store, None)
     }
 
     #[test]
     fn unsigned_package_is_refused_without_flag() {
-        let err =
-            check_unlocked(&unsigned_response(), WASM, false, &always, no_store()).unwrap_err();
+        let err = check_unlocked(&unsigned_response(), false, &always, no_store()).unwrap_err();
         assert_eq!(err.code, "R-TRUST-001");
         assert!(
             err.suggestion
@@ -336,7 +325,7 @@ mod tests {
 
     #[test]
     fn unsigned_package_passes_with_flag_and_no_pin_and_is_w155() {
-        let trusted = check_unlocked(&unsigned_response(), WASM, true, &never, no_store()).unwrap();
+        let trusted = check_unlocked(&unsigned_response(), true, &never, no_store()).unwrap();
         assert_eq!(trusted.accepted, Accepted::Unsigned);
         assert_eq!(trusted.diagnostics.len(), 1);
         assert_eq!(trusted.diagnostics[0].code, "W155");
@@ -350,7 +339,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = dir.path().join("known-keys.json");
 
-        let trusted = check_unlocked(&response, WASM, false, &never, &store).unwrap();
+        let trusted = check_unlocked(&response, false, &never, &store).unwrap();
         assert_eq!(
             trusted.accepted,
             Accepted::Signed {
@@ -386,7 +375,7 @@ mod tests {
         save_known_keys_at(&store, &known).unwrap();
 
         // An install of the pinned package/key: accepted, pin unchanged.
-        let trusted = check_unlocked(&response, WASM, false, &never, &store).unwrap();
+        let trusted = check_unlocked(&response, false, &never, &store).unwrap();
         assert_eq!(
             trusted.accepted,
             Accepted::Signed {
@@ -409,7 +398,7 @@ mod tests {
 
         // Different key signs the same package: refused when nobody consents.
         let second = signed_response(&key_b, MANIFEST, WASM);
-        let err = check_unlocked(&second, WASM, false, &never, &store).unwrap_err();
+        let err = check_unlocked(&second, false, &never, &store).unwrap_err();
         assert_eq!(err.code, "R-TRUST-003");
 
         // The asker sees both keys; yes accepts. The store still holds the old pin.
@@ -420,7 +409,7 @@ mod tests {
             assert_eq!(change.source, PinSource::User);
             true
         };
-        let trusted = check_unlocked(&second, WASM, false, &asked, &store).unwrap();
+        let trusted = check_unlocked(&second, false, &asked, &store).unwrap();
         assert_eq!(
             trusted.accepted,
             Accepted::Repinned {
@@ -462,7 +451,7 @@ mod tests {
         save_known_keys_at(&store, &known).unwrap();
 
         let response = signed_response(&key, MANIFEST, WASM);
-        let trusted = check_unlocked(&response, WASM, false, &never, &store).unwrap();
+        let trusted = check_unlocked(&response, false, &never, &store).unwrap();
         assert!(matches!(trusted.accepted, Accepted::Signed { .. }));
     }
 
@@ -478,21 +467,22 @@ mod tests {
         save_known_keys_at(&store, &known).unwrap();
 
         let response = signed_response(&key, MANIFEST, WASM);
-        let err = check_unlocked(&response, WASM, false, &always, &store).unwrap_err();
+        let err = check_unlocked(&response, false, &always, &store).unwrap_err();
         assert_eq!(err.code, "R-TRUST-005");
     }
 
     #[test]
-    fn tampered_wasm_is_refused_even_with_valid_pin() {
+    fn a_signature_over_other_digests_than_the_reply_states_is_refused_even_with_a_valid_pin() {
         let key = SigningKey::generate();
         let dir = tempfile::tempdir().unwrap();
         let store = dir.path().join("known-keys.json");
 
-        let response = signed_response(&key, MANIFEST, WASM);
-        let tampered: &[u8] = b"\0asm-evil";
+        // Signed over WASM, but the reply states the digest of other bytes.
+        let mut response = signed_response(&key, MANIFEST, WASM);
+        response.sha256 = specforge_registry_wire::sha256_hex(b"\0asm-evil");
 
         // No --allow-unsigned escape for broken signatures.
-        let err = check_unlocked(&response, tampered, true, &always, &store).unwrap_err();
+        let err = check_unlocked(&response, true, &always, &store).unwrap_err();
         assert_eq!(err.code, "R-TRUST-002");
     }
 
@@ -503,15 +493,7 @@ mod tests {
         store: &Path,
         locked: &str,
     ) -> Result<Trusted, Diagnostic> {
-        check(
-            "@acme/tool",
-            metadata,
-            WASM,
-            false,
-            decide,
-            store,
-            Some(locked),
-        )
+        check("@acme/tool", metadata, false, decide, store, Some(locked))
     }
 
     #[test]
@@ -639,7 +621,7 @@ mod tests {
         let broken = format!(r#"{{"denied_keys":["{}"],}}"#, key.key_id());
         std::fs::write(&store, &broken).unwrap();
 
-        let err = check_unlocked(&response, WASM, false, &always, &store).unwrap_err();
+        let err = check_unlocked(&response, false, &always, &store).unwrap_err();
         assert_eq!(err.code, "R-TRUST-006");
         assert!(err.message.contains("can't be read"), "{}", err.message);
         assert!(

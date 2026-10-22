@@ -1051,6 +1051,7 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   verify integration "an unsigned package is refused without --allow-unsigned"
   verify integration "an unsigned package is accepted with --allow-unsigned and pins no key"
   verify integration "an unsigned package accepted with --allow-unsigned is reported as W155"
+  verify integration "a signature is verified over the digests the reply describes, before any download"
   verify unit "a dry run refuses what the add's trust decision refuses, downloading nothing"
   verify integration "a package the trust decision refuses is refused before its download"
 }

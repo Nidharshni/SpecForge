@@ -109,7 +109,7 @@ pub fn assert_client_contract(
         .expect("K5: download of the metadata's wasm_url");
     assert_eq!(&bytes, wasm, "K5: the published bytes");
     assert_eq!(
-        crate::verify_package_signature(&metadata, &bytes).expect("K5: the signature verifies"),
+        crate::verify_package_signature(&metadata).expect("K5: the signature verifies"),
         TrustCheck::Verified {
             key_id: key.key_id()
         },

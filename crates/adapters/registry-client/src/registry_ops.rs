@@ -109,24 +109,21 @@ pub enum TrustCheck {
     Unsigned,
 }
 
-/// Verify a downloaded package's publisher signature against served metadata.
+/// Verify a package's publisher signature over what the reply describes.
 ///
-/// Uses only data the client holds or the registry serves: the downloaded wasm
-/// bytes, the served manifest JSON, and the typed signature — the registry is
-/// not the trust anchor (spec #21). Fails (R-TRUST-002) when the signature
-/// doesn't verify: tampered wasm, tampered manifest or a wrong key. A signature
-/// that isn't one never gets here: the reply isn't readable (R009).
-pub fn verify_package_signature(
-    response: &PackageMetadata,
-    wasm_bytes: &[u8],
-) -> Result<TrustCheck, Diagnostic> {
+/// Uses only data the registry serves: the binary's SHA-256, the manifest JSON and the typed
+/// signature (the registry is not the trust anchor, spec #21). No download is needed: a download is
+/// then held to `response.sha256` ([`verify_registry_integrity`]), so the signature covers its bytes.
+/// Fails (R-TRUST-002) when the signature doesn't verify: other digests, a swapped manifest or a
+/// wrong key. A signature that isn't one never gets here: the reply isn't readable (R009).
+pub fn verify_package_signature(response: &PackageMetadata) -> Result<TrustCheck, Diagnostic> {
     let Some(signature) = &response.signature else {
         return Ok(TrustCheck::Unsigned);
     };
-    let content = SignedContent::of(
+    let content = SignedContent::described(
         &response.name,
         &response.version,
-        wasm_bytes,
+        &response.sha256,
         &response.manifest,
     );
     signature.verify(&content).map_err(|why| {
