@@ -21,6 +21,7 @@ mod derive;
 pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
 mod members;
+pub mod title;
 mod tokens;
 pub use members::{AnnotationJson, Members, MethodJson, Obligation, ParameterJson};
 pub use specforge_cycles::Cycle;

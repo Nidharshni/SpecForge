@@ -84,12 +84,15 @@ behavior require_block_titles "Require Block Titles" {
     A define block is never a node (W143) and needs none. The block MUST
     still be placed in the graph, so hover, completion and navigation keep
     working while it is typed. The check needs no extension and names no
-    kind; it follows the file in an incremental build.
+    kind; it follows the file in an incremental build. Whether a block owes
+    a title is one answer of the graph (`title::owes_title`), which the titles
+    step, its judge and the typed create and retitle ask.
   """
   verify unit "a block with no title or a blank one is E076 and is still placed"
   verify unit "an untitled union is E076"
   verify unit "define, spec and ref blocks are not E076"
   verify unit "E076 needs no extension and follows the file in an incremental build"
+  verify unit "E076 is reported exactly for the blocks the title rule says owe one"
   verify unit "E076 names specforge migrate exactly where migrate writes the title"
 }
 
