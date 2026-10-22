@@ -15,6 +15,7 @@ mod obligations;
 mod paths;
 mod places;
 mod positions;
+mod repeated;
 mod replay;
 mod sides;
 mod skeleton;

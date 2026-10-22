@@ -98,6 +98,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
+  verify unit "every verb that changes a field written twice leaves the block writing it once, holding what it says"
   verify unit "every verb reads a field.entry path the same way"
   verify unit "an entry of a block field written as a value is refused"
   verify unit "every verb leaves a field holding what it says, own or inherited"
