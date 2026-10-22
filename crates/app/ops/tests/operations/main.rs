@@ -14,6 +14,7 @@ mod connectivity;
 mod contracts;
 mod contracts_pass;
 mod coverage;
+mod coverage_status;
 mod cross_extension;
 mod declaration_names;
 mod defaults;
