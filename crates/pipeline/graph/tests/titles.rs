@@ -80,7 +80,6 @@ fn e076_needs_no_extension_and_follows_the_file_in_an_incremental_build() {
     assert!(build.diagnostics().is_empty(), "{:?}", build.diagnostics());
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "require_block_titles",
     verify = "E076 names specforge migrate exactly where migrate writes the title"

@@ -953,9 +953,10 @@ A block that becomes a graph node has no title, or a blank one: write it after
 the block's id (`type Task "A unit of work" { … }`, `type Status "Task status"
 = open | done`). The title is the one label every surface shows for the node; a
 `//` comment above the block never reaches the graph. `specforge migrate` writes
-the missing titles of a project: the comment directly above each block when
-there is one, else its id in words. `spec` takes its name as its title, `ref`
-requires one, and `define` blocks are never nodes.
+a project's missing and blank titles: the comment directly above each block when
+there is one, else its id in words. A `spec` block's title is its name, which
+migrate never writes; `ref` requires one; `define` and `defaults` blocks are
+never nodes.
 
 Owner: core
 Level: error

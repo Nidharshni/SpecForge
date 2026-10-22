@@ -3,7 +3,7 @@
 
 use crate::build::is_define_block;
 use crate::defaults::is_defaults_block;
-use specforge_common::{Diagnostic, codes};
+use specforge_common::{Diagnostic, codes, structural};
 use specforge_parser::Entity;
 
 /// Whether `title` names nothing: absent, or only whitespace. A blank title is no title.
@@ -21,15 +21,21 @@ fn becomes_node(entity: &Entity) -> bool {
     !is_define_block(entity) && !is_defaults_block(entity)
 }
 
-/// E076: a block with no title, or a blank one.
+/// E076: a block with no title, or a blank one. Its help names `specforge migrate` exactly where the titles step
+/// writes the title: a spec block's title is its name, which no step writes (ADR 0187 D4).
 pub(crate) fn untitled_block_error(entity: &Entity) -> Diagnostic {
+    let help = if entity.kind.raw == structural::SPEC {
+        "a spec block's title is its name: write it in the header, spec \"…\"".to_string()
+    } else {
+        format!(
+            "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block, else its id in words",
+            entity.kind.raw, entity.id.raw
+        )
+    };
     Diagnostic::new(
         codes::E076,
         format!("{} '{}' has no title", entity.kind.raw, entity.id.raw),
     )
     .with_span(entity.span.clone())
-    .with_suggestion(format!(
-        "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block",
-        entity.kind.raw, entity.id.raw
-    ))
+    .with_suggestion(help)
 }

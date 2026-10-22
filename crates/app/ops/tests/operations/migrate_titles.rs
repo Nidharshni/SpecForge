@@ -93,7 +93,6 @@ fn a_planned_text_that_also_changes_a_field_refuses_the_titles() {
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "add_missing_titles",
     verify = "a migration leaves no E076 it names migrate for"

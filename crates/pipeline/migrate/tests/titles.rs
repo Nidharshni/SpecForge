@@ -188,7 +188,6 @@ fn a_header_whose_name_is_on_its_second_line_takes_its_title_after_the_name() {
     );
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test(
     behavior = "add_missing_titles",
     verify = "a blank title is replaced where it is written: the doc comment, else the id in words"

@@ -84,7 +84,9 @@ behavior require_block_titles "Require Block Titles" {
     A define block is never a node (W143) and needs none. The block MUST
     still be placed in the graph, so hover, completion and navigation keep
     working while it is typed. The check needs no extension and names no
-    kind; it follows the file in an incremental build. Whether a block owes
+    kind; it follows the file in an incremental build. Its help names
+    specforge migrate exactly where the titles step writes the title: every
+    block it reports but a spec block, whose help says to write its name. Whether a block owes
     a title is one answer of the graph (`title::owes_title`), which the titles
     step, its judge and the typed create and retitle ask.
   """

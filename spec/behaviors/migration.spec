@@ -191,17 +191,19 @@ behavior add_missing_titles "Add Missing Titles" {
   ports      [FileSystem]
   contract   """
     The titles step MUST write a title into every block header that has
-    none, entity blocks and unions alike, written after the block's name
-    on whichever line of its header the name stands: the block's doc comment as the
+    none or a blank one (only whitespace), entity blocks, unions and refs
+    alike, every block E076 reports but a spec block, whose title is its
+    name: a missing title after the block's name on whichever line of its
+    header the name stands, a blank one where the parse read it: the block's doc comment as the
     parse reads it (the // lines directly above its header with no blank line
     between, never the format header), each line's text after // trimmed and the lines
     joined by one space, with \\ and " escaped, the comment lines removed.
     A block with no doc comment MUST get its id in Title Case words. The
-    step MUST leave define, spec and ref blocks, titled blocks and text
+    step MUST leave define, defaults and spec blocks, titled blocks and text
     with a syntax error as they are, and MUST be idempotent. It runs on
     every file it changes, whatever the file's format version, and the
     graph comparison keeps exactly the title it added where a block had
-    none.
+    none or a blank one.
   """
   verify unit "a doc comment directly above a block becomes its title"
   verify unit "a multi-line doc comment becomes one title"
@@ -353,7 +355,7 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     field values, methods and outgoing edges. Source positions MUST be
     ignored, since format migration inherently shifts them. The
     migration steps declare their own changes (add_missing_titles: a
-    title where a node had none); the delta is taken less those. The
+    title where a node had none or a blank one); the delta is taken less those. The
     migration keeps the graph exactly when that delta is empty. Each
     change the delta names MUST be reported as one W054 warning: an
     entity removed or added, an entity whose content changed (naming
