@@ -77,7 +77,9 @@ behavior apply_file_defaults "Apply File Defaults" {
     kind MUST be E077 and MUST NOT be applied. A title, a verify or method member, a
     field given twice, a second block for the kind, or a block after the file's
     first entity block MUST be E078. A block field equal to its default, and a
-    default no block takes, MUST be W161. A defaults block is never a node. A
+    default no block takes, MUST be W161. A defaults block is never a node. A W159 about a value a defaults block
+    writes is reported once, at the default; every other diagnostic about an inherited
+    value names each block that takes it. A
     token in a defaults block names its entity whether or not a block takes the
     default: a rename edits it, the editor's find-references shows it, and a
     delete refuses it. A default's token, a type name a derived field reads in it

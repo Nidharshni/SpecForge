@@ -100,7 +100,6 @@ fn format_writes_a_defaults_blocks_values_in_the_forms_of_the_kind_it_names() {
     );
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     behavior = "check_field_value_types",
     verify = "a value a defaults block writes in the other form is W159 once, at the default"

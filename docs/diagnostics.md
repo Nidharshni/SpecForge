@@ -3312,7 +3312,9 @@ enum, identifier or reference value and each item of a reference list; quoted
 for text and each item of a string list. This value is written the other way. It
 reads the same, so the graph is unchanged; run specforge format (or format the
 document in the editor) to rewrite every value in its form. A bare word on a
-kind that takes members (type, port) is left alone: it may be a member's type.
+kind that takes members (type, port) is left alone: it may be a member's type. A
+value a `defaults <kind>` block writes is reported once, at the default, however
+many blocks take it.
 
 Owner: core
 Level: warning
