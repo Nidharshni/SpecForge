@@ -122,7 +122,6 @@ fn the_lock_plan_judges_a_locked_module_by_what_it_declares() {
     behavior = "add_extension_to_existing_project",
     verify = "an add of an installed extension whose lock entry records other than its module declares rewrites the entry from the module"
 )]
-#[ignore = "flipped by T6"]
 fn an_add_rewrites_a_lock_entry_its_module_does_not_declare() {
     let dir = project(&[]);
     let file = dir.path().join("base.wasm");

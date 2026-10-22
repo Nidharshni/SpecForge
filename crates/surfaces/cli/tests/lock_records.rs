@@ -39,7 +39,6 @@ fn lock(project: &TestProject) -> Value {
     behavior = "load_wasm_module",
     verify = "a lock entry whose binary declares another version or other peers is refused with E070 through check, and add of its file rewrites it"
 )]
-#[ignore = "flipped by T6"]
 fn a_lock_entry_its_binary_does_not_declare_is_e070_until_an_add_rewrites_it() {
     let project = greeting_project();
     project.write("greet.wasm", greet_wasm());

@@ -328,7 +328,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     A .wasm file entry that declares a builtin's name is never admitted, so it does not stand in
     the way of enabling that builtin.
     Only a named entry (name, or name@version as older adds wrote it) makes an extension already
-    enabled or already present.
+    enabled or already present, and an installed one is present only when it is pinned at this
+    version with these bytes and its module declares what its lock entry records: an add over an
+    entry that does not rewrites it from the module.
     A dry run is the add's lock plan judged and not committed: it answers
     what the add would answer for each specifier (planned, with the
     builtins it would enable as peers_enabled), or the refusal the add

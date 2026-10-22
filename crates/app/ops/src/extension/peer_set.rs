@@ -228,11 +228,6 @@ impl<'r> Declarations<'r> {
         }
     }
 
-    /// The disk files and modules are read through.
-    pub(crate) fn disk(&self) -> &'r dyn Disk {
-        self.disk
-    }
-
     /// The builtin `name`'s declaration (`builtin_declaration`): E028 "the builtin '<name>' does not
     /// load: …" when it does not; `None` when it was not loaded and there is no runtime to read it.
     pub(crate) fn builtin(&mut self, name: &str) -> Result<Option<&ExtensionDeclaration>, OpError> {
