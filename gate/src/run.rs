@@ -363,6 +363,30 @@ pub(crate) fn named(only: Option<&str>, check: &str) -> bool {
     only.is_none_or(|list| list.split(',').any(|name| name == check))
 }
 
+/// The least free space a full run starts with: the build and the tests write about this much, and a disk that
+/// fills mid-run fails `tests` with "No space left on device", which reads as a code failure.
+const MIN_FREE_KIB: u64 = 8 * 1024 * 1024;
+
+/// Refuse a full run on a nearly full disk. Best effort: no `df`, or output it cannot read, passes.
+fn free_space(dir: &std::path::Path) -> Result<(), String> {
+    let Ok(out) = std::process::Command::new("df").arg("-k").arg(dir).output() else {
+        return Ok(());
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let free = text
+        .lines()
+        .nth(1)
+        .and_then(|l| l.split_whitespace().nth(3))
+        .and_then(|f| f.parse::<u64>().ok());
+    match free {
+        Some(kib) if kib < MIN_FREE_KIB => Err(format!(
+            "only {:.1} GB free where the gate writes (needs 8): run `cargo run -p xtask --bin clean-target`",
+            kib as f64 / 1048576.0
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// Run the checks `mode` selects (only those `only` names when given), at most one compiling check at a time, each
 /// after the checks it names. Logs go to `<target_dir>/gate/`.
 pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String> {
@@ -370,6 +394,9 @@ pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String
         if !CHECKS.iter().any(|c| c.name == name) {
             return Err(format!("no check named `{name}` (cargo gate list)"));
         }
+    }
+    if matches!(mode, Mode::Full | Mode::Ci) {
+        free_space(&repo.target_dir)?;
     }
     let changes = match mode {
         Mode::Hook => ChangeSet::staged(repo)?,

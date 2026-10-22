@@ -35,6 +35,9 @@ for the crates it touched, and its final reply is in.
 
 A dead agent (API error) resumes with `SendMessage`; its worktree survives.
 
+When the disk runs low, `cargo run -p xtask --bin clean-target` (`--dry-run` to preview) removes the stale
+duplicates cargo leaves in `target/*/deps`, `incremental/` and `blob-stage/`; a full `cargo gate` refuses to start under 8 GB free.
+
 Each worktree agent builds into its own target directory, about 30 GB for the workspace. Before launching a wave,
 compare `df -h ..` with `du -sh ../SpecForge-targets/*`. When the disk holds fewer target directories than the wave
 has agents, run the plans **serially** instead: one agent at a time, in the README's merge order, committing straight

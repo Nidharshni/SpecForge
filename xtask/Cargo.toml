@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Repository tasks that link the workspace: build-blobs, revendor, check-links and check-modules"
+description = "Repository tasks that link the workspace: build-blobs, revendor, check-links, check-modules and clean-target"
 edition = "2024"
 version = "0.1.0"
 publish = false
@@ -12,6 +12,10 @@ path = "src/build_blobs.rs"
 [[bin]]
 name = "revendor"
 path = "src/revendor.rs"
+
+[[bin]]
+name = "clean-target"
+path = "src/clean_target.rs"
 
 [[bin]]
 name = "check-links"
