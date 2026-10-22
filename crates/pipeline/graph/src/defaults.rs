@@ -201,11 +201,7 @@ impl<'f> FileDefaults<'f> {
     /// default is [`Self::entry`] of the block's kind, so E077 and E078 are honoured. A `defaults` block holds only its
     /// own entries (no default applies to the kind `defaults`).
     pub fn held<'a>(&'a self, block: &'a Entity, field: &str) -> Held<&'a FieldEntry> {
-        let own = block
-            .fields
-            .entries()
-            .iter()
-            .find(|e| e.key.as_str() == field);
+        let own = block.fields.entry(field);
         let default = if is_defaults_block(block) {
             None
         } else {

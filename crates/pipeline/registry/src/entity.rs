@@ -19,8 +19,8 @@ pub struct EntityRecord {
     pub id: String,
     pub kind: String,
     pub span: SourceSpan,
-    /// Every field the entity writes, in source order (a name written twice
-    /// appears twice), each with its field text.
+    /// Every field the entity writes, once each, in source order, each with
+    /// its field text.
     pub fields: Vec<FieldRecord>,
     /// Its `verify` statements, in order: what it declares it will prove.
     pub obligations: Vec<ObligationRecord>,
@@ -250,12 +250,11 @@ impl EntityRecord {
         self
     }
 
-    /// The text of `key`: the last occurrence's, the value the entity gives
-    /// it.
+    /// The text of `key`: its one entry's (a node holds a key once, ADR 0215; a record built by hand reads its
+    /// first).
     pub fn field(&self, key: &str) -> Option<&str> {
         self.fields
             .iter()
-            .rev()
             .find(|f| f.key == key)
             .map(|f| f.text.as_str())
     }
@@ -316,22 +315,21 @@ mod tests {
         behavior = "snapshot_entities_once",
         verify = "every field an entity writes has one text, the same for declarative rules, custom validators and compiler passes"
     )]
-    fn entity_record_lookups_read_the_last_occurrence() {
+    fn entity_record_lookups_read_a_fields_one_text() {
         let record = EntityRecord::new("item", "a", &span())
             .with_field("status", "draft")
             .with_field("empty", "")
             .with_list("tags", &["x, y", "z"])
-            .with_field("status", "final")
             .with_edges(Direction::Outgoing, Some("Implements"), 2)
             .with_edges(Direction::Outgoing, Some("Emits"), 1)
             .with_edges(Direction::Outgoing, None, 1)
             .with_edges(Direction::Incoming, Some("Contains"), 1);
 
-        // A name written twice reads as its last text; both stay listed.
-        assert_eq!(record.field("status"), Some("final"));
+        // A name has one text.
+        assert_eq!(record.field("status"), Some("draft"));
         assert_eq!(
             record.field_keys().collect::<Vec<_>>(),
-            ["status", "empty", "tags", "status"]
+            ["status", "empty", "tags"]
         );
         // Written but empty is written.
         assert!(record.writes("empty"));

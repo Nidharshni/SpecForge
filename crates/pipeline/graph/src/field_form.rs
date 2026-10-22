@@ -701,8 +701,8 @@ pub fn write(value: &FieldValue) -> FieldJson {
     })
 }
 
-/// Every field of `fields` written by [`write`], keyed by name (a name
-/// written twice keeps its last value).
+/// Every field of `fields` written by [`write`], keyed by name (a node holds a
+/// name once, ADR 0215).
 pub fn write_fields(fields: &FieldMap) -> BTreeMap<String, FieldJson> {
     fields
         .entries()

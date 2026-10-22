@@ -377,16 +377,15 @@ fn changes(
     (fields.into_iter().collect(), aspects.into_iter().collect())
 }
 
-/// Each field's values (a key may repeat) as every output writes them: the
-/// written form has no positions.
-fn field_contents(node: &Node) -> BTreeMap<String, Vec<Value>> {
-    let mut fields: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+/// Each field's value as every output writes it: the written form has no positions.
+fn field_contents(node: &Node) -> BTreeMap<String, Value> {
+    let mut fields: BTreeMap<String, Value> = BTreeMap::new();
     for entry in node.fields.entries() {
         let value = serde_json::json!({
             "value": Value::from(crate::field_form::write(&entry.value)),
             "annotations": serde_json::to_value(&entry.annotations).unwrap_or_default(),
         });
-        fields.entry(entry.key.to_string()).or_default().push(value);
+        fields.entry(entry.key.to_string()).or_insert(value);
     }
     fields
 }

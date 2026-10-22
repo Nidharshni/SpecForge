@@ -90,8 +90,5 @@ pub fn nested<'b>(
             ),
         ));
     };
-    Ok(Some((
-        outer,
-        map.entries().iter().find(|e| e.key.as_str() == entry),
-    )))
+    Ok(Some((outer, map.entry(entry))))
 }
