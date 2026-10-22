@@ -15,7 +15,6 @@ const BROKEN: &[u8] = b"\0asm in-process @x/broken 1.0.0";
     behavior = "scaffold_starter_spec_file",
     verify = "init writes the project's version into its starter as one string the starter reads back, whatever the version holds"
 )]
-#[ignore = "flipped by T3"]
 fn init_writes_any_version_as_the_one_string_its_starter_reads_back() {
     let scratch = TempDir::new().unwrap();
     let runtime = specforge_project::testing::component_runtime();

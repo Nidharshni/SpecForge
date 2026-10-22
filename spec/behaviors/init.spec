@@ -120,7 +120,10 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
     The starter spec's spec block MUST state the project's version, the
     one specforge.json records: an extension's template writes it as
     {version} (as {project} stands for the project id), which init fills
-    in. Init MUST write the starter as the
+    in with the version escaped as the inside of a .spec string (backslash,
+    quote, line breaks, tab), so a template writes it between quotes and the
+    spec block reads back the version specforge.json records, whatever it
+    holds. Init MUST write the starter as the
     formatter writes it, with the configuration of its directory and the
     field forms of the extensions it enables, whatever they contribute, so
     a freshly initialised project passes specforge format --check.
@@ -261,6 +264,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
   verify unit "init refuses a structural keyword as the starter's spec ID, whatever it enables"
   verify integration "a directory named after a kind init enables is refused as the project name, writing nothing"
+  verify integration "an init whose version holds a quote or a backslash writes a starter that passes format --check and check"
   verify integration "non-interactive output matches interactive output for same inputs"
   verify unit "non-interactive init with --format=json prints the init document specforge.init answers"
   verify unit "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"

@@ -19,6 +19,7 @@ use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
 use specforge_graph::FieldForms;
+use specforge_graph::field_form::spell;
 use specforge_installed::Installed;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::Disk;
@@ -47,6 +48,19 @@ pub const DEFAULT_VERSION: &str = "0.1.0";
 pub const SPEC_ROOT: &str = "spec";
 /// The starter file, relative to the project root.
 pub const STARTER_FILE: &str = "spec/hello.spec";
+/// The starter when no extension contributes one: structural syntax only, a template filled as an extension's is.
+const STRUCTURAL_STARTER: &str = r#"// {project} — starter spec file
+//
+// This file uses only structural syntax that the core compiler
+// understands without any extensions. Install extensions to unlock
+// domain-specific entity types.
+//
+// Try: specforge check
+
+spec "{project}" {
+  version "{version}"
+}
+"#;
 /// The files `.gitignore` gets: the inference cache, the report `collect`
 /// writes, and its working directory (installed extensions too).
 pub const GITIGNORE: [&str; 3] = [
@@ -258,12 +272,13 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         }
     }
 
-    let starter = match template {
-        Some(template) => template
-            .replace("{project}", &spec_id)
-            .replace("{version}", &version),
-        None => structural_starter(&spec_id, &version),
-    };
+    // Each placeholder stands for the inside of a `.spec` string: `{project}` first, so a version that
+    // writes `{project}` stays literal (ADR 0226).
+    let starter = template
+        .as_deref()
+        .unwrap_or(STRUCTURAL_STARTER)
+        .replace("{project}", &spell::escaped(&spec_id))
+        .replace("{version}", &spell::escaped(&version));
     // Whatever the extensions contribute, the file is written as the
     // formatter writes it, so `specforge format --check` accepts it, with the
     // configuration init's bound reads (ADR 0169) and the field forms of the build above.
@@ -379,23 +394,6 @@ fn canonical(starter: &str, dir: &Path, disk: &dyn Disk, forms: &FieldForms) -> 
     let config =
         Configs::new(Forms::none(), disk).layout(FormatPlace::InProject { root: dir, dir });
     specforge_formatter::format_source(starter, &config, forms).formatted
-}
-
-fn structural_starter(project_name: &str, version: &str) -> String {
-    format!(
-        r#"// {project_name} — starter spec file
-//
-// This file uses only structural syntax that the core compiler
-// understands without any extensions. Install extensions to unlock
-// domain-specific entity types.
-//
-// Try: specforge check
-
-spec "{project_name}" {{
-  version "{version}"
-}}
-"#
-    )
 }
 
 /// `.gitignore` with the missing [`GITIGNORE`] entries appended to `existing`, its bytes (a file that is not
