@@ -539,6 +539,9 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "a change of column or content alone moves no node"
   verify unit "a verify statement edit is the obligations aspect, not a changed field"
   verify unit "an incremental build compares each node's obligations"
+  verify unit "a changed annotation is a changed field, never an aspect"
+  verify unit "a method edit is the methods aspect, not a changed field"
+  verify unit "an annotation changed inside a block field is a change of the block field"
   verify unit "a delta over the changed files is the delta of the whole graphs"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
