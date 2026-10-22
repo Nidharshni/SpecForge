@@ -482,9 +482,8 @@ custom rule (`ValidatorField.value`, always a JSON string) and a compiler pass
 
 A written empty list or block is present with the text `""`, so
 `missing_required_field` does not fire on it and `non_empty` does. No written
-field is left out and no value is `null`. A name written twice: a pass and a
-declarative rule see its last text; a custom rule's `fields` lists every entry
-in order.
+field is left out and no value is `null`. A name written twice in one block
+is E081: every rule, pass and custom validator sees its first entry, once.
 
 A joined list cannot be split back when an item itself contains the joiner:
 `["a, b", "c"]` is `"a, b, c"`. A rule that must tell items apart needs a

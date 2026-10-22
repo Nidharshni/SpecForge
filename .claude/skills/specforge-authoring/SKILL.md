@@ -165,7 +165,7 @@ defaults behavior {
 }
 ```
 
-Every behavior in the file now has `features [task_management]`; a block that writes its own `features` replaces it whole (`features []` means none). The next behavior you add inherits it too, so write a default only for what is true of every block of the kind. A default sets a field the kind declares (E077), once per kind (E078), and a block restating it is W161. `specforge migrate` hoists the repeats of an existing file.
+Every behavior in the file now has `features [task_management]`; a block that writes its own `features` replaces it whole (`features []` means none). The next behavior you add inherits it too, so write a default only for what is true of every block of the kind. A default sets a field the kind declares (E077), once per kind (E078), and a block restating it is W161. `specforge migrate` hoists the repeats of an existing file. A block writes each field once (E081): give a list all its items in one `[...]`.
 
 ## Cross-Reference Conventions
 

@@ -497,7 +497,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   edit changes a field through one module (`edit::defaults::change`, ADR 0175): an inherited list or block field is
   copied into an own field first, the verb changes it, an own field that then holds what the default holds, as stored, is removed, and a
   field left empty over a default holds none (`[]`, `{}`; a field of one value is refused). `unset` leaves a field
-  holding none.
+  holding none. A block's own field is its first entry with the key (ADR 0215).
+- **Repeated field**: a key one block writes more than once, at any depth (E081, ADR 0215). The graph build keeps the first
+  entry and reports each later one; every reader of a node reads that one entry; the finder still reads the later
+  entries' names, so a rename edits them; a typed edit that changes the field removes the later entries.
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
