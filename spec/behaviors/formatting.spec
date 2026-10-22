@@ -335,7 +335,7 @@ behavior apply_format_rules "Apply Format Rules" {
     (ADR 0147): a quoted word (on a reference list, a quoted entity id, scheme
     refs included) on a field whose declared type writes it bare
     loses its quotes, and a bare word on a text field gains them, read from
-    the declarations of the document's own project, found from its place; nothing else in a string literal changes, and
+    the declarations of the document's own project, found from its place; a `defaults <kind>` block's values are read in the forms of the kind it names, as the graph applies them; nothing else in a string literal changes, and
     a triple-quoted one is kept byte-for-byte. Statements keep their source
     order; only runs of imports are sorted. An expression block's
     expressions are indented one level inside it, its closing brace at its

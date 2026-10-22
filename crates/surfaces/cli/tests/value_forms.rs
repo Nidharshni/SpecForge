@@ -76,7 +76,6 @@ const DEFAULTS: &str = "defaults behavior {\n  category \"cart\"\n}\n\n\
                         behavior add_item \"Add\" {\n  contract \"x\"\n}\n\n\
                         behavior remove_item \"Remove\" {\n  contract \"y\"\n}\n";
 
-#[ignore = "flipped by T3"]
 #[specforge_test_macros::test(
     behavior = "apply_format_rules",
     verify = "a defaults block's values are written in the forms of the kind it names"
