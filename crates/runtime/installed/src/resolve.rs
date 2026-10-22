@@ -7,10 +7,31 @@ use std::path::PathBuf;
 
 use specforge_common::ExtensionEntry;
 use specforge_package::PackageName;
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 
 use crate::Installed;
 use crate::load::{Builtins, EnabledExtension, LoadProblem};
 use crate::lock::{LockFileEntry, LockSource, LockState};
+
+/// What a component says about itself, as the admit rules read it: its name, its version and its
+/// peers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Declared {
+    pub name: String,
+    pub version: String,
+    pub peers: Vec<PeerDependency>,
+}
+
+impl Declared {
+    /// What `declaration` declares.
+    pub fn of(declaration: &ExtensionDeclaration) -> Self {
+        Declared {
+            name: declaration.name().to_string(),
+            version: declaration.version().to_string(),
+            peers: declaration.peers().to_vec(),
+        }
+    }
+}
 
 /// What one `extensions` entry names, decided as the extension load decides it, nothing loaded.
 #[derive(Debug, Clone, PartialEq)]
@@ -114,8 +135,8 @@ impl<'a> Resolution<'a> {
 impl<'a> Resolution<'a> {
     /// The extension load's walk (ADR 0181 D1): every entry in load order ([`Self::in_load_order`];
     /// `Again` entries are left out, they load nothing of their own). `read` says what a resolved
-    /// entry declares: the name it declares and what it brings, or why it brings nothing. The
-    /// declared name is admitted against the names the entries tried before it were admitted under
+    /// entry declares: what it declares ([`Declared`]) and what it brings, or why it brings nothing.
+    /// The declaration is admitted ([`Resolved::admit`]) against the names the entries tried before it were admitted under
     /// ([`Resolved::admit`]); `settle` turns what `read` brought and that verdict (the name the
     /// entry loads under, or the problem refusing it) into the entry's outcome. Only an admitted
     /// entry's name counts as loaded: an entry `read` refused leaves its name free, and a `settle`
@@ -124,7 +145,7 @@ impl<'a> Resolution<'a> {
     /// The outcomes come back in entry order, each with its index.
     pub fn walk<T, U, E>(
         &self,
-        mut read: impl FnMut(usize, &Resolved<'a>) -> Result<(String, T), E>,
+        mut read: impl FnMut(usize, &Resolved<'a>) -> Result<(Declared, T), E>,
         mut settle: impl FnMut(&Resolved<'a>, T, Result<&str, LoadProblem>) -> Result<U, E>,
     ) -> Vec<(usize, Result<U, E>)> {
         let mut admitted: HashSet<String> = HashSet::new();
@@ -134,7 +155,7 @@ impl<'a> Resolution<'a> {
                 match resolved.admit(&declared, &self.builtins, |name| admitted.contains(name)) {
                     Ok(()) => {
                         let name = match resolved {
-                            Resolved::File(_) => declared,
+                            Resolved::File(_) => declared.name,
                             Resolved::Builtin { name, .. }
                             | Resolved::Locked { name, .. }
                             | Resolved::Unloadable { name, .. } => (*name).to_string(),
@@ -224,17 +245,17 @@ impl Resolved<'_> {
     /// `Again` never reach a component, so they admit nothing to refuse.
     pub(crate) fn admit(
         &self,
-        declared: &str,
+        declared: &Declared,
         builtins: &Builtins,
         loaded: impl Fn(&str) -> bool,
     ) -> Result<(), LoadProblem> {
         match self {
-            Resolved::Locked { name, .. } if *name != declared => {
+            Resolved::Locked { name, .. } if *name != declared.name => {
                 Err(LoadProblem::NotItsLockEntry {
-                    declared: declared.to_string(),
+                    declared: declared.name.clone(),
                 })
             }
-            Resolved::File(file) => file.admit(declared, builtins, loaded),
+            Resolved::File(file) => file.admit(&declared.name, builtins, loaded),
             _ => Ok(()),
         }
     }
@@ -442,6 +463,15 @@ mod tests {
         ));
     }
 
+    /// A component declaring `name` at 1.0.0 with no peers.
+    fn declared_as(name: &str) -> Declared {
+        Declared {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            peers: Vec::new(),
+        }
+    }
+
     #[test]
     fn the_walk_admits_against_the_names_entries_before_it_were_admitted_under() {
         let installed = Installed::with_lock(Path::new("/p"), lock_of(&["@acme/tool"]));
@@ -456,12 +486,12 @@ mod tests {
             let resolution = installed.resolve(&entries, &Builtins::none());
             resolution.walk(
                 |_, resolved| match resolved {
-                    Resolved::Locked { name, .. } if tool_loads => Ok(((*name).to_string(), ())),
+                    Resolved::Locked { name, .. } if tool_loads => Ok((declared_as(name), ())),
                     Resolved::Locked { .. } => Err(LoadProblem::NotInstalled),
                     Resolved::File(file) if file.key == "a.wasm" => {
-                        Ok(("@acme/tool".to_string(), ()))
+                        Ok((declared_as("@acme/tool"), ()))
                     }
-                    _ => Ok(("@acme/x".to_string(), ())),
+                    _ => Ok((declared_as("@acme/x"), ())),
                 },
                 |_, (), verdict| verdict.map(str::to_string),
             )
@@ -558,15 +588,15 @@ mod tests {
             entry: &entry,
         };
         assert_eq!(
-            builtin.admit("@acme/anything", &Builtins::none(), |_| true),
+            builtin.admit(&declared_as("@acme/anything"), &Builtins::none(), |_| true),
             Ok(())
         );
         assert_eq!(
-            installed.admit("@acme/a", &Builtins::none(), |_| true),
+            installed.admit(&declared_as("@acme/a"), &Builtins::none(), |_| true),
             Ok(())
         );
         assert_eq!(
-            installed.admit("@acme/b", &Builtins::none(), |_| false),
+            installed.admit(&declared_as("@acme/b"), &Builtins::none(), |_| false),
             Err(LoadProblem::NotItsLockEntry {
                 declared: "@acme/b".to_string()
             })
@@ -578,7 +608,8 @@ mod tests {
             written: Some("@acme/x"),
         };
         assert_eq!(
-            Resolved::File(file.clone()).admit("@acme/g", &Builtins::none(), |_| false),
+            Resolved::File(file.clone())
+                .admit(&declared_as("@acme/g"), &Builtins::none(), |_| false),
             file.admit("@acme/g", &Builtins::none(), |_| false)
         );
     }
@@ -650,6 +681,9 @@ mod tests {
             name: "@acme/core",
             bytes: b"",
         };
-        assert_eq!(builtin.admit("@acme/core", &builtins, |_| false), Ok(()));
+        assert_eq!(
+            builtin.admit(&declared_as("@acme/core"), &builtins, |_| false),
+            Ok(())
+        );
     }
 }

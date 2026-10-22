@@ -18,7 +18,7 @@ use specforge_wasm::protocol::load_declaration;
 use crate::Installed;
 use crate::lock::LockFileEntry;
 use crate::module::Module;
-use crate::resolve::{Origin, Resolved};
+use crate::resolve::{Declared, Origin, Resolved};
 
 /// The builtin extensions the host embeds: name and component bytes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -563,7 +563,7 @@ impl Installed {
         resolved: &Resolved,
         runtime: &dyn WasmRuntime,
         disk: &dyn Disk,
-    ) -> Result<(String, Done), LoadFailure> {
+    ) -> Result<(Declared, Done), LoadFailure> {
         let subject = subject(resolved);
         let fail = |problem: LoadProblem| self.failure(&subject, problem);
         let mut notices = Vec::new();
@@ -607,7 +607,7 @@ impl Installed {
             })
         })?;
         Ok((
-            read.declaration.name().to_string(),
+            Declared::of(&read.declaration),
             Done {
                 declaration: read.declaration,
                 notices,

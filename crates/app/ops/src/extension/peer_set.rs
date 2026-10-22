@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use specforge_installed::{Installed, Origin, Resolved};
+use specforge_installed::{Declared, Installed, Origin, Resolved};
 use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_registry::{Disk, PlainDisk};
@@ -75,9 +75,9 @@ impl ProjectPeers {
                     return Err(());
                 }
                 let origin = resolution.origin(i);
-                let (name, declared) = match resolved {
+                let declared = match resolved {
                     Resolved::Builtin { name, .. } => match read.builtin(name) {
-                        Ok(Some(declared)) => ((*name).to_string(), declared),
+                        Ok(Some(declared)) => Declared::of(declared),
                         Ok(None) => return Err(()),
                         Err(error) => {
                             broken = Some(error);
@@ -91,27 +91,25 @@ impl ProjectPeers {
                         {
                             return Err(());
                         }
-                        let member = PeerMember {
+                        Declared {
                             name: entry.name.to_string(),
                             version: entry.version.clone(),
                             peers: entry.peer_dependencies.clone(),
-                            origin,
-                        };
-                        return Ok((member.name.clone(), member));
+                        }
                     }
                     Resolved::File(file) => match read.file(&file.file) {
-                        Some(declared) => (declared.name().to_string(), declared),
+                        Some(declared) => Declared::of(declared),
                         None => return Err(()),
                     },
                     Resolved::Unloadable { .. } | Resolved::Again { .. } => return Err(()),
                 };
                 let member = PeerMember {
-                    name: name.clone(),
-                    version: declared.version().to_string(),
-                    peers: declared.peers().to_vec(),
+                    name: declared.name.clone(),
+                    version: declared.version.clone(),
+                    peers: declared.peers.clone(),
                     origin,
                 };
-                Ok((name, member))
+                Ok((declared, member))
             },
             |_, member, admitted| admitted.map(|_| member).map_err(|_| ()),
         );

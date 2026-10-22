@@ -27,7 +27,7 @@ pub use layout::{LOCK_FILE, lock_path};
 pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded};
 pub use lock::{LockFile, LockFileEntry, LockSource, LockState, read_lock_file, write_lock_file};
 pub use module::{Module, hex_sha256};
-pub use resolve::{FileEntry, Origin, Resolution, Resolved};
+pub use resolve::{Declared, FileEntry, Origin, Resolution, Resolved};
 
 /// A project's installed extensions: its root and what `specforge.lock`
 /// held when it was read, once. Every rule about installed extensions is
