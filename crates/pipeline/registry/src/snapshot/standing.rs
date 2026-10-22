@@ -67,7 +67,7 @@ impl Standing {
 
     /// It counts toward coverage: the coverage rule's
     /// [`Counting::counts`](specforge_coverage::Counting::counts) over its
-    /// facts. Every reader (inspect, the coverage view, stats, the plan check) asks this.
+    /// facts. Every reader (inspect, the coverage view, its status, stats, the plan check) asks this.
     pub fn counts(&self) -> bool {
         self.counting().counts()
     }
@@ -78,11 +78,6 @@ impl Standing {
     /// `ProjectCoverage::statuses` ask this.
     pub fn status(&self, verdict: &specforge_coverage::Verdict) -> specforge_coverage::Status {
         self.counting().status(verdict)
-    }
-
-    /// Testable, but it owes none and declares none, so it does not count.
-    pub fn exempt(&self) -> bool {
-        self.counting().exempt()
     }
 
     /// The rule that reports it now: it owes obligations and declares none.

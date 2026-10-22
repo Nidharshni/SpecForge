@@ -46,13 +46,13 @@ fn standing(view: &ProjectView, id: &str) -> Standing {
     inspect(view, id).unwrap().standing.clone()
 }
 
-/// `(testable, obligated, exempt)`, how inspect states a standing.
+/// `(testable, obligated, counts)`, how inspect states a standing.
 fn shape(view: &ProjectView, id: &str) -> (bool, bool, bool) {
     let facts = inspect(view, id).unwrap();
     (
         facts.standing.testable,
         facts.standing.obligated(),
-        facts.standing.exempt(),
+        facts.standing.counts(),
     )
 }
 
@@ -69,12 +69,12 @@ fn standing_is_the_coverage_views() {
         assert_eq!(standing.status(&row.verdict), row.status, "{id}");
         assert_eq!(standing.counts(), row.status.counts(), "{id}");
     }
-    assert_eq!(shape(&view, "ob"), (true, true, false));
-    assert_eq!(shape(&view, "fr"), (true, false, true));
-    assert_eq!(shape(&view, "U"), (true, true, true));
-    assert_eq!(shape(&view, "ab"), (true, true, true));
+    assert_eq!(shape(&view, "ob"), (true, true, true));
+    assert_eq!(shape(&view, "fr"), (true, false, false));
+    assert_eq!(shape(&view, "U"), (true, true, false));
+    assert_eq!(shape(&view, "ab"), (true, true, false));
     assert_eq!(shape(&view, "n"), (false, false, false));
-    assert_eq!(shape(&view, "done"), (true, true, false));
+    assert_eq!(shape(&view, "done"), (true, true, true));
 }
 
 #[specforge_test(

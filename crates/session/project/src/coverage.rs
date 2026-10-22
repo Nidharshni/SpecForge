@@ -537,7 +537,7 @@ mod tests {
         let tests: TestReport = serde_json::from_str(&report("passed")).unwrap();
         let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
         let login = project.entities().standing("login").unwrap().clone();
-        assert!(login.testable && login.counts() && !login.exempt());
+        assert!(login.testable && login.counts() && !login.counting().exempt());
         assert!(!coverage.is_unverified("login"), "proven");
         assert!(
             coverage.is_unverified("logout"),
