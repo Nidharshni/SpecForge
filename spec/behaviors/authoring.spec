@@ -49,6 +49,7 @@ behavior create_entity "Create an Entity" {
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new --in reads a spelling of an existing file as that file"
   verify integration "new refuses a file named from the project root, naming its spec-root spelling"
+  verify integration "new --in refuses a new file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
   verify unit "a kind's field named like one of new's options is no flag of new, and the kind's help says to set it with set"

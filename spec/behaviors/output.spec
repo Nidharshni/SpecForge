@@ -456,6 +456,7 @@ behavior read_a_named_spec_file "Read a Spec File a Request Names" {
   verify unit "a read of a file that is no compiled source is file_not_found"
   verify unit "a spec file named from the project root is refused naming its spec-root spelling"
   verify unit "a refusal of a named spec file names the file as the request spelled it"
+  verify unit "a new spec file named from the project root is refused naming its spec-root spelling"
 }
 
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
