@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use specforge_graph::{Graph, Node, ValueShape};
-use specforge_parser::{FieldValue, UNION_VARIANTS_FIELD};
+use specforge_parser::FieldValue;
 
 use super::text::{field_items, field_text};
 use crate::compilation::RegistryBuild;
@@ -137,23 +137,18 @@ pub(super) fn record(
 /// declares `exempts_obligations` (as `@specforge/formal` declares
 /// `abstract true`); a kind that accepts no `verify` statements
 /// (`supports_verify` unset), which has nowhere to declare them. Decided
-/// from the entity's structure and the registries, never from field names:
+/// from the entity's structure (`FieldMap::is_union`) and the registries, never from field names:
 /// a struct member that only happens to be named `abstract` exempts
 /// nothing. A kind no extension declares is not known to refuse `verify`,
 /// so it is not exempt for that.
 fn exemption(node: &Node, kinds: &KindRegistry, fields: &FieldRegistry) -> Option<Exemption> {
     let kind = node.kind.raw.as_str();
-    let entries = node.fields.entries();
-    // The union syntax is structural: its body is the variant list, under
-    // the parser's own key (a user's `values [a, b]` is a list, and exempts
-    // nothing).
-    let union = entries.iter().any(|entry| {
-        matches!(&entry.value, FieldValue::VariantList(variants)
-            if entry.key.as_str() == UNION_VARIANTS_FIELD && !variants.is_empty())
-    });
-    if union {
+    // A union (`type X = A | B`) has no body to hold them: the parse's answer, never a field's name
+    // (a user's `values [a, b]` is a list, and exempts nothing).
+    if node.fields.is_union() {
         return Some(Exemption::Union);
     }
+    let entries = node.fields.entries();
     let flag = entries.iter().find(|entry| {
         is_set(&entry.value)
             && fields

@@ -206,6 +206,17 @@ impl FieldMap {
         }
     }
 
+    /// Whether the block these fields were read from is a union (`kind name "Title" = a | b`) rather than braced
+    /// (`{ ... }`): it holds the parser's own variant list. Decided by the body's syntax, never by a field's name: a
+    /// braced block's member named `variants` is a field like any other, and so is a type union written as a
+    /// member's value (`variants a | b`, a [`FieldValue::TypeUnion`]). The registry's union exemption and the typed
+    /// edits read it (ADR 0219).
+    pub fn is_union(&self) -> bool {
+        self.entries
+            .iter()
+            .any(|e| matches!(e.value, FieldValue::VariantList(_)))
+    }
+
     pub fn entries(&self) -> &[FieldEntry] {
         &self.entries
     }
@@ -309,7 +320,7 @@ pub enum FieldValue {
     /// (`specforge_graph::Reading::references`), never decided here.
     List(Vec<ListItem>),
     /// A union body's variants (`type X = a | b`), under
-    /// [`UNION_VARIANTS_FIELD`] only.
+    /// [`UNION_VARIANTS_FIELD`] only; [`FieldMap::is_union`] reads it.
     VariantList(Vec<TypeMember>),
     Block(FieldMap),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.
