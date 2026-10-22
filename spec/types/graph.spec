@@ -27,6 +27,30 @@ type Node "Node" {
   verify unit "Node schema is valid"
 }
 
+type AnnotationJson "One @name annotation as every output writes it: after a field's value or a parameter's type" {
+  name  string
+  /// Absent when the annotation writes no value.
+  value string @optional
+  verify unit "AnnotationJson schema is valid"
+}
+
+type ParameterJson "One parameter of a method as every output writes it" {
+  name        string
+  type        string
+  /// Present, true, when it is written name?: Type.
+  optional    boolean          @optional
+  annotations AnnotationJson[] @optional
+  verify unit "ParameterJson schema is valid"
+}
+
+type MethodJson "One method member as every output writes it: no position" {
+  name    string
+  params  ParameterJson[]
+  /// Absent when the method writes no return type.
+  returns string @optional
+  verify unit "MethodJson schema is valid"
+}
+
 type Edge "Edge" {
   source    EntityId @readonly
   target    EntityId @readonly

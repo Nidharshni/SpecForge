@@ -1,8 +1,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_coverage::Status;
-use specforge_graph::Obligation;
 use specforge_graph::field_form::{FieldJson, write};
+use specforge_graph::{AnnotationJson, Members, MethodJson, Obligation};
 use specforge_graph::{FieldValue, Node};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -21,6 +21,11 @@ pub(crate) struct ContextNode {
     verify: Option<Vec<Obligation>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     fields: BTreeMap<String, FieldJson>,
+    /// The annotations of the fields it keeps (a headline or a normative one), by path (ADR 0222).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    annotations: BTreeMap<String, Vec<AnnotationJson>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    methods: Vec<MethodJson>,
     /// The entity's coverage status, when the export was given verdicts
     /// (`EmitOptions::coverage`): what `specforge query --include-coverage`
     /// shows.
@@ -29,7 +34,16 @@ pub(crate) struct ContextNode {
 }
 
 /// Keys a context node has of its own, which no headline field may take.
-const NODE_KEYS: [&str; 6] = ["id", "kind", "title", "verify", "fields", "coverage_status"];
+const NODE_KEYS: [&str; 8] = [
+    "id",
+    "kind",
+    "title",
+    "verify",
+    "fields",
+    "annotations",
+    "methods",
+    "coverage_status",
+];
 
 /// The fields of `node` its extension declares `headline`, as text, for the
 /// context node's top level.
@@ -97,16 +111,29 @@ pub(crate) fn context_node(
     registry: &FieldRegistry,
     coverage_status: Option<Status>,
 ) -> ContextNode {
+    let fields = normative_fields(n, registry);
+    let headline = headline_fields(n, registry);
+    let Members {
+        annotations,
+        methods,
+        ..
+    } = Members::of(n);
+    let kept = |field: &str| fields.contains_key(field) || headline.contains_key(field);
     ContextNode {
         id: n.id.raw.to_string(),
         kind: n.kind.raw.to_string(),
         title: n.title.clone(),
-        headline: headline_fields(n, registry),
+        annotations: annotations
+            .into_iter()
+            .filter(|(path, _)| kept(Members::field_of(path)))
+            .collect(),
+        methods,
+        headline,
         verify: {
             let statements = &n.obligations;
             (!statements.is_empty()).then(|| statements.iter().map(Obligation::of).collect())
         },
-        fields: normative_fields(n, registry),
+        fields,
         coverage_status,
     }
 }

@@ -10,7 +10,7 @@ mod escape;
 use std::collections::BTreeSet;
 
 use specforge_common::Sym;
-use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Node, Selected, Written};
+use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Members, Node, Selected, Written};
 use specforge_registry::snapshot::field_text;
 
 use crate::emit::EmitOptions;
@@ -24,6 +24,8 @@ const NONE: &str = "—";
 /// and the entity when it resolves.
 struct Row<'g> {
     field: &'g str,
+    /// The field's annotations as written (` @a @b`), empty for a referrer's edge label.
+    noted: String,
     id: &'g str,
     entity: Option<&'g Node>,
 }
@@ -88,7 +90,8 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
     let span = &node.source_span;
     let mut blocks = vec![heading, format!("`{}:{}`", span.file, span.start_line)];
 
-    let links = links(graph, node, options.registries.field_forms());
+    let members = Members::of(node);
+    let links = links(graph, node, options.registries.field_forms(), &members);
     let linked: BTreeSet<&str> = links.iter().map(|r| r.field).collect();
     let mut fields = Vec::new();
     let mut prose = Vec::new();
@@ -101,13 +104,21 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
             .is_some_and(|f| f.declared().normative);
         if normative {
             let text = field_text(&entry.value);
-            blocks.push(format!("**{key}**\n\n{}", escape::quote(&inline(&text))));
+            blocks.push(format!(
+                "**{key}**{}\n\n{}",
+                inline(&noted(key, &members)),
+                escape::quote(&inline(&text))
+            ));
         } else if linked.contains(key) {
             continue;
-        } else if let Some(text) = prose_of(&entry.value) {
-            prose.push(format!("**{key}**\n\n{text}"));
+        } else if let Some(text) = prose_of(&entry.value, key, &members) {
+            prose.push(format!(
+                "**{key}**{}\n\n{text}",
+                inline(&noted(key, &members))
+            ));
         } else {
-            fields.push(vec![key.to_string(), cell(&field_text(&entry.value))]);
+            let value = format!("{}{}", field_text(&entry.value), noted(key, &members));
+            fields.push(vec![key.to_string(), cell(&value)]);
         }
     }
     if !fields.is_empty() {
@@ -117,6 +128,14 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
         ));
     }
     blocks.extend(prose);
+    if !members.methods.is_empty() {
+        let lines: Vec<String> = members
+            .methods
+            .iter()
+            .map(|m| format!("- `{}`", m.signature()))
+            .collect();
+        blocks.push(format!("**Methods**\n\n{}", lines.join("\n")));
+    }
     if !links.is_empty() {
         blocks.push(format!("**Links**\n\n{}", entity_table(&links)));
     }
@@ -125,6 +144,7 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
         .into_iter()
         .map(|e| Row {
             field: e.label.as_str(),
+            noted: String::new(),
             id: e.source.as_str(),
             entity: graph.node(e.source.as_str()),
         })
@@ -153,7 +173,12 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
 /// `node`'s references: each written reference in field and written order
 /// (linked, or unresolved), then each edge from it not listed yet (derived
 /// ones), in edge order.
-fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g>> {
+fn links<'g>(
+    graph: &'g Graph,
+    node: &'g Node,
+    forms: &FieldForms,
+    members: &Members,
+) -> Vec<Row<'g>> {
     let edges = graph.edges_from(node.id.raw.as_str());
     let linked = |field: &str, target: &str| {
         edges
@@ -172,6 +197,7 @@ fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g
                 .flatten();
             rows.push(Row {
                 field,
+                noted: noted(field, members),
                 id: reference.id,
                 entity,
             });
@@ -182,6 +208,7 @@ fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g
         if !rows.iter().any(|r| r.field == field && r.id == target) {
             rows.push(Row {
                 field,
+                noted: String::new(),
                 id: target,
                 entity: graph.node(target),
             });
@@ -192,7 +219,7 @@ fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g
 
 /// A prose-shaped value as a paragraph or list: a multi-line string, a list
 /// of quoted strings, a block. `None` for any other value.
-fn prose_of(value: &FieldValue) -> Option<String> {
+fn prose_of(value: &FieldValue, key: &str, members: &Members) -> Option<String> {
     match value {
         FieldValue::String(s) if s.contains('\n') => Some(dedent(&inline(s)).join("\n")),
         FieldValue::List(items)
@@ -206,7 +233,7 @@ fn prose_of(value: &FieldValue) -> Option<String> {
         }
         FieldValue::Block(block) => {
             let mut lines = Vec::new();
-            block_lines(block, 0, &mut lines);
+            block_lines(block, key, 0, members, &mut lines);
             Some(lines.join("\n"))
         }
         _ => None,
@@ -225,23 +252,43 @@ fn entity_table(rows: &[Row<'_>]) -> String {
                 ),
                 None => (NONE.to_string(), "*unresolved*".to_string()),
             };
-            vec![r.field.to_string(), format!("`{}`", r.id), kind, title]
+            vec![
+                format!("{}{}", r.field, cell(&r.noted)),
+                format!("`{}`", r.id),
+                kind,
+                title,
+            ]
         })
         .collect();
     table(&["Field", "Entity", "Kind", "Title"], rows)
 }
 
+/// The annotations written after the field at `path`, each with a space before it; empty when it has none.
+fn noted(path: &str, members: &Members) -> String {
+    members.annotations.get(path).map_or_else(String::new, |a| {
+        a.iter().map(|a| format!(" {}", a.spelled())).collect()
+    })
+}
+
 /// A block as `- key: text` lines, nested two spaces per level.
-fn block_lines(block: &FieldMap, depth: usize, out: &mut Vec<String>) {
+fn block_lines(
+    block: &FieldMap,
+    path: &str,
+    depth: usize,
+    members: &Members,
+    out: &mut Vec<String>,
+) {
     let pad = "  ".repeat(depth);
     for entry in block.entries() {
+        let path = format!("{path}.{}", entry.key);
+        let note = inline(&noted(&path, members)).into_owned();
         match &entry.value {
             FieldValue::Block(inner) => {
-                out.push(format!("{pad}- {}:", entry.key));
-                block_lines(inner, depth + 1, out);
+                out.push(format!("{pad}- {}:{note}", entry.key));
+                block_lines(inner, &path, depth + 1, members, out);
             }
             value => out.push(format!(
-                "{pad}- {}: {}",
+                "{pad}- {}: {}{note}",
                 entry.key,
                 inline(&field_text(value)).replace('\n', " ")
             )),

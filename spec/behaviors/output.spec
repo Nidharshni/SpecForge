@@ -54,8 +54,11 @@ behavior serialize_json_graph "Serialize JSON Graph" {
     their display form, one per line, an integer or boolean as a JSON
     scalar, a list as an array, a block as an object of its entries; an entity's
     verify statements as {kind, description} objects under the node's own
-    `verify`, beside its fields. No position and no parse tree
-    is ever written.
+    `verify`, beside its fields; its methods as {name, params, returns}
+    under its own `methods` (a parameter as {name, type, optional?,
+    annotations?}); the annotations written after its fields under its own
+    `annotations`, by the field's name (a block field's entry's by
+    `outer.key`). No position and no parse tree is ever written.
   """
   verify unit "JSON output contains all nodes"
   verify unit "JSON output contains all edges"
@@ -1164,7 +1167,9 @@ behavior export_agent_context_format "Export Agent Context Format" {
     non-existent entity ID, the system MUST emit an E003 diagnostic
     and exit with code 1. When coverage metadata is available from
     compute_project_statistics, the context export MUST include
-    coverage_pct and testable_entity_count in the graph metadata.
+    coverage_pct and testable_entity_count in the graph metadata. An entity
+    also carries its methods under `methods`, and the annotations of the
+    fields it keeps under `annotations`, as the graph format writes them.
   """
   verify unit "context format includes entity IDs and contracts"
   verify unit "context format omits verbose prose fields"
@@ -1252,7 +1257,10 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph
-    Protocol version.
+    Protocol version. An entity's methods are written under its own
+    `methods` and the annotations written after its fields under its own
+    `annotations`, by the field's name (a block field's entry's by
+    `outer.key`), beside its fields.
   """
   verify unit "graph format includes all nodes and edges"
   verify unit "graph format includes all fields and metadata"
@@ -1291,7 +1299,8 @@ behavior export_review_document "Export a Review Document" {
     the selection too. The document MUST be deterministic: the scoped
     entity first, then by kind and id, with no timestamp. Prose renders as
     written, with raw HTML, entity references and backslashes escaped
-    outside code spans.
+    outside code spans. A field's annotations follow its written value, and
+    a Methods block lists the signature of each method in written order.
   """
   verify unit "a section is headed by its kind, id and title"
   verify unit "a normative field is quoted whole"

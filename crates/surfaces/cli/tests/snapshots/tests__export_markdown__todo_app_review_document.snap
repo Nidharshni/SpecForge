@@ -514,6 +514,14 @@ without running a server.
 | direction | outbound |
 | category | persistence/task |
 
+**Methods**
+
+- `create(cmd: CreateTaskCommand) -> Result<Task, InvalidTitleError>`
+- `findById(id: string) -> Result<Task, TaskNotFoundError>`
+- `complete(cmd: CompleteTaskCommand) -> Result<Task, TaskNotFoundError>`
+- `list(status: TaskStatus) -> Task[]`
+- `delete(id: string) -> Result<void, TaskNotFoundError>`
+
 **Links**
 
 | Field | Entity | Kind | Title |
@@ -638,7 +646,7 @@ without running a server.
 | Field | Value |
 |---|---|
 | title | string |
-| description | string |
+| description | string @optional |
 
 **Referenced by**
 
@@ -661,7 +669,7 @@ without running a server.
 
 | Field | Value |
 |---|---|
-| _tag | InvalidTitleError |
+| _tag | InvalidTitleError @literal |
 | reason | string |
 
 **Referenced by**
@@ -685,12 +693,12 @@ without running a server.
 
 | Field | Value |
 |---|---|
-| id | string |
+| id | string @readonly @unique |
 | title | string |
-| description | string |
+| description | string @optional |
 | status | TaskStatus |
-| createdAt | timestamp |
-| completedAt | timestamp |
+| createdAt | timestamp @readonly |
+| completedAt | timestamp @optional |
 
 **Links**
 
@@ -721,7 +729,7 @@ without running a server.
 
 | Field | Value |
 |---|---|
-| taskId | string |
+| taskId | string @readonly |
 | completedAt | timestamp |
 
 **Referenced by**
@@ -744,7 +752,7 @@ without running a server.
 
 | Field | Value |
 |---|---|
-| taskId | string |
+| taskId | string @readonly |
 | title | string |
 
 **Referenced by**
@@ -767,7 +775,7 @@ without running a server.
 
 | Field | Value |
 |---|---|
-| _tag | TaskNotFoundError |
+| _tag | TaskNotFoundError @literal |
 | taskId | string |
 | message | string |
 

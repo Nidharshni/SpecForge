@@ -65,7 +65,6 @@ fn save() -> Value {
     behavior = "export_agent_graph_format",
     verify = "graph format writes each entity's methods and its fields' annotations"
 )]
-#[ignore = "flipped by T4"]
 fn a_graph_node_writes_its_methods_and_its_fields_annotations() {
     let export = crate::export(&graph(), EmitFormat::Json, None);
     let port = node(&export, "order_store");
@@ -92,7 +91,6 @@ fn a_graph_node_writes_its_methods_and_its_fields_annotations() {
     behavior = "export_agent_context_format",
     verify = "context format keeps an entity's methods and the annotations of the fields it keeps"
 )]
-#[ignore = "flipped by T4"]
 fn a_context_node_keeps_its_methods_and_its_fields_annotations() {
     let build = build_of(vec![
         kind("type", vec![field("note", true, false)]),
@@ -110,7 +108,6 @@ fn a_context_node_keeps_its_methods_and_its_fields_annotations() {
     behavior = "export_review_document",
     verify = "a section lists its methods, and each field's annotations follow its value"
 )]
-#[ignore = "flipped by T4"]
 fn a_section_lists_methods_and_annotations() {
     let export = crate::export(&graph(), EmitFormat::Markdown, None);
     assert!(

@@ -66,7 +66,8 @@ impl CoreTool for Tool {
         group: ToolGroup::Core,
     };
     const SPEC: ReplySpec = ReplySpec::Document("the agent export, ADR 0007");
-    const OPEN_VALUES: &'static [&'static str] = &["$.nodes[]", "$.nodes[].fields"];
+    const OPEN_VALUES: &'static [&'static str] =
+        &["$.nodes[]", "$.nodes[].fields", "$.nodes[].annotations"];
     type Args = Args;
     type Input = View;
     type Returns = Answered<Reply>;

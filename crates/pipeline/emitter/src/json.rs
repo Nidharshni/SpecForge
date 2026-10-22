@@ -1,8 +1,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_coverage::Status;
-use specforge_graph::field_form::{FieldJson, write_fields};
-use specforge_graph::{Graph, Node, Obligation};
+use specforge_graph::field_form::FieldJson;
+use specforge_graph::{AnnotationJson, Graph, Members, MethodJson, Node, Obligation};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
@@ -75,6 +75,13 @@ pub(crate) struct JsonNode {
     file: String,
     line: usize,
     fields: BTreeMap<String, FieldJson>,
+    /// The annotations written after its fields, by field name (a block field's entry's by `outer.key`); omitted
+    /// when it has none (ADR 0222).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    annotations: BTreeMap<String, Vec<AnnotationJson>>,
+    /// Its methods, in written order; omitted when it has none (ADR 0222).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    methods: Vec<MethodJson>,
     /// The entity's own `verify` statements, beside its fields (ADR 0094); omitted when it has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     verify: Option<Vec<Obligation>>,
@@ -87,13 +94,20 @@ pub(crate) struct JsonNode {
 
 /// `n` as the graph export writes an entity.
 pub(crate) fn graph_node(n: &Node, coverage_status: Option<Status>) -> JsonNode {
+    let Members {
+        fields,
+        annotations,
+        methods,
+    } = Members::of(n);
     JsonNode {
         id: n.id.raw.to_string(),
         kind: n.kind.raw.to_string(),
         title: n.title.clone(),
         file: n.source_span.file.to_string(),
         line: n.source_span.start_line,
-        fields: write_fields(&n.fields),
+        fields,
+        annotations,
+        methods,
         verify: (!n.obligations.is_empty())
             .then(|| n.obligations.iter().map(Obligation::of).collect()),
         coverage_status,

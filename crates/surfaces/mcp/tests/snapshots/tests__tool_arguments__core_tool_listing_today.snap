@@ -50,6 +50,21 @@ expression: listing
     },
     "outputSchema": {
       "$defs": {
+        "AnnotationJson": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
         "Edge": {
           "additionalProperties": false,
           "properties": {
@@ -276,6 +291,53 @@ expression: listing
           ],
           "type": "object"
         },
+        "MethodJson": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "params": {
+              "items": {
+                "$ref": "#/$defs/ParameterJson"
+              },
+              "type": "array"
+            },
+            "returns": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "params"
+          ],
+          "type": "object"
+        },
+        "ParameterJson": {
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "items": {
+                "$ref": "#/$defs/AnnotationJson"
+              },
+              "type": "array"
+            },
+            "name": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
         "SchemaRefBlock": {
           "additionalProperties": false,
           "properties": {
@@ -359,6 +421,15 @@ expression: listing
               "items": {
                 "additionalProperties": false,
                 "properties": {
+                  "annotations": {
+                    "additionalProperties": {
+                      "items": {
+                        "$ref": "#/$defs/AnnotationJson"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
                   "coverage_status": {
                     "enum": [
                       "covered",
@@ -387,6 +458,12 @@ expression: listing
                   "line": {
                     "minimum": 0,
                     "type": "integer"
+                  },
+                  "methods": {
+                    "items": {
+                      "$ref": "#/$defs/MethodJson"
+                    },
+                    "type": "array"
                   },
                   "title": {
                     "type": "string"
@@ -451,6 +528,15 @@ expression: listing
                   "type": "string"
                 },
                 "properties": {
+                  "annotations": {
+                    "additionalProperties": {
+                      "items": {
+                        "$ref": "#/$defs/AnnotationJson"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
                   "coverage_status": {
                     "enum": [
                       "covered",
@@ -472,6 +558,12 @@ expression: listing
                   },
                   "kind": {
                     "type": "string"
+                  },
+                  "methods": {
+                    "items": {
+                      "$ref": "#/$defs/MethodJson"
+                    },
+                    "type": "array"
                   },
                   "title": {
                     "type": "string"
