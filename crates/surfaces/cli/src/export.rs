@@ -30,7 +30,7 @@ pub(crate) struct Args {
 
     /// Keep only entities of these kinds (comma-separated); the scoped
     /// entity always stays
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long)]
     kinds: Vec<String>,
 
     /// Suppress schema embedding in `graph` exports (keeps format_version 1.0)
@@ -66,7 +66,11 @@ impl Args {
             format: Some(self.format),
             scope: self.scope.as_deref(),
             depth: self.depth,
-            kinds: self.kinds.iter().map(String::as_str).collect(),
+            kinds: self
+                .kinds
+                .iter()
+                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
+                .collect(),
             max_tokens: self.max_tokens,
             // context, brief and a budgeted graph export leave the schema
             // out unless asked for it (the policy lives in specforge-ops).
@@ -233,6 +237,14 @@ mod tests {
             matches!(&both, Err(e) if e.kind() == clap::error::ErrorKind::ArgumentConflict),
             "the two flags conflict"
         );
+    }
+
+    #[test]
+    fn the_kinds_flag_is_a_kinds_list() {
+        let line =
+            Line::try_parse_from(["export", "--kinds", "type, event", "--kinds", "adr,"]).unwrap();
+        let request = line.args.request().unwrap_or_else(|_| unreachable!());
+        assert_eq!(request.kinds, ["type", "event", "adr", ""]);
     }
 
     #[derive(Parser)]

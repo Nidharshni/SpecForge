@@ -16,7 +16,7 @@ const KEYS: &str = "scope (or root), depth, kinds and max_tokens";
 
 /// What a graph-view resource URI asks `ops::read::export` for: the template's
 /// placeholder (or `?scope=`, alias `?root=`, on an untemplated URI) as the
-/// scope, `depth`, `kinds` (comma-separated) and `max_tokens`. Keys and
+/// scope, `depth`, `kinds` (a kinds list, `specforge_ops::view::kinds_of_text`) and `max_tokens`. Keys and
 /// values are percent-decoded; nothing in a query is ignored: an unknown or
 /// repeated key, a value that does not parse, `scope` with `root`, and a
 /// scope on a templated URI are refused naming the key (ADR 0024 D8).
@@ -96,18 +96,9 @@ impl ViewQuery {
                     }
                 }
                 "kinds" => {
-                    let mut kinds = Vec::new();
-                    for kind in value.split(',').map(str::trim) {
-                        if kind.is_empty() {
-                            return Err(refuse(
-                                &key,
-                                "'kinds' is a comma-separated list of kinds, none of them empty"
-                                    .to_string(),
-                            ));
-                        }
-                        kinds.push(kind.to_string());
-                    }
-                    parsed.kinds = kinds;
+                    parsed.kinds = specforge_ops::view::kinds_of_text(&value)
+                        .map(str::to_string)
+                        .collect();
                 }
                 other => {
                     return Err(refuse(
@@ -246,5 +237,26 @@ mod tests {
         assert_eq!(query.argument(ExportField::MaxTokens), Some("max_tokens"));
         assert_eq!(query.argument(ExportField::Scope), Some("scope"));
         assert_eq!(query.argument(ExportField::SchemaVersion), None);
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "serve_graph_resource",
+        verify = "a graph view's kinds query is a kinds list: the items between commas, each trimmed, an empty item kept"
+    )]
+    fn a_graph_views_kinds_are_a_kinds_list() {
+        let kinds = |uri: &str| {
+            let matched = crate::uri_template::read("specforge://brief", uri).unwrap();
+            ViewQuery::parse(&matched, None).unwrap().kinds
+        };
+        assert_eq!(
+            kinds("specforge://brief?kinds=type,%20event"),
+            ["type", "event"]
+        );
+        assert_eq!(
+            kinds("specforge://brief?kinds=type%2C%20event"),
+            ["type", "event"]
+        );
+        assert_eq!(kinds("specforge://brief?kinds=type,"), ["type", ""]);
+        assert_eq!(kinds("specforge://brief?kinds="), [""]);
     }
 }

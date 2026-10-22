@@ -256,7 +256,9 @@ behavior serve_graph_resource "Serve Graph Resource via MCP" {
     MUST support a scope query parameter (root is accepted as its alias) to
     restrict output to a subgraph rooted at a specific entity (e.g.,
     specforge://context?scope=auth_login), with depth, kinds and max_tokens as
-    specforge export takes them; a kind of kinds the project does not know is
+    specforge export takes them (kinds is a kinds list: the items between
+    commas, each trimmed; an empty item is a kind the project does not know);
+    a kind of kinds the project does not know is
     reported as I020 in the reply's _meta.diagnostics. Query keys and values are percent-decoded; an
     unknown key, a repeated key, scope with root, a scope on a templated URI,
     a value that does not parse, or depth without a scope is refused as
@@ -281,6 +283,7 @@ behavior serve_graph_resource "Serve Graph Resource via MCP" {
   verify unit "root is accepted as an alias of the scope query parameter"
   verify unit "an unknown query key, a repeated key or a malformed value is invalid_input naming the key"
   verify unit "a count in a resource query is read as a tool's count argument is"
+  verify unit "a graph view's kinds query is a kinds list: the items between commas, each trimmed, an empty item kept"
   verify integration "specforge://graph under max_tokens stays within the budget, as the budgeted export does"
   verify unit "resources reflect current compilation state"
   verify unit "compilation failure returns error resource with diagnostic summary"

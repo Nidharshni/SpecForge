@@ -40,7 +40,7 @@ pub(crate) struct Args {
     extension: Option<String>,
 
     /// Filter to specific entity kinds (comma-separated)
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long)]
     kinds: Vec<String>,
 
     /// Root entity kind for depth-scoped output
@@ -62,7 +62,12 @@ impl Args {
             group_by: self.group_by,
             fields: self.fields,
             extension: self.extension.clone(),
-            kinds: self.kinds.clone(),
+            kinds: self
+                .kinds
+                .iter()
+                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
+                .map(str::to_string)
+                .collect(),
             // clap's `requires` refuses a depth without a root first; the reading is the operation's.
             root: specforge_ops::read::model::root(self.root.clone(), self.depth)?,
         })

@@ -725,7 +725,6 @@ fn kinds_of(label: &str) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     behavior = "export_agent_graph_format",
     verify = "a kinds list written as text names the same kinds on the command line and in a graph resource's query: the items between commas, each trimmed, an empty item a kind the project does not know"

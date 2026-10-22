@@ -675,7 +675,7 @@ fn a_query_the_resource_cannot_read_is_refused_naming_its_key() {
         ("specforge://graph?depth=1&depth=2", "depth"),
         ("specforge://graph?scope=alpha&root=alpha", "root"),
         ("specforge://graph?max_tokens=-1", "max_tokens"),
-        ("specforge://graph?kinds=behavior,", "kinds"),
+        ("specforge://graph?kinds=behavior&kinds=feature", "kinds"),
         ("specforge://graph?scope=", "scope"),
         ("specforge://graph?depth", "depth"),
         ("specforge://context/alpha?root=zeta", "root"),
