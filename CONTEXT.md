@@ -545,8 +545,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
   W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
   table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
-  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153). A `defaults` body's
-  values are written in the forms of its body kind (ADR 0224).
+  `format`, W159, migrate's `titles` step, the typed-edit writer and init's starter spell through it (ADR 0153,
+  ADR 0226); `spell::escaped` is the inside of a quote. A `defaults` body's values are written in the forms of its
+  body kind (ADR 0224).
 - **Stored value**: a field value as the graph build stores it: coerced by its field form (`FieldForms::stored`,
   ADR 0182), so a list written as one value is a one-item list and `"100"` on an integer field is `100`. Every reader
   of references, derived names and inherited values reads it; what a file *writes* (W159, W161, the formatter) reads
@@ -1315,8 +1316,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
 - **Starter**: the spec file init writes (`spec/hello.spec`): the first template the extensions it enables declare,
   in `specforge.json` order, else the structural one, its `{project}` the project's spec ID and `{version}` its
-  version. It is checked and laid out by the registry build of those extensions, made before the project exists
-  (ADR 0189), so its first `check` and `format --check` accept it.
+  version, each filled with the inside of a `.spec` string (`spell::escaped`). It is checked and laid out by the
+  registry build of those extensions, made before the project exists (ADR 0189), and parsed before it is written:
+  one that does not parse is refused, `starter_unparsed` (ADR 0226), so its first `check` and `format --check`
+  accept it.
 - **Entity ID rule**: what `check` refuses of an entity ID: outside 2–60 characters (E014) or a reserved word (E013)
   (`specforge_registry::refused_id`). A token ID is also the grammar's identifier (`authoring::entity_id::validate_id`);
   a spec block's ID, its header's string, is not.
