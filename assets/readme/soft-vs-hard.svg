@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 360" width="880" height="360" role="img" aria-labelledby="t d">
   <title id="t">Soft skill versus hard skill</title>
-  <desc id="d">Left: a rule written in CLAUDE.md is advice; the AI's refund code passes it by and ships with the rule skipped. Right: the same rule as a SpecForge check stops the draft with W003 (the rule is not enforced by any behavior), the agent links the rule, and it ships with the rule enforced.</desc>
+  <desc id="d">Left: a rule written in a Markdown spec is advice; the AI's refund code passes it by and ships with the rule skipped. Right: the same rule as a SpecForge check stops the draft with W003 (the rule is not enforced by any behavior), the agent links the rule, and it ships with the rule enforced.</desc>
   <style>
     svg { --bg:#ffffff; --panel:#f6f8fa; --line:#d0d7de; --text:#1f2328; --muted:#59636e;
           --ai:#8250df; --forge:#d94f00; --ok:#1a7f37; --bad:#cf222e;
@@ -67,7 +67,7 @@
   <g class="ignored anim">
     <path class="note" d="M232 150 h158 l20 20 v68 h-178 z"/>
     <path d="M390 150 v20 h20" fill="none" stroke="var(--line)"/>
-    <text class="mono muted" x="246" y="173" font-size="12">CLAUDE.md</text>
+    <text class="mono muted" x="246" y="173" font-size="12">docs/refunds.md</text>
     <text x="246" y="198" font-size="13.5">Refunds never exceed</text>
     <text x="246" y="218" font-size="13.5">the captured amount.</text>
   </g>

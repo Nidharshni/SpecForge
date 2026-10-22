@@ -124,7 +124,7 @@ AI coding agents spend 60-80% of their tokens on *discovery* — not *building*.
 - **70% fewer rework cycles** (first-shot accuracy from precise contracts)
 - **Developer time savings exceed token savings by 10x** (~4,000 hours/year for a 100-dev org)
 
-The industry has independently converged on structured context files (CLAUDE.md, .cursor/rules, copilot-instructions.md). SpecForge is the **compiled, cross-referenced, validated** version of what these tools approximate.
+Context files (CLAUDE.md, .cursor/rules, copilot-instructions.md) carry coding rules: conventions, commands, style. The spec, what the system must do, usually sits in Markdown (PRDs, spec-kit files). SpecForge replaces those Markdown specs with a **compiled, cross-referenced, validated** one; the coding rules stay in the context files.
 
 > Full analysis with citations: **[RES-18: AI Agent Token Economics](../spec/research/RES-18-ai-agent-token-economics.md)**
 

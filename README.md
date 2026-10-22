@@ -39,11 +39,11 @@ A reviewer reads. A check resolves.
 
 You ask an AI agent to add refunds to your payment service. It writes clean code, the tests pass, the pull request looks fine. Two weeks later, finance finds a refund larger than the payment it refunded.
 
-The rule was written down: in a design doc, in `CLAUDE.md`, in a comment. The agent read it three sessions ago, or never found it. Nothing failed, so nobody noticed.
+The rule was written down, in the spec: a Markdown file in `docs/`, next to the PRD. The agent read it three sessions ago, or never found it. Nothing failed, so nobody noticed.
 
 This isn't a problem with the model. It's a problem with where your rules live. Today, the knowledge that matters sits in places that nothing enforces:
 
-- **Prompts and context files** (`CLAUDE.md`, `AGENTS.md`, skill files) are advice. An agent can misread them or skip them, silently.
+- **Specs in Markdown** (PRDs, `docs/*.md`, spec-kit files) are prose. An agent can misread a rule or skip it, silently, and nothing checks that the spec is complete or that its parts agree.
 - **Docs and wikis** drift away from the code, and nothing breaks when they do.
 - **Traceability** (which requirement has a test, which rule is enforced where) is a spreadsheet someone updates by hand, until they stop.
 - **Every session starts from zero.** The agent re-reads dozens of files to rediscover what you meant, and still guesses.
@@ -54,15 +54,15 @@ The more work you give to AI, the worse this gets. It writes faster than anyone 
 
 There are two ways to teach an AI how your team works.
 
-A **soft skill** is advice placed in the AI's context: a prompt, a `CLAUDE.md`, a skill file. It helps, but it's prose. The AI may follow it, or not.
+A **soft skill** is advice placed in the AI's context: a Markdown spec, a PRD, a skill file. It helps, but it's prose. The AI may follow it, or not.
 
 A **hard skill** is a rule that a program enforces. The AI can't skip it, because the check fails.
 
 <p align="center">
-  <img src="assets/readme/soft-vs-hard.svg" width="100%" alt="Left, soft skill: a rule written in CLAUDE.md is advice; the AI's refund code passes it by and ships with the rule skipped, found two weeks later. Right, hard skill: the same rule in a spec file; specforge check --strict stops the draft with W003, rule not enforced; the agent links the rule, the check passes, and it ships with the rule enforced.">
+  <img src="assets/readme/soft-vs-hard.svg" width="100%" alt="Left, soft skill: a rule written in a Markdown spec is advice; the AI's refund code passes it by and ships with the rule skipped, found two weeks later. Right, hard skill: the same rule in a spec file; specforge check --strict stops the draft with W003, rule not enforced; the agent links the rule, the check passes, and it ships with the rule enforced.">
 </p>
 
-|  | Soft skill<br>prompt, `CLAUDE.md`, skill file | Hard skill<br>SpecForge extension |
+|  | Soft skill<br>Markdown spec, PRD, skill file | Hard skill<br>SpecForge extension |
 |---|---|---|
 | Lives in | The AI's context window, as prose | A compiler, as code |
 | Can the AI ignore it? | Yes, silently | No: the check fails |
@@ -262,8 +262,8 @@ To write specs by hand, start with the [authoring tutorial](docs/guides/authorin
 
 | You already use | It's good at | What SpecForge adds |
 |---|---|---|
-| `CLAUDE.md`, `AGENTS.md`, skill files | Telling an agent how to behave | Rules a program checks, not advice the agent may skip |
-| Specs and PRDs in Markdown | Describing intent for people and agents | Structure that is validated: broken references, missing pieces and unproven promises fail the check |
+| Specs and PRDs in Markdown | Describing intent for people and agents | SpecForge replaces them: the same intent as `.spec` files whose structure is validated. Broken references, missing pieces and unproven promises fail the check |
+| `CLAUDE.md`, `AGENTS.md` | Coding rules for the agent: conventions, commands, style | Nothing to replace. Keep your coding rules there; the spec, what the system must do, lives in SpecForge |
 | Tests | Proving the code does something | Saying *which* promise each test proves, and which promises have no test at all |
 | Issue trackers | Tracking work in progress | Tracking what the system must do, and whether that's proven |
 | Requirements tools (DOORS, Polarion) | Traceability for regulated teams | Plain text in your repository, checked in CI, readable by agents, extensible by you |
