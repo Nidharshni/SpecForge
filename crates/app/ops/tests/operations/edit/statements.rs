@@ -138,8 +138,10 @@ fn add_verify_on_a_union_is_refused_as_not_editable() {
 const FEATURE: &str = "type Feature \"Feature\" {\n  name     string\n  variants string[]\n}\n\n\
                        type Status = open | done\n";
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_obligation",
+    verify = "add-verify on a braced block writes the statement whatever its members are named"
+)]
 fn add_verify_on_a_braced_block_with_a_member_named_variants_writes_the_statement() {
     let c = compile(TESTING, &[("types.spec", FEATURE)]);
     assert_eq!(
@@ -155,8 +157,10 @@ fn add_verify_on_a_braced_block_with_a_member_named_variants_writes_the_statemen
     );
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "code_actions_for_missing_verify",
+    verify = "a verify stub is offered and planned for a braced block whatever its members are named"
+)]
 fn a_verify_stub_is_offered_for_a_braced_block_with_a_member_named_variants() {
     let c = compile(TESTING, &[("types.spec", FEATURE)]);
     let navigator = c.navigator();

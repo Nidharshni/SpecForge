@@ -588,7 +588,8 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     statements and either owe obligations (a no_verify_statements rule
     applies to their kind) or are of a testable kind; an entity a union
     body or an exempting flag exempts is offered none, since a stub there
-    is not an obligation it owes (a union has no block to hold one). A
+    is not an obligation it owes (a union has no block to hold one; a block is a
+    union by its syntax, so a braced block whose member is named `variants` is offered one). A
     stub fixes the diagnostic of the rule that reports its entity, and
     none when no rule reports it. The code actions offered for a request are those
     whose diagnostic, or whose entity, overlaps the requested range. The code action MUST add verify stub declarations
@@ -621,6 +622,7 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "the verify stub is laid out with the file's format configuration"
   verify unit "a client that resolves code actions gets a stub's edits on resolve"
   verify unit "a verify stub is offered for an entity whose block field holds an entry named verify"
+  verify unit "a verify stub is offered and planned for a braced block whatever its members are named"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 

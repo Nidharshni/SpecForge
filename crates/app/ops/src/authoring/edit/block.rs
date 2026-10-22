@@ -3,7 +3,7 @@
 //! changes. `site` holds what the kind's registry answers about the entity; `verbs` the edits that change a block.
 
 use super::path;
-use super::write::written;
+use super::write::{NOT_EDITABLE, written};
 use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, codes};
@@ -66,6 +66,32 @@ pub fn canonical(site: &Site<'_>, text: &str) -> Result<String, Refusal<EditFiel
     } else {
         Ok(formatted.formatted)
     }
+}
+
+/// Refused `not_editable` when `site`'s block, as `text` parses, is a union (`kind name = a | b`,
+/// [`specforge_parser::FieldMap::is_union`]): its body holds only its variants, so it has no field to set, unset,
+/// link or unlink and no verify statement to add or remove. Retitle and delete take a union (ADR 0219).
+pub fn refuse_union(site: &Site<'_>, text: &str) -> Result<(), Refusal<EditField>> {
+    let file = parse(text, site.key);
+    let index = position(&file, site).ok_or_else(|| unreadable(site.id))?;
+    if !file.entities[index].fields.is_union() {
+        return Ok(());
+    }
+    Err(OpError::new(
+        OpErrorKind::InvalidInput,
+        NOT_EDITABLE,
+        format!(
+            "'{id}' is a union ({kind} {id} = ...): its body holds only its variants",
+            id = site.id,
+            kind = site.kind
+        ),
+    )
+    .with_entity(site.id)
+    .with_suggestion(format!(
+        "retitle and delete take a union; write its variants in {} by hand",
+        site.key
+    ))
+    .about(EditField::Entity))
 }
 
 impl Block {

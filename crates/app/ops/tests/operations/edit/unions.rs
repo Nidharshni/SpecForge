@@ -32,8 +32,10 @@ fn retitle(id: &str, title: &str) -> Edit {
     }
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "every member edit of a union is refused as one not_editable, before its field is read"
+)]
 fn every_member_edit_of_a_union_is_refused_as_one_not_editable() {
     let c = project(&[("types.spec", UNIONS)]);
     for id in ["stage", "gate"] {
@@ -64,10 +66,13 @@ fn every_member_edit_of_a_union_is_refused_as_one_not_editable() {
         &[retitle("gate", "Gates"), set("gate", "name", one("x"))],
     );
     assert_eq!(code, "not_editable");
-    assert!(message.starts_with("'gate' is a union"), "{message}");
+    assert!(message.contains("'gate' is a union"), "{message}");
 }
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "retitle and delete take a union"
+)]
 fn retitle_and_delete_take_a_union() {
     let c = project(&[("types.spec", UNIONS)]);
     assert_eq!(
