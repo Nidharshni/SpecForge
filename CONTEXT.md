@@ -330,7 +330,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
-  entry from its file under the name it declares. Which extension each entry names is decided once
+  entry from its file under the package name it declares (E072 when it declares none, ADR 0223). Which extension each entry names is decided once
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision: a named entry names an
   extension by its text (`ExtensionEntry::names`), a `.wasm` file entry only by what its component declares, once
@@ -341,6 +341,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   enables what it names (`Installed::unloaded`); each entry records where the load takes it from, its **origin** (`Origin`: `builtin`, the lock entry's source, `file:<path>`, `unknown`; `Resolution::origin`, a repeated entry the one it repeats'), and whether it loaded, with or without a runtime; what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Builtin's name**: the name a builtin this specforge embeds declares. Only that builtin loads under it: a `.wasm` file entry whose component declares it is refused by the load's admit (E028), and add, update, init, publish, extension validate and extension init refuse a candidate declaring it (`extension_conflict`). One predicate, `Builtins::contains` (ADR 0028 D7, ADR 0214).
+- **Load key**: the key the runtime holds an entry's component under while its declaration is read: a builtin's or a locked entry's name, a `.wasm` file entry's `file:<entry>`, a candidate's `__candidate`. Every name the load admits is a package name and no temporary key is one, so a load never replaces another entry's extension (`load_key`, ADR 0223).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
   origin (the origin the load recorded on the entry that loaded it, else on the first entry the load tried, `EnabledExtension::loader`; else its lock entry's source; else `builtin` for a builtin's name; else `unknown`), its status (loaded, not loaded, not
@@ -680,7 +681,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   these) or `name` alone (a local module); each part `a-z 0-9 . _ -`, starting with a letter or
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
   (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
-  `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
+  `add` installs, `publish` uploads and `extension validate` reads it, and where the extension load admits a `.wasm` file entry; a `specforge.json` entry and a lock entry are read as one.
 - **Package scope**: the namespace a scoped package name starts with, `@` and one name part (`@acme`)
   (`specforge_package::Scope`, ADR 0200). A `registries` entry's `scope_filter`, a registry token's filter and
   `scope assign` name one; text that is not one is refused where it is written, naming the scope to write. A scope

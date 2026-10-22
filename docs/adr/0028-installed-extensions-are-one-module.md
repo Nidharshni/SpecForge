@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+**Read with [ADR 0223](0223-a-file-entrys-declared-name-is-a-package-name.md) (round 25):** "what would reopen it" (a candidate read disturbing what is loaded): no admitted name can be `__candidate`.
 **Amended by [ADR 0217](0217-a-locked-module-declares-what-its-lock-entry-records.md) (round 24):** D3: the load's admit compares a locked entry's version and peers with its module's declaration, not its name alone (E070).
 **Amended by [ADR 0214](0214-a-builtins-name-is-refused-where-extensions-load.md) (round 24):** D7: a builtin's name is refused where extensions load too: a `.wasm` file entry declaring one is E028 (`LoadProblem::BuiltinsName`), by the predicate `not_a_builtins_name` reads (`Builtins::contains`).
 **Amended (2026-10-21, architecture round 22, plan 10):** D7: a declared name beside the builtins is one rule, `extension::not_a_builtins_name`, read by `publish`, `extension validate` and `extension init` as `add` reads it.
