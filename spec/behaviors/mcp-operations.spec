@@ -443,6 +443,7 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
   verify unit "the entities whose kind only that extension declares are listed as stranded"
   verify unit "non-installed extension returns extension_not_found error"
   verify unit "dry_run returns preview without modifying files"
+  verify integration "remove_extension with force removes an extension another requires, which it refuses with E027 without it"
   verify contract "Provide MCP Remove Extension Tool: MCP remove extension tool holds — filesystem_available, extension_removed, stranded_entities_listed, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
 }
 

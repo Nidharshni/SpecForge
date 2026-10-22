@@ -46,6 +46,7 @@ mod protocol;
 mod read_notices;
 mod refusal_arguments;
 mod refusal_wire;
+mod remove_peers;
 mod render_writes;
 mod request_meaning;
 mod resource_templates;
