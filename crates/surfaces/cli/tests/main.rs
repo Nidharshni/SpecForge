@@ -58,6 +58,7 @@ mod query;
 mod read_views;
 mod refusal_wire;
 mod registry;
+mod registry_dry_run;
 mod request_pairs;
 mod schema_cache;
 mod schema_notices;

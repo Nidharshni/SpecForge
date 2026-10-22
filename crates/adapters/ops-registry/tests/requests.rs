@@ -233,3 +233,26 @@ fn a_locked_version_served_as_other_bytes_is_refused_before_its_download() {
     assert!(error.is(specforge_common::codes::R014), "{error:?}");
     assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
 }
+
+#[specforge_test(
+    behavior = "verify_publisher_signature",
+    verify = "a package the trust decision refuses is refused before its download"
+)]
+#[ignore = "flipped by T4"]
+fn an_unsigned_package_is_refused_before_its_download() {
+    let served = serving(&["1.0.0"]); // unsigned
+    let dir = project_with(&default_registry(served.root().as_str()));
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .as_user(User::at(dir.home(), None));
+
+    let error = registry
+        .fetch(
+            &name("@acme/tool"),
+            &Version::new(1, 0, 0),
+            TrustPolicy::new(false, Asking::Nobody),
+        )
+        .unwrap_err();
+
+    assert!(error.is(specforge_common::codes::R_TRUST_001), "{error:?}");
+    assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
+}

@@ -168,6 +168,7 @@ invariant publisher_trust "Publisher Trust" {
   verify integration "specforge add refuses an unsigned package without --allow-unsigned"
   verify integration "specforge add pins the publisher key and records it in specforge.lock"
   verify integration "specforge add refuses a package signed by another key than the pinned one"
+  verify integration "specforge add --dry-run refuses an unsigned package and a denied publisher key as specforge add does, downloading nothing"
 }
 
 invariant registry_reply_binding "Registry Reply Binding" {
