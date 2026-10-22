@@ -91,7 +91,6 @@ fn a_file_entrys_load_never_replaces_another_entrys_extension() {
     behavior = "load_extension_manifests",
     verify = "a .wasm file entry declaring a name another entry already loads is refused, whatever its own text"
 )]
-#[ignore = "flipped by T3"]
 fn a_file_entry_declaring_its_own_text_is_refused_when_another_entry_loads_that_name() {
     let dir = TempDir::new().unwrap();
     file(dir.path(), "x.wasm", b"\0asm x");

@@ -73,7 +73,7 @@ impl FileEntry<'_> {
     /// written before `=` when there is one (`NotTheNameWritten`), never a builtin's name
     /// (`BuiltinsName`: only the builtin loads under it, ADR 0214), and an extension an entry tried
     /// before it must not already be loaded under that name (`AlreadyLoaded`; `loaded` says which
-    /// names are).
+    /// names are), whatever this entry's own text.
     pub(crate) fn admit(
         &self,
         declared: &str,
@@ -91,7 +91,7 @@ impl FileEntry<'_> {
                 declared: declared.to_string(),
             });
         }
-        if declared != self.key && loaded(declared) {
+        if loaded(declared) {
             return Err(LoadProblem::AlreadyLoaded {
                 declared: declared.to_string(),
             });
@@ -640,10 +640,12 @@ mod tests {
                 declared: "@acme/g".to_string()
             })
         );
-        // The entry's own key is not "another entry".
+        // The entry's own text is no exception: a name admitted before is taken.
         assert_eq!(
             file(None).admit("g.wasm", &Builtins::none(), |_| true),
-            Ok(())
+            Err(LoadProblem::AlreadyLoaded {
+                declared: "g.wasm".to_string()
+            })
         );
     }
 
