@@ -62,12 +62,12 @@ pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
     let root = match ProjectArg::scan(&rest).root() {
         Ok(root) => root,
         Err(error) => {
-            if asks_for_json(&rest) {
-                let line = serde_json::json!({"code": error.code, "message": error.message});
-                errln!(terminal, "{line}");
+            let format = if asks_for_json(&rest) {
+                CommandFormat::Json
             } else {
-                errln!(terminal, "error[{}]: {}", error.code, error.message);
-            }
+                CommandFormat::Human
+            };
+            err!(terminal, "{}", written(&RunError::NoProject(error), format));
             return Exit::Failed.code();
         }
     };
