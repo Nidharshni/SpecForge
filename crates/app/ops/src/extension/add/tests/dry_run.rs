@@ -264,3 +264,65 @@ fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
         "a dry run downloads nothing: {asked:?}"
     );
 }
+
+#[specforge_test(
+    behavior = "verify_publisher_signature",
+    verify = "a dry run refuses what the add's trust decision refuses, downloading nothing"
+)]
+fn a_dry_run_refuses_what_the_trust_decision_refuses() {
+    let registry = || {
+        MemoryRegistry::new()
+            .serving(Published::new(
+                b"\0asm plain".to_vec(),
+                declaration("@acme/plain", "1.0.0", &[]),
+            ))
+            .serving(
+                Published::new(
+                    b"\0asm tool".to_vec(),
+                    declaration("@acme/tool", "1.0.0", &[]),
+                )
+                .signed_by("k2"),
+            )
+            .serving(
+                Published::new(
+                    b"\0asm denied".to_vec(),
+                    declaration("@acme/denied", "1.0.0", &[]),
+                )
+                .signed_by("k3"),
+            )
+            .pinning("@acme/tool", "k1")
+            .denying("k3")
+    };
+    let dir = add_project(Vec::new());
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let request = |spec: &str, dry_run| AddRequest {
+        root: &root,
+        extensions: vec![Source::Registry(PackageRef::parse(spec).unwrap()).into()],
+        base: None,
+        allow_unsigned: false,
+        dry_run,
+        caller: crate::testing::caller(), // nobody to ask: a key change is refused
+    };
+    for (spec, code) in [
+        ("@acme/plain@1.0.0", "R-TRUST-001"),
+        ("@acme/tool@1.0.0", "R-TRUST-003"),
+        ("@acme/denied@1.0.0", "R-TRUST-005"),
+    ] {
+        let real = add(&request(spec, false), &registry(), &runtime()).unwrap_err();
+        assert_eq!(real.error.code, code, "{spec}");
+        let previewed = registry();
+        let dry = add(&request(spec, true), &previewed, &runtime()).unwrap_err();
+        assert_eq!(
+            (dry.error.code, dry.error.message),
+            (real.error.code, real.error.message),
+            "{spec}"
+        );
+        assert!(
+            !previewed
+                .asked()
+                .iter()
+                .any(|asked| matches!(asked, crate::registry::testing::Asked::Fetch(..))),
+            "{spec}: a dry run downloads nothing"
+        );
+    }
+}

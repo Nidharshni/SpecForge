@@ -46,13 +46,13 @@ fn standing(view: &ProjectView, id: &str) -> Standing {
     inspect(view, id).unwrap().standing.clone()
 }
 
-/// `(testable, obligated, exempt)`, how inspect states a standing.
+/// `(testable, obligated, counts)`, how inspect states a standing.
 fn shape(view: &ProjectView, id: &str) -> (bool, bool, bool) {
     let facts = inspect(view, id).unwrap();
     (
         facts.standing.testable,
         facts.standing.obligated(),
-        facts.standing.exempt(),
+        facts.standing.counts(),
     )
 }
 
@@ -66,16 +66,15 @@ fn standing_is_the_coverage_views() {
     for id in IDS {
         let standing = standing(&view, id);
         let row = row(&view, id);
-        assert_eq!(standing.testable, row.testable, "{id}");
-        assert_eq!(standing.exempt(), row.exempt, "{id}");
-        assert_eq!(standing.counts(), row.testable && !row.exempt, "{id}");
+        assert_eq!(standing.status(&row.verdict), row.status, "{id}");
+        assert_eq!(standing.counts(), row.status.counts(), "{id}");
     }
-    assert_eq!(shape(&view, "ob"), (true, true, false));
-    assert_eq!(shape(&view, "fr"), (true, false, true));
-    assert_eq!(shape(&view, "U"), (true, true, true));
-    assert_eq!(shape(&view, "ab"), (true, true, true));
+    assert_eq!(shape(&view, "ob"), (true, true, true));
+    assert_eq!(shape(&view, "fr"), (true, false, false));
+    assert_eq!(shape(&view, "U"), (true, true, false));
+    assert_eq!(shape(&view, "ab"), (true, true, false));
     assert_eq!(shape(&view, "n"), (false, false, false));
-    assert_eq!(shape(&view, "done"), (true, true, false));
+    assert_eq!(shape(&view, "done"), (true, true, true));
 }
 
 #[specforge_test(
@@ -92,7 +91,7 @@ fn coverage_is_the_coverage_rows_verdict() {
     assert_eq!(coverage.verdict, row.verdict);
     assert_eq!(coverage.verdict.obligations, 2);
     assert_eq!(coverage.verdict.proven, 1);
-    assert_eq!(coverage.status(), Status::Partial);
+    assert_eq!(coverage.status, Status::Partial);
     assert!(facts.standing.declares_obligations());
     assert_eq!(facts.standing.declares_obligations(), row.declared());
     assert!(coverage.recorded);
@@ -105,7 +104,7 @@ fn without_a_report_the_coverage_is_unrecorded() {
     let facts = inspect(&view, "done").unwrap();
     let coverage = specforge_ops::read::inspect::coverage(&view, &facts).unwrap();
     assert!(!coverage.recorded);
-    assert_eq!(coverage.status(), Status::Uncovered);
+    assert_eq!(coverage.status, Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
     assert!(facts.standing.declares_obligations());
     assert!(
@@ -299,5 +298,28 @@ fn an_unknown_entity_is_not_found() {
     assert_eq!(
         error.error.message,
         "unresolved entity 'ghost' — not found in graph"
+    );
+}
+
+#[specforge_test(
+    behavior = "inspect_entity_facts",
+    verify = "an entity's headline and its fields read the one entry of a field written twice"
+)]
+fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
+    let p = compile(
+        &["@specforge/software"],
+        &[(
+            "a.spec",
+            "behavior beh \"B\" {\n  category command\n  contract \"first contract\"\n  \
+             contract \"second contract\"\n}\n",
+        )],
+    );
+    let view = ProjectView::of(&p.project);
+    let facts = inspect(&view, "beh").unwrap();
+    assert_eq!(facts.headline, Some("first contract"));
+    let fields = specforge_graph::field_form::write_fields(&facts.node.fields);
+    assert_eq!(
+        serde_json::to_value(&fields["contract"]).unwrap(),
+        serde_json::json!("first contract")
     );
 }

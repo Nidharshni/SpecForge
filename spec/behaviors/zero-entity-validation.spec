@@ -247,8 +247,9 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     " | "; a mixed list its items' texts joined by ", "; an expression
     group its expressions joined by ", "; a block its keys joined by ", ". An empty list or
     block is written and its text is empty. No written field is left
-    out and no value is null. A name written twice has the last one's
-    value. Beside its text, every written field keeps its value shape
+    out and no value is null. A name written twice in one block is E081,
+    and every reader reads its first entry, the only one the graph keeps.
+    Beside its text, every written field keeps its value shape
     (a quoted string, a bare word, a date, an integer, a boolean, a list
     of strings, of references, mixed or of variants, a type union, a
     block, an expression) and the span of its value,
@@ -273,6 +274,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
   verify unit "a rule without a target kind applies to every kind, for the rule, the standing and the verify stub alike"
   verify unit "a kind that accepts no verify statements owes no obligations, whatever rule applies to it"
+  verify unit "a field written twice reads as its first entry to declarative rules, custom validators and compiler passes"
   verify unit "the checks, the check passes and the coverage of one compile read one snapshot"
   verify unit "a session's snapshot follows every update"
   verify unit "a snapshot reads only a graph built in its registry build"

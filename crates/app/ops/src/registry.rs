@@ -78,15 +78,18 @@ pub struct Package {
     pub publisher: Publisher,
 }
 
-/// What a registry says it publishes as `name@version`, without its binary: the declaration it was
-/// published with (its manifest) and the SHA-256 its binary must have. Nothing here is checked against a
-/// binary or a signature: it is what a preview judges, never what is installed.
+/// What a registry publishes as `name@version`, its publisher decided, without its binary: the
+/// declaration it was published with (its manifest), the SHA-256 its binary must have and how the
+/// trust decision accepted its publisher. It is what a dry run judges; its bytes are checked only by a
+/// fetch (ADR 0213).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     pub name: PackageName,
     pub version: Version,
     pub sha256: String,
     pub declaration: ExtensionDeclaration,
+    /// How the trust decision accepted its publisher, as a fetch would.
+    pub publisher: Publisher,
 }
 
 /// What `specforge.lock` records for a name's registry install (`Installed::locked`), which every
@@ -154,8 +157,8 @@ impl<'a> LockedPin<'a> {
 pub const LOCKED_BYTES_CHANGED: Code = codes::R014;
 
 /// How a fetch decides a package's publisher: the caller's two choices, and the pin the project's
-/// lock already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes
-/// nothing; what it decided is the package's [`Publisher`].
+/// lock already records for the name. [`TrustPolicy::decide`] holds the rules (ADR 0213) and both
+/// adapters ask it; it writes nothing, and what it decided is the package's [`Publisher`].
 #[derive(Debug, Clone, Copy)]
 pub struct TrustPolicy<'a> {
     /// Accept a package with no publisher signature (reported as W155).
@@ -430,13 +433,8 @@ pub trait Registry {
     /// Every version `name` publishes (unparseable ones dropped);
     /// R-RES-001 when the registry has no such package.
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError>;
-    /// `name@version`, downloaded and integrity-checked, its publisher signature checked and its
-    /// publisher decided under `policy`. A package with none is refused unless `allow_unsigned`.
-    /// The expected key is the user's pin for the name, else `policy.locked_key()`, else none (trust
-    /// on first use). Another key is a key change, put to `policy.asking` (R-TRUST-003 when it answers no).
-    /// An answer for another package or version, or one whose manifest can't be read, is refused.
-    /// Refused with R014, after the reply names `name@version` and before the download, the
-    /// signature check or any question, when `policy`'s lock pin pins this version as other bytes.
+    /// `name@version`: [`Registry::published`]'s decision, then the binary downloaded and held to the
+    /// SHA-256 that decision covered (R-OPS-002). A package the decision refuses is never downloaded.
     /// **Writes nothing**: the decision is [`Package::publisher`], pinned by [`Registry::pin`] once
     /// the operation's lock plan commits.
     fn fetch(
@@ -445,11 +443,19 @@ pub trait Registry {
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError>;
-    /// `name@version`'s [`Manifest`], read from the registry that serves the name without
-    /// downloading the binary: the reply must name the package and version asked for and its manifest
-    /// must read as that package's declaration (the fetch policy's steps 1 and 3), else the fetch's
-    /// refusal. Writes nothing, asks no question and decides no publisher.
-    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError>;
+    /// `name@version`'s [`Manifest`]: the fetch policy without the download (ADR 0213). The reply must
+    /// name the package and version asked for and its manifest must read as that package's
+    /// declaration; R014 when `policy`'s lock pin pins this version as other bytes (before any
+    /// question); the publisher signature must verify over the digests the reply describes
+    /// (R-TRUST-002); and the publisher is decided by [`TrustPolicy::decide`] (R-TRUST-001, -003, -005;
+    /// R-TRUST-006 when the user's store can't be read). A key change is put to `policy.asking` as a
+    /// fetch puts it. Downloads nothing and writes nothing.
+    fn published(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Manifest, OpError>;
     /// Pin `pins` for the user, all or none: what a committed lock plan's fetches decided. Refused
     /// with R-TRUST-006 when the pins can't be saved or the store can't be read, and nothing is
     /// saved then. Each pin that replaces another is reported as W156 by an adapter that reports.
@@ -479,6 +485,9 @@ pub trait Registry {
     ) -> Result<Searched, OpError>;
 }
 
+mod trust;
+pub use trust::{Signer, UserKeys};
+
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
@@ -500,7 +509,12 @@ impl Registry for Unconfigured {
         Err(no_registry(self.0))
     }
 
-    fn published(&self, _: &PackageName, _: &Version) -> Result<Manifest, OpError> {
+    fn published(
+        &self,
+        _: &PackageName,
+        _: &Version,
+        _: TrustPolicy<'_>,
+    ) -> Result<Manifest, OpError> {
         Err(no_registry(self.0))
     }
 

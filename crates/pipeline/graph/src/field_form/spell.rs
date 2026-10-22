@@ -1,7 +1,9 @@
 //! How a value is spelled in `.spec` text (ADR 0147, ADR 0153): the one escape table, the one rule for when a
 //! value may stand bare, and each declared type's one-line spelling. `FieldForms::rewrite` (format's rewrite and
-//! W159), the typed-edit writer, migrate's `titles` step and W159's message read it; nothing else quotes a value.
+//! W159), the typed-edit writer, migrate's `titles` step and W159's message read it; nothing else quotes a value. It also says where a
+//! quoted value writes the id it reads ([`id_span`]).
 
+use specforge_common::SourceSpan;
 use specforge_parser::Written;
 use specforge_parser::lex::is_entity_id;
 use specforge_protocol_types::FieldType;
@@ -25,6 +27,29 @@ pub fn quoted(text: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// Where a value written `written` at `span` writes the id `id` it reads (ADR 0218): one byte inside each quote of a
+/// `"…"` on one line exactly two bytes wider than `id`, three inside each of a `"""…"""` exactly six wider when `id`
+/// is an entity id; else `span` (a bare word, a scheme ref or a literal is its text; a value with an escape, padding
+/// or a line break has no bytes that spell its id).
+///
+/// Exact, not a guess: a `"…"` reads each escape (see [`quoted`]) as one character and keeps any other byte, so
+/// content as long as `id` holds no escape and is `id`. An entity id holds none of the escaped characters, so a value
+/// six bytes wider than one is `"""id"""`.
+pub fn id_span(written: Written, span: &SourceSpan, id: &str) -> SourceSpan {
+    let width = span.end_col.checked_sub(span.start_col);
+    let one_line = span.start_line == span.end_line;
+    let quote = match (written, width) {
+        (Written::Quoted, Some(w)) if one_line && w == id.len() + 2 => 1,
+        (Written::Quoted, Some(w)) if one_line && w == id.len() + 6 && is_entity_id(id) => 3,
+        _ => return span.clone(),
+    };
+    SourceSpan {
+        start_col: span.start_col + quote,
+        end_col: span.end_col - quote,
+        ..span.clone()
+    }
 }
 
 /// `text` written as `written`: `Quoted` through [`quoted`]; bare, a scheme ref or a literal as it is.

@@ -5,7 +5,7 @@
 //! It is one pure library, owned by the testing extension and linked twice:
 //! the extension's Wasm `coverage` pass (the authority for the A-codes and
 //! the `--min` gate) calls [`assess`], and host surfaces link the same crate
-//! for per-entity views ([`Verdict::of`], [`Verdict::status`]). Neither side
+//! for per-entity views ([`Verdict::of`], [`Counting::status`]). Neither side
 //! re-implements the rule, and both are held to the golden vectors in
 //! `tests/fixtures/coverage-cases.json`.
 //!
@@ -66,10 +66,22 @@ impl Counting {
     }
 
     /// Testable, yet it owes none and declares none, so it does not count:
-    /// the summary's `testable_exempt`, the coverage view's and inspect's
-    /// `exempt`. Not [`Entity::owes_none`], which says only that it owes none.
+    /// the summary's `testable_exempt` and [`Status::Exempt`]. Not [`Entity::owes_none`], which says only that it owes none.
     pub fn exempt(self) -> bool {
         self.testable && !self.counts()
+    }
+
+    /// The entity's coverage status (ADR 0216): [`Status::NotTestable`] when
+    /// its kind is not testable, [`Status::Exempt`] when it is testable and
+    /// does not count, else how `verdict` proves its obligations.
+    pub fn status(self, verdict: &Verdict) -> Status {
+        if !self.testable {
+            Status::NotTestable
+        } else if !self.counts() {
+            Status::Exempt
+        } else {
+            verdict.status()
+        }
     }
 }
 
@@ -150,16 +162,32 @@ impl From<&PassEntity> for Entity {
     }
 }
 
-/// An entity's coverage at a glance, for per-entity views.
+/// An entity's coverage at a glance (ADR 0216): whether it counts toward
+/// coverage and, when it does, how its obligations are proven.
+/// [`Counting::status`] answers it; every per-entity view writes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
-    /// At least one obligation, every one proven, and no test fails.
+    /// It counts; at least one obligation, every one proven, and no test fails.
     Covered,
-    /// Some obligation is proven, or a test fails.
+    /// It counts; some obligation is proven, or a test fails.
     Partial,
-    /// Nothing proven, including an entity with no obligations.
+    /// It counts; nothing proven, including an entity with no obligations.
     Uncovered,
+    /// Its kind is testable, but it owes no obligations and declares none,
+    /// so it does not count ([`Counting::exempt`]).
+    Exempt,
+    /// Its kind is not testable, so it does not count, whatever it declares
+    /// and its tests prove.
+    NotTestable,
+}
+
+impl Status {
+    /// It counts toward coverage: [`Counting::counts`] held for the entity it
+    /// was answered for.
+    pub fn counts(self) -> bool {
+        matches!(self, Status::Covered | Status::Partial | Status::Uncovered)
+    }
 }
 
 /// How an entity's recorded tests (and formal proofs) cover its obligations.
@@ -233,8 +261,9 @@ impl Verdict {
         self.obligations > 0 && self.unproven.is_empty() && self.failing == 0
     }
 
-    /// The per-entity view, from the same facts as [`Verdict::is_proven`].
-    pub fn status(&self) -> Status {
+    /// How the verdict proves a counted entity's obligations:
+    /// [`Counting::status`]'s answer for one that counts.
+    pub(crate) fn status(&self) -> Status {
         if self.is_proven() {
             Status::Covered
         } else if self.proven > 0 || self.failing > 0 {

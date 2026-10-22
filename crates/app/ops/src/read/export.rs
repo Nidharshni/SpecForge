@@ -158,8 +158,8 @@ pub struct Request<'a> {
     /// version as the project's schema, not newer. Checked whatever the
     /// format; never applied (the export carries the schema's own version).
     pub schema_version: Option<&'a str>,
-    /// Give every exported node whose entity has a verdict its coverage
-    /// status (`coverage_status`). `None`, the default: no node carries one.
+    /// Give every exported node its entity's coverage status
+    /// (`coverage_status`, `ProjectCoverage::statuses`). `None`, the default: no node carries one.
     /// Query's `include_coverage` sets it; `specforge export` never does.
     pub coverage: Option<&'a ProjectCoverage>,
 }
@@ -321,6 +321,7 @@ fn export_versioned(
         })?;
     }
     let selected = selection.selected(None);
+    let statuses = request.coverage.map(ProjectCoverage::statuses);
     let options = EmitOptions {
         format: request.format().emit_format(),
         selected: Some(&selected),
@@ -328,7 +329,7 @@ fn export_versioned(
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
         registries: view.registries(),
-        coverage: request.coverage.map(|coverage| &coverage.verdicts),
+        coverage: statuses.as_ref(),
     };
     let document = emit(view.graph(), &options).map_err(failure)?;
     Ok(Noticed::new(document, selection.into_notices()))

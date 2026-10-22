@@ -8,12 +8,11 @@ expression: "normalized(&result, root)"
       "declared": false,
       "entity_id": "Status",
       "evidence_collected": false,
-      "exempt": true,
       "kind": "type",
       "linked": false,
       "obligations": 0,
       "proven": 0,
-      "status": "uncovered",
+      "status": "exempt",
       "unproven": []
     }
   ]

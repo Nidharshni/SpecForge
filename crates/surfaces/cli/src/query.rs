@@ -19,9 +19,10 @@ pub(crate) struct Args {
     #[arg(long, default_value_t = specforge_ops::read::query::DEFAULT_DEPTH)]
     depth: usize,
 
-    /// Filter results to specific entity kinds (can be repeated)
+    /// Keep only entities of these kinds (comma-separated, or the flag repeated); the queried
+    /// entity always stays
     #[arg(long)]
-    kind: Vec<String>,
+    kinds: Vec<String>,
 
     /// Output detail level
     #[arg(
@@ -42,7 +43,11 @@ impl Args {
         QueryRequest {
             entity_id: &self.entity,
             depth: Some(self.depth),
-            kinds: self.kind.iter().map(String::as_str).collect(),
+            kinds: self
+                .kinds
+                .iter()
+                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
+                .collect(),
             format: Some(self.format),
             include_coverage: self.include_coverage,
         }
@@ -65,5 +70,25 @@ impl Args {
             }
             Err(error) => Refusal::fixed().report(terminal, &error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Line {
+        #[command(flatten)]
+        args: Args,
+    }
+
+    #[test]
+    fn the_kinds_flag_is_a_kinds_list() {
+        let line =
+            Line::try_parse_from(["query", "x", "--kinds", "behavior, type", "--kinds", "adr"])
+                .unwrap();
+        assert_eq!(line.args.request().kinds, ["behavior", "type", "adr"]);
     }
 }

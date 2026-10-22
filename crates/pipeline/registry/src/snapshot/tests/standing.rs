@@ -21,10 +21,11 @@ fn a_union_type_owes_no_obligations() {
 #[test]
 fn an_enum_values_list_is_not_a_union() {
     let ids = w004_ids(
-        "type Priority \"Priority\" {\n  values [high, low]\n}\n",
+        "type Priority \"Priority\" {\n  values [high, low]\n}\n\n\
+         type Feature \"Feature\" {\n  variants string[]\n}\n",
         false,
     );
-    assert_eq!(ids, ["Priority"]);
+    assert_eq!(ids, ["Feature", "Priority"]);
 }
 
 #[specforge_test(
@@ -199,7 +200,7 @@ fn standing_counts_as_the_coverage_rule_does() {
                     let entity = specforge_coverage::Entity::from(&pass_entity(&record, &standing));
                     assert_eq!(standing.counting(), entity.counting(), "{standing:?}");
                     assert_eq!(entity.owes_none, !standing.owes_obligations());
-                    assert_eq!(standing.exempt(), testable && !standing.counts());
+                    assert_eq!(standing.counting().exempt(), testable && !standing.counts());
                     combinations += 1;
                 }
             }

@@ -15,10 +15,12 @@ mod obligations;
 mod paths;
 mod places;
 mod positions;
+mod repeated;
 mod replay;
 mod sides;
 mod skeleton;
 mod statements;
+mod unions;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};

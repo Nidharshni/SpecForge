@@ -28,7 +28,8 @@ use specforge_formatter::FormatConfig;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// One typed edit. The MCP `specforge.edit` tool reads a list of them (`op` names the variant); each CLI verb
-/// builds one.
+/// builds one. Every edit of a member (set, unset, link, unlink, add or remove a verify statement) refuses a union
+/// (`not_editable`); retitle and delete take one.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Shape)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Edit {
@@ -284,6 +285,20 @@ impl<'v> Planner<'v> {
         Ok(())
     }
 
+    /// `change` applied to the members of `id`'s block: its fields and its verify statements. A union has none:
+    /// refused first (`block::refuse_union`), as the text being planned parses, before the verb reads its field
+    /// argument, so every member verb answers a union the same way (ADR 0219).
+    fn on_members(
+        &mut self,
+        id: &str,
+        change: impl FnOnce(&block::Site<'_>, &str) -> Result<String, Refusal<EditField>>,
+    ) -> Result<(), Refusal<EditField>> {
+        self.on(id, |site, text| {
+            block::refuse_union(site, text)?;
+            change(site, text)
+        })
+    }
+
     fn apply(&mut self, edit: &Edit) -> Result<(), Refusal<EditField>> {
         self.declared.edit(edit);
         match edit {
@@ -292,11 +307,11 @@ impl<'v> Planner<'v> {
                 field,
                 value,
                 annotations,
-            } => self.on(entity_id, |site, text| {
+            } => self.on_members(entity_id, |site, text| {
                 block::set(site, text, field, value, annotations.as_deref())
             }),
             Edit::Unset { entity_id, field } => {
-                self.on(entity_id, |site, text| block::unset(site, text, field))
+                self.on_members(entity_id, |site, text| block::unset(site, text, field))
             }
             Edit::Retitle { entity_id, title } => {
                 self.on(entity_id, |site, text| block::retitle(site, text, title))
@@ -305,28 +320,28 @@ impl<'v> Planner<'v> {
                 entity_id,
                 field,
                 target,
-            } => self.on(entity_id, |site, text| {
+            } => self.on_members(entity_id, |site, text| {
                 block::link(site, text, field, target, true)
             }),
             Edit::Unlink {
                 entity_id,
                 field,
                 target,
-            } => self.on(entity_id, |site, text| {
+            } => self.on_members(entity_id, |site, text| {
                 block::link(site, text, field, target, false)
             }),
             Edit::AddVerify {
                 entity_id,
                 kind,
                 text: description,
-            } => self.on(entity_id, |site, text| {
+            } => self.on_members(entity_id, |site, text| {
                 block::verify(site, text, kind.as_deref(), description, true)
             }),
             Edit::RemoveVerify {
                 entity_id,
                 kind,
                 text: description,
-            } => self.on(entity_id, |site, text| {
+            } => self.on_members(entity_id, |site, text| {
                 block::verify(site, text, kind.as_deref(), description, false)
             }),
             Edit::Create {

@@ -48,7 +48,7 @@ fn a_bounded_migration_compiles_no_source_the_bound_refuses() {
         r#"{"name": "p", "version": "0.1.0", "extensions": ["@acme/x"]}"#,
     )
     .unwrap();
-    specforge_installed::testing::install(&dir, &["@acme/x"]);
+    specforge_installed::testing::install(&dir, &echoing(), &["@acme/x"]);
     std::fs::write(dir.join("a.spec"), OWN).unwrap();
     std::fs::write(outside.join("probe.spec"), PROBE).unwrap();
     std::fs::hard_link(outside.join("probe.spec"), dir.join("leak.spec")).unwrap();

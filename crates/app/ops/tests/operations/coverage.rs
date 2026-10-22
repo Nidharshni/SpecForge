@@ -67,11 +67,8 @@ fn the_view_lists_what_counts_toward_coverage() {
     // nothing owe nothing; the feature's kind is not testable.
     assert_eq!(ids(&outcome.rows), ["login", "logout", "uptime"]);
     assert_eq!(outcome.rows.len(), outcome.summary.testable_total);
-    assert!(outcome.rows.iter().all(|r| r.testable && !r.exempt));
-    let proven = outcome
-        .rows
-        .iter()
-        .filter(|r| r.status() == Status::Covered);
+    assert!(outcome.rows.iter().all(|r| r.status.counts()));
+    let proven = outcome.rows.iter().filter(|r| r.status == Status::Covered);
     assert_eq!(proven.count(), outcome.summary.testable_proven);
 
     // Narrowed by kind and by status.
@@ -102,8 +99,12 @@ fn coverage_rows_and_stats_read_one_standing() {
     // are listed.
     for row in &outcome.rows {
         let standing = entities.standing(&row.entity_id).unwrap();
-        assert_eq!(row.testable, standing.testable, "{}", row.entity_id);
-        assert_eq!(row.exempt, standing.exempt(), "{}", row.entity_id);
+        assert_eq!(
+            row.status,
+            standing.status(&row.verdict),
+            "{}",
+            row.entity_id
+        );
         assert!(standing.counts(), "{}", row.entity_id);
     }
     let counted = entities.iter().filter(|(_, s)| s.counts()).count();
@@ -112,10 +113,7 @@ fn coverage_rows_and_stats_read_one_standing() {
     // A row named by id is its standing too, counted or not.
     for (record, standing) in entities.iter() {
         let row = row(&view, &record.id);
-        assert_eq!(
-            (row.testable, row.exempt),
-            (standing.testable, standing.exempt())
-        );
+        assert_eq!(row.status, standing.status(&row.verdict));
     }
     // Stats count the same entities.
     let stats = specforge_ops::read::stats::stats(&view).unwrap();
@@ -124,7 +122,7 @@ fn coverage_rows_and_stats_read_one_standing() {
 
 #[specforge_test(
     behavior = "compute_the_coverage_view",
-    verify = "an exempt entity named by entity_id is returned with exempt true"
+    verify = "an entity that does not count, named by entity_id, is returned with the status that says why"
 )]
 fn an_exempt_entity_is_reachable_by_id() {
     let project = project();
@@ -135,12 +133,12 @@ fn an_exempt_entity_is_reachable_by_id() {
         };
         let rows = answered(coverage(&project.view(), &query)).rows;
         assert_eq!(ids(&rows), [exempt]);
-        assert!(rows[0].testable && rows[0].exempt, "{exempt}");
+        assert_eq!(rows[0].status, Status::Exempt, "{exempt}");
         assert_eq!(row(&project.view(), exempt), rows[0]);
     }
-    // Not testable: reachable, neither testable nor exempt.
+    // Not testable: reachable, and its status says so.
     let signin = row(&project.view(), "signin");
-    assert!(!signin.testable && !signin.exempt);
+    assert_eq!(signin.status, Status::NotTestable);
 }
 
 #[specforge_test(
@@ -206,15 +204,14 @@ fn a_coverage_row_is_one_document() {
             "obligations": 1,
             "proven": 1,
             "unproven": [],
-            "exempt": false,
         })
     );
 
     let base = serde_json::to_value(row(&view, "base").document()).unwrap();
-    assert_eq!(base["exempt"], true);
+    assert_eq!(base["status"], "exempt");
     assert_eq!(base["declared"], false);
     assert_eq!(base["obligations"], 0);
-    assert_eq!(base.as_object().unwrap().len(), 10);
+    assert_eq!(base.as_object().unwrap().len(), 9);
 }
 
 /// `two`, a behavior of obligations "a" and "b", with `tests` (verify text, status) recorded for it.

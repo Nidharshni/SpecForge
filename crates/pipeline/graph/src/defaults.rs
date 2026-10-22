@@ -201,11 +201,7 @@ impl<'f> FileDefaults<'f> {
     /// default is [`Self::entry`] of the block's kind, so E077 and E078 are honoured. A `defaults` block holds only its
     /// own entries (no default applies to the kind `defaults`).
     pub fn held<'a>(&'a self, block: &'a Entity, field: &str) -> Held<&'a FieldEntry> {
-        let own = block
-            .fields
-            .entries()
-            .iter()
-            .find(|e| e.key.as_str() == field);
+        let own = block.fields.entry(field);
         let default = if is_defaults_block(block) {
             None
         } else {
@@ -302,10 +298,11 @@ impl<'f> FileDefaults<'f> {
         }
     }
 
-    /// `entity`'s fields: its own entries in written order, then each applied default of its kind whose key it does
-    /// not write, in the default's order, as written (spans in the defaults block).
+    /// `entity`'s fields: its own entries in written order, the first of each key (ADR 0215), then each applied
+    /// default of its kind whose key it does not write, in the default's order, as written (spans in the defaults
+    /// block).
     pub(crate) fn resolve(&self, entity: &Entity) -> FieldMap {
-        let mut fields = entity.fields.clone();
+        let mut fields = entity.fields.first_of_each_key();
         if let Some((_, applied)) = self
             .by_kind
             .iter()

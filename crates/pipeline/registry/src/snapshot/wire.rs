@@ -108,7 +108,7 @@ impl EntitySnapshot {
 }
 
 /// One entity as a pass receives it:
-/// - its field texts by key (a key written twice keeps its last text);
+/// - its field texts by key;
 /// - its edge totals and span;
 /// - `testable`, and `owes_none` = it owes no obligations of its own.
 pub(super) fn pass_entity(record: &EntityRecord, standing: &Standing) -> PassEntity {

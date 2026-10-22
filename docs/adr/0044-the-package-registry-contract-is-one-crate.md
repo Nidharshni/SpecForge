@@ -4,6 +4,8 @@
 
 **Amended in architecture round 20 (plan 10):** D3, D4, D5: an operation opens its registry once (`Registry::open`).
 
+**Amended by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (round 24):** D3's rejection of the policy in ops is narrowed: the signature check and the pin store stay in the adapter; the decision over their results is ops'.
+
 **Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09):** D2, the client's publish takes the declared package it uploads; D4, the client contract gains K12.
 
 A package registry was reached through two stacked seams, the ops `Registry` port (ADR 0010) and the

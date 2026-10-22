@@ -21,7 +21,7 @@ fn refused_project() -> tempfile::TempDir {
         "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n",
     )
     .unwrap();
-    specforge_installed::testing::install(dir.path(), &["@acme/x"]);
+    specforge_installed::testing::install(dir.path(), &hooked_runtime(), &["@acme/x"]);
     dir
 }
 

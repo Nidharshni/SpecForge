@@ -224,7 +224,7 @@ fn query_of_a_missing_entity_is_e003() {
 
 #[specforge_test(
     behavior = "query_graph_multi_resolution",
-    verify = "an unknown --kind is reported with I020 and the closest kind"
+    verify = "an unknown kind of --kinds is reported with I020 and the closest kind"
 )]
 fn query_reports_an_unknown_kind() {
     let project = Assembled::over(registries(&["behavior"], &[])).graph({
@@ -737,7 +737,7 @@ mod compiled {
 
     #[specforge_test(
         behavior = "query_graph_multi_resolution",
-        verify = "an unknown --kind is reported with I020 and the closest kind"
+        verify = "an unknown kind of --kinds is reported with I020 and the closest kind"
     )]
     fn query_reports_an_unknown_kind() {
         let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);

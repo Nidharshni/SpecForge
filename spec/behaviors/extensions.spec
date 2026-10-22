@@ -62,7 +62,8 @@ behavior load_extension_manifests "Load Extension Manifests" {
     MUST load from .specforge/extensions/<name>/extension.wasm under that
     name, on every surface, only when the binary's hash is the one its
     specforge.lock entry records; a mismatch, or a binary that declares
-    another extension than its entry, MUST be refused with E070, and an
+    another extension, another version or other peers than its entry
+    records, MUST be refused with E070, and an
     extension enabled but not installed MUST produce E028 naming the
     command that installs it. A specforge.lock that is there and can't be
     read MUST be reported once (E033), before an E028 for each installed
@@ -75,7 +76,8 @@ behavior load_extension_manifests "Load Extension Manifests" {
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
     read that one decision. A file that does not exist, cannot be read, does not load as a
-    component, declares another name than the one written, or declares an
+    component, declares another name than the one written, declares the name of a
+    builtin (only the builtin loads under a builtin's name), or declares an
     extension another entry already loads MUST produce E028 naming the entry.
     Each entry's outcome MUST record where the load takes its extension from
     (builtin, the lock entry's source, file:<path>, or unknown; a repeated
@@ -117,6 +119,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   """
   verify unit "installed extension manifest is loaded"
   verify unit "an installed extension loads only when its binary is the one its specforge.lock entry pins"
+  verify unit "an installed extension loads only when its binary declares the version and peers its specforge.lock entry records"
   verify integration "tampered installed binary refused via lockfile hash pin (E070)"
   verify unit "an unreadable specforge.lock is reported once (E033) and each installed extension it leaves unloaded is E028 naming it"
   verify integration "an extension installed from a registry loads through check"
@@ -125,6 +128,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify unit "each entry records where the load takes its extension from and whether it loaded"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
+  verify integration "a .wasm file entry that declares a builtin's name is E028 naming the entry, and only the builtin loads under that name"
   verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
   verify unit "an entry refused at any step of its load leaves nothing loaded"
@@ -948,9 +952,9 @@ behavior verify_registry_integrity "Verify Registry Integrity" {
   verify contract "Verify Registry Integrity: registry integrity verification holds — wasm_binary_downloaded, registry_response_available, hash_verified, mismatch_aborts, lock_file_updated, integrity_verified_emitted"
 }
 
-// Package trust after the SHA256 check (docs/registry-trust.md). The
-// registry is not the trust anchor: these checks use only the bytes
-// downloaded, the metadata and manifest served, and the user's pins.
+// Package trust, decided from the registry's reply before its binary is
+// downloaded (docs/registry-trust.md). The registry is not the trust anchor:
+// these checks use only the metadata and manifest served, and the user's pins.
 
 behavior check_registry_reply "Check Registry Reply" {
   invariants [registry_reply_binding, registry_integrity]
@@ -1025,9 +1029,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   types      [PackageMetadata, ExtensionError]
   ports      [RegistryClient]
   requires {
-    reply_checked "The registry reply passed the SHA256 check and names the package requested"
+    reply_checked "The registry reply names the package requested and its manifest reads"
   }
   ensures {
+    decided_before_download  "The publisher is decided from the reply before the binary is downloaded, and a dry run decides it as the add does"
     broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
@@ -1036,10 +1041,12 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   contract   """
     A registry package's Ed25519 publisher signature MUST be verified
     over the canonical payload {name, version, wasmSha256, manifestSha256,
-    signedAt} re-derived from the downloaded Wasm bytes and the manifest
-    the registry serves, with the public key carried in the signature
-    object. A signature that doesn't verify (tampered binary or swapped
-    manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
+    signedAt} built from the name, version, SHA-256 and manifest the
+    registry describes, before the binary is downloaded; the downloaded
+    bytes MUST then hash to that SHA-256, so the signature covers them. A
+    dry run MUST decide the same, downloading nothing. The public key is
+    carried in the signature object. A signature that doesn't verify (other
+    digests or a swapped manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
     NOT bypass it; one that isn't a package signature makes the reply
     unreadable (R009, check_registry_reply). A package with no signature MUST
     be refused with R-TRUST-001 unless the user passes --allow-unsigned;
@@ -1051,6 +1058,9 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   verify integration "an unsigned package is refused without --allow-unsigned"
   verify integration "an unsigned package is accepted with --allow-unsigned and pins no key"
   verify integration "an unsigned package accepted with --allow-unsigned is reported as W155"
+  verify integration "a signature is verified over the digests the reply describes, before any download"
+  verify unit "a dry run refuses what the add's trust decision refuses, downloading nothing"
+  verify integration "a package the trust decision refuses is refused before its download"
 }
 
 behavior pin_publisher_key "Pin Publisher Key" {
@@ -1100,6 +1110,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
   verify unit "a refused key change names the commands that can consent"
+  verify unit "a publisher is decided once, by the trust policy, from the signer and the user's keys"
+  verify unit "the memory registry refuses a denied key and accepts a trusted key's change without asking, as the configured registry does"
   verify integration "consent to a key change re-pins the new key"
   verify integration "a denied key is refused even with consent"
   verify integration "consent to a key change is reported as W156"

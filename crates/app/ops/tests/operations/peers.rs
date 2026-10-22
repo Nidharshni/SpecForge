@@ -33,24 +33,6 @@ fn served(
     }
 }
 
-/// Rewrite `specforge.lock` so `name`'s entry records `peers`.
-fn locked_peers(root: &Path, name: &str, peers: &[(&str, &str)]) {
-    let path = root.join("specforge.lock");
-    let mut lock: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    for entry in lock["entries"].as_array_mut().unwrap() {
-        if entry["name"] == name {
-            entry["peer_dependencies"] = peers
-                .iter()
-                .map(|(peer, range)| {
-                    serde_json::json!({"name": peer, "version": range, "optional": false})
-                })
-                .collect();
-        }
-    }
-    std::fs::write(&path, lock.to_string()).unwrap();
-}
-
 fn project(extensions: &[&str]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let config = serde_json::json!({"name": "p", "version": "0.1.0", "extensions": extensions});
@@ -71,8 +53,7 @@ fn a_peer_a_builtin_satisfies_is_not_reported_by_doctor() {
             "1.0.0",
             &[("@specforge/software", "^1.0")],
         ));
-    specforge_installed::testing::install(dir.path(), &["@acme/app"]);
-    locked_peers(dir.path(), "@acme/app", &[("@specforge/software", "^1.0")]);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@acme/app"]);
 
     let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     assert!(
@@ -102,8 +83,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     let runtime = InProcessRuntime::new()
         .with(served("@acme/base", "1.0.0", &[]))
         .with(served("@acme/bad", "1.0.0", &[("@acme/base", "one-ish")]));
-    specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/bad"]);
-    locked_peers(dir.path(), "@acme/bad", &[("@acme/base", "one-ish")]);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@acme/base", "@acme/bad"]);
 
     let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
@@ -134,7 +114,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     let runtime = InProcessRuntime::new()
         .with(served("@acme/base", "1.0.0", &[]))
         .with(served("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]));
-    specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/app"]);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@acme/base", "@acme/app"]);
     let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
     let e027: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
@@ -155,7 +135,7 @@ fn check_reports_a_cycle_among_required_peers() {
     let runtime = InProcessRuntime::new()
         .with(served("@acme/a", "1.0.0", &[("@acme/b", "^1")]))
         .with(served("@acme/b", "1.0.0", &[("@acme/a", "^1")]));
-    specforge_installed::testing::install(dir.path(), &["@acme/a", "@acme/b"]);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@acme/a", "@acme/b"]);
 
     let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
@@ -188,13 +168,9 @@ enum Adds {
     Builtin(&'static str),
 }
 
-/// An extension installed by hand: name, module bytes, locked version and locked peers.
-type Locked = (
-    &'static str,
-    &'static [u8],
-    &'static str,
-    &'static [(&'static str, &'static str)],
-);
+/// An extension installed by hand: name and module bytes. Its lock entry records what the module
+/// declares in [`specforge_ops::testing::probes`].
+type Locked = (&'static str, &'static [u8]);
 
 /// One case of the table: name, config entries, files under the root, extensions installed by
 /// hand, what is added, and the code the add is refused with (`None`: it passes).
@@ -206,25 +182,6 @@ type Case = (
     Adds,
     Option<&'static str>,
 );
-
-/// Rewrite the lock entry of `name` to record `version` and `peers`.
-fn lock_record(root: &Path, name: &str, version: &str, peers: &[(&str, &str)]) {
-    let path = root.join("specforge.lock");
-    let mut lock: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    for entry in lock["entries"].as_array_mut().unwrap() {
-        if entry["name"] == name {
-            entry["version"] = version.into();
-            entry["peer_dependencies"] = peers
-                .iter()
-                .map(|(peer, range)| {
-                    serde_json::json!({"name": peer, "version": range, "optional": false})
-                })
-                .collect();
-        }
-    }
-    std::fs::write(&path, lock.to_string()).unwrap();
-}
 
 /// The table `add_and_check_agree_on_the_project_peer_set` and the dry run's twin walk.
 fn add_cases() -> Vec<Case> {
@@ -251,12 +208,7 @@ fn add_cases() -> Vec<Case> {
             "enabling breaks an installed one",
             &["@probe/needs-software"],
             &[],
-            &[(
-                "@probe/needs-software",
-                NEEDS_SOFTWARE_9,
-                "1.0.0",
-                &[("@specforge/software", "^9.0")],
-            )],
+            &[("@probe/needs-software", NEEDS_SOFTWARE_9)],
             Adds::Builtin("@specforge/software"),
             Some("E027"),
         ),
@@ -296,7 +248,7 @@ fn add_cases() -> Vec<Case> {
             "locked, not enabled",
             &[],
             &[],
-            &[("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")])],
+            &[("@probe/dep", DEP_1)],
             Adds::Local(BASE_2),
             None,
         ),
@@ -318,9 +270,8 @@ fn add_and_check_agree_on_the_project_peer_set() {
         for (path, bytes) in files {
             std::fs::write(dir.path().join(path), bytes).unwrap();
         }
-        for (name, bytes, version, peers) in locked {
-            specforge_installed::testing::install_module(dir.path(), name, bytes);
-            lock_record(dir.path(), name, version, peers);
+        for (name, bytes) in locked {
+            specforge_installed::testing::install_module(dir.path(), &probes(), name, bytes);
         }
         let outside = tempfile::tempdir().unwrap();
         let source = match adds {
@@ -396,9 +347,8 @@ fn a_dry_run_answers_what_the_add_answers() {
         for (path, bytes) in files {
             std::fs::write(dir.path().join(path), bytes).unwrap();
         }
-        for (name, bytes, version, peers) in locked {
-            specforge_installed::testing::install_module(dir.path(), name, bytes);
-            lock_record(dir.path(), name, version, peers);
+        for (name, bytes) in locked {
+            specforge_installed::testing::install_module(dir.path(), &probes(), name, bytes);
         }
         let outside = tempfile::tempdir().unwrap();
         let source = match adds {
@@ -469,9 +419,13 @@ fn removal_project(
     for (path, bytes) in files {
         std::fs::write(dir.path().join(path), bytes).unwrap();
     }
-    for (name, bytes, version, peers) in locked {
-        specforge_installed::testing::install_module(dir.path(), name, bytes);
-        lock_record(dir.path(), name, version, peers);
+    for (name, bytes) in locked {
+        specforge_installed::testing::install_module(
+            dir.path(),
+            &specforge_ops::testing::probes(),
+            name,
+            bytes,
+        );
     }
     dir
 }
@@ -486,20 +440,10 @@ fn remove_and_check_agree_on_the_project_peer_set() {
         BASE_1, BASE_2, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes,
     };
 
-    let software_needs_9: Locked = (
-        "@probe/needs-software",
-        NEEDS_SOFTWARE_9,
-        "1.0.0",
-        &[("@specforge/software", "^9.0")],
-    );
-    let software_needs_1: Locked = (
-        "@probe/needs-software",
-        NEEDS_SOFTWARE_1,
-        "1.0.0",
-        &[("@specforge/software", "^1.0")],
-    );
-    let dep_needs_base: Locked = ("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")]);
-    let base_locked: Locked = ("@probe/base", BASE_1, "1.2.0", &[]);
+    let software_needs_9: Locked = ("@probe/needs-software", NEEDS_SOFTWARE_9);
+    let software_needs_1: Locked = ("@probe/needs-software", NEEDS_SOFTWARE_1);
+    let dep_needs_base: Locked = ("@probe/dep", DEP_1);
+    let base_locked: Locked = ("@probe/base", BASE_1);
     // name, config, files, locked, the argument, force, whether it is refused
     #[expect(
         clippy::type_complexity,
@@ -640,12 +584,7 @@ fn a_removal_judged_on_the_compiled_config_never_writes_another() {
     use specforge_ops::extension::{self, RemoveRequest};
     use specforge_ops::testing::{NEEDS_SOFTWARE_1, probes};
 
-    let software_needs_1: Locked = (
-        "@probe/needs-software",
-        NEEDS_SOFTWARE_1,
-        "1.0.0",
-        &[("@specforge/software", "^1.0")],
-    );
+    let software_needs_1: Locked = ("@probe/needs-software", NEEDS_SOFTWARE_1);
     let dir = removal_project(&["@specforge/software"], &[], &[software_needs_1]);
     let root = dir.path();
     let compiled = compile_at(root, Some(Arc::new(probes())));

@@ -850,7 +850,6 @@ fn contract_coverage() {
             "obligations": 1,
             "proven": 0,
             "unproven": ["works"],
-            "exempt": false,
         }])
     );
 
@@ -889,7 +888,7 @@ fn contract_coverage() {
         json!({"entity_id": "beta"}),
     )["entities"]
         .clone();
-    assert_eq!(beta[0]["exempt"], true, "{beta}");
+    assert_eq!(beta[0]["status"], "exempt", "{beta}");
     assert_eq!(beta[0]["obligations"], 0);
     // Once a rule obliges features to declare obligations, beta counts.
     let mut server = contracts_project().serve(&[testable_feature.obligating("feature")]);
@@ -897,7 +896,6 @@ fn contract_coverage() {
     let beta = find(&coverage, "entity_id", "beta");
     assert_eq!(beta["obligations"], 0);
     assert_eq!(beta["status"], "uncovered");
-    assert_eq!(beta["exempt"], false);
 
     assert_tool_invoked(&server, "specforge.coverage");
 }
@@ -1354,19 +1352,14 @@ fn contract_dispatch_surface_command() {
     // what it got when it tried every capability; its `trap` command panics.
     let probe = specforge_component::committed::PROBE.path();
     let runtime = specforge_component::ComponentRuntime::new();
-    runtime
-        .load("@test/probe", &std::fs::read(&probe).unwrap())
-        .unwrap();
+    let blob = std::fs::read(&probe).unwrap();
+    runtime.load("@test/probe", &blob).unwrap();
     let dir = project_dir(
         json!({"name": "probed", "version": "0.1.0", "extensions": ["@test/probe"]}),
         "probe_target t1 \"Target\" {\n}\n",
     );
     // The probe is installed as any extension is, so the project loads it.
-    specforge_installed::testing::install_module(
-        dir.path(),
-        "@test/probe",
-        &std::fs::read(&probe).unwrap(),
-    );
+    specforge_installed::testing::install_module(dir.path(), &runtime, "@test/probe", &blob);
     std::fs::write(dir.path().join("secret.txt"), "secret").unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();

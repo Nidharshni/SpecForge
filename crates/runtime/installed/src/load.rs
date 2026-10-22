@@ -18,10 +18,10 @@ use specforge_wasm::protocol::load_declaration;
 use crate::Installed;
 use crate::lock::LockFileEntry;
 use crate::module::Module;
-use crate::resolve::{Origin, Resolved};
+use crate::resolve::{Declared, Origin, Resolved};
 
 /// The builtin extensions the host embeds: name and component bytes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Builtins<'a>(pub &'a [(&'a str, &'a [u8])]);
 
 impl<'a> Builtins<'a> {
@@ -160,6 +160,12 @@ pub enum LoadProblem {
     Changed { locked: String, actual: String },
     /// E070: the module declares another extension than its lock entry.
     NotItsLockEntry { declared: String },
+    /// E070: the module declares another version, or other peers, than its lock entry records.
+    NotWhatItsEntryRecords {
+        what: Recorded,
+        declared: String,
+        recorded: String,
+    },
     /// E028: the bytes are not a component the runtime loads.
     NotAComponent { reason: String },
     /// E028: its declaration can't be read (handshake, describe, protocol
@@ -170,8 +176,27 @@ pub enum LoadProblem {
     /// E028, file entry: declares another name than the one written before
     /// `=`.
     NotTheNameWritten { declared: String, written: String },
+    /// E028, file entry: declares the name of a builtin this specforge embeds; only the builtin
+    /// loads under it.
+    BuiltinsName { declared: String },
     /// E028, file entry: declares an extension another entry already loads.
     AlreadyLoaded { declared: String },
+}
+
+/// What of a lock entry a module declares otherwise ([`LoadProblem::NotWhatItsEntryRecords`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recorded {
+    Version,
+    Peers,
+}
+
+impl std::fmt::Display for Recorded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Recorded::Version => "version",
+            Recorded::Peers => "peers",
+        })
+    }
 }
 
 impl LoadProblem {
@@ -295,8 +320,27 @@ impl LoadProblem {
                 "re-install it: {}",
                 installed.reinstall(name)
             )),
+            LoadProblem::NotWhatItsEntryRecords {
+                what,
+                declared,
+                recorded,
+            } => Diagnostic::new(
+                codes::E070,
+                format!(
+                    "extension '{name}': the installed binary declares {what} {declared}, but its lock entry records {recorded}"
+                ),
+            )
+            .with_suggestion(format!(
+                "re-install it: {}",
+                match what {
+                    // The peers are compared after the version, so the version is the entry's too.
+                    Recorded::Peers => installed.reinstall(name),
+                    Recorded::Version => installed.reinstall_at(name, declared),
+                }
+            )),
             LoadProblem::FileMissing { .. }
             | LoadProblem::NotTheNameWritten { .. }
+            | LoadProblem::BuiltinsName { .. }
             | LoadProblem::AlreadyLoaded { .. }
             | LoadProblem::NotAComponent { .. }
             | LoadProblem::NoDeclaration { .. } => {
@@ -323,6 +367,15 @@ impl LoadProblem {
                 format!("{} declares '{declared}', not '{written}'", file.display()),
                 format!("write \"{declared}={path}\", or just \"{path}\""),
             ),
+            LoadProblem::BuiltinsName { declared } => refused(
+                format!(
+                    "{} declares '{declared}', the name of a builtin extension: only the builtin loads under it",
+                    file.display()
+                ),
+                format!(
+                    "write \"{declared}\" in place of this entry to enable the builtin, or rebuild the extension under a name of its own"
+                ),
+            ),
             LoadProblem::AlreadyLoaded { declared } => refused(
                 format!(
                     "{} declares '{declared}', and '{declared}' is already loaded by another entry",
@@ -341,6 +394,7 @@ impl LoadProblem {
             | LoadProblem::ModuleMissing { .. }
             | LoadProblem::Changed { .. }
             | LoadProblem::NotItsLockEntry { .. }
+            | LoadProblem::NotWhatItsEntryRecords { .. }
             | LoadProblem::NotAComponent { .. }
             | LoadProblem::NoDeclaration { .. } => {
                 unreachable!("a file entry is not installed, or the step's problem")
@@ -537,7 +591,7 @@ impl Installed {
     }
 
     /// Read one resolved entry: its bytes once, loaded under its key, its declaration once. Returns
-    /// the name it declares with what it brings; [`Installed::settle_entry`] admits or refuses it
+    /// what it declares with what it brings; [`Installed::settle_entry`] admits or refuses it
     /// (`Resolved::admit`, by [`Resolution::walk`]).
     ///
     /// When it returns `Err`, nothing this call loaded stays loaded.
@@ -550,7 +604,7 @@ impl Installed {
         resolved: &Resolved,
         runtime: &dyn WasmRuntime,
         disk: &dyn Disk,
-    ) -> Result<(String, Done), LoadFailure> {
+    ) -> Result<(Declared, Done), LoadFailure> {
         let subject = subject(resolved);
         let fail = |problem: LoadProblem| self.failure(&subject, problem);
         let mut notices = Vec::new();
@@ -594,7 +648,7 @@ impl Installed {
             })
         })?;
         Ok((
-            read.declaration.name().to_string(),
+            Declared::of(&read.declaration),
             Done {
                 declaration: read.declaration,
                 notices,
@@ -639,16 +693,11 @@ impl Installed {
         }
     }
 
-    /// `name`'s lock entry when its module on disk is the one it pins (any
-    /// module, for an entry that pins no hash): the check the extension load
-    /// makes ([`Self::check_module`]), without loading it.
-    pub fn verified(&self, name: &str, disk: &dyn Disk) -> Option<&LockFileEntry> {
-        let entry = self
-            .lock
-            .entries()
-            .iter()
-            .find(|e| e.name.as_str() == name)?;
-        self.check_module(entry, disk).ok().map(|_| entry)
+    /// `entry`'s module when the one on disk is the one it pins (any module, for an entry that
+    /// pins no hash): the check the extension load makes ([`Self::check_module`]), and the bytes it
+    /// read, without loading them.
+    pub fn pinned_module(&self, entry: &LockFileEntry, disk: &dyn Disk) -> Option<Module> {
+        self.check_module(entry, disk).ok()
     }
 }
 

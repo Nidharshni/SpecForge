@@ -196,9 +196,6 @@ type McpInspectResult "Mcp Inspect Result" {
   testable            boolean
   /// The entity declares at least one verify obligation.
   declared            boolean
-  /// Testable, but it owes no obligations and declares none: it does not
-  /// count toward coverage (specforge.coverage's row says the same).
-  exempt              boolean
   /// Its kind must declare obligations (a no_verify_statements rule targets
   /// it): why an exempt entity is exempt.
   obligated           boolean
@@ -215,6 +212,8 @@ type McpInspectResult "Mcp Inspect Result" {
   refers_to           string[]
   /// Its verify texts; absent when it declares none.
   verify_declarations string[]   @optional
+  /// Whether the entity counts (exempt, not_testable) and, when it does, how
+  /// it is proven, as specforge.coverage's row says.
   coverage_status     CoverageStatus
   /// The diagnostics about the entity, as specforge.validate reports them.
   diagnostics         Diagnostic[]
@@ -526,9 +525,13 @@ type McpSearchResult "Mcp Search Result" {
   verify unit "McpSearchResult schema is valid"
 }
 
-type CoverageStatus "Coverage Status" = "covered" | "uncovered" | "partial"
+type CoverageStatus "Coverage Status" = "covered"
+  | "uncovered"
+  | "partial"
+  | "exempt"
+  | "not_testable"
 
-type McpCoverageResults "P2 compliance: CoverageStatus is a structural computation, not domain vocabulary. An obligation is proven when a passing recorded test names its verify text, the same rule `analyze coverage` applies (A015), computable without extension input: covered   = every obligation proven AND no recorded test fails partial   = not covered, AND some obligation proven OR a recorded test fails uncovered = no obligation proven and no recorded test fails (incl. no verify declarations) Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant) via extension-contributed metadata fields on their entity kinds." {
+type McpCoverageResults "P2 compliance: CoverageStatus is a structural computation, not domain vocabulary. An obligation is proven when a passing recorded test names its verify text, the same rule `analyze coverage` applies (A015), computable without extension input: covered   = every obligation proven AND no recorded test fails partial   = not covered, AND some obligation proven OR a recorded test fails uncovered = no obligation proven and no recorded test fails (incl. no verify declarations) exempt = its kind is testable but it owes no obligations and declares none, so it does not count; not_testable = its kind is not testable, so it does not count (whatever its tests prove). Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant) via extension-contributed metadata fields on their entity kinds." {
   /// One row per entity that counts toward coverage (or the one named).
   entities McpCoverageResult[]
   verify unit "McpCoverageResults schema is valid"
@@ -537,6 +540,7 @@ type McpCoverageResults "P2 compliance: CoverageStatus is a structural computati
 type McpCoverageResult "Mcp Coverage Result" {
   entity_id          string @readonly
   kind               string @readonly
+  /// Whether the entity counts (exempt, not_testable) and, when it does, how it is proven.
   status             CoverageStatus
   declared           boolean
   linked             boolean
@@ -548,8 +552,6 @@ type McpCoverageResult "Mcp Coverage Result" {
   proven             integer
   /// Verify texts no passing recorded test names, in declaration order.
   unproven           string[]
-  /// A testable-kind entity that owes no obligations and declares none (W004 exempts it).
-  exempt             boolean
   verify unit "McpCoverageResult schema is valid"
 }
 

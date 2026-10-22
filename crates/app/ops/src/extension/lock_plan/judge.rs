@@ -19,7 +19,7 @@ impl<'a> LockPlan<'a> {
     ///    loads is refused (`extension_conflict`, ADR 0160).
     /// 1. [`Self::close`], then the peer rule over the project peer set as the change leaves it
     ///    ([`ProjectPeers::of`] over the staged lock and the entries plus the appended ones, a
-    ///    locked extension the change does not stage by its module on disk, as `check` loads it). It
+    ///    locked extension the change does not stage by what its module declares, admitted as `check` loads it). It
     ///    judges every declared peer whose dependent or peer the change touches (a staged install,
     ///    an appended entry):
     ///    - E073 for a range that can't be read;

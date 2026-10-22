@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-use specforge_coverage::{Status, Verdict};
+use specforge_coverage::Status;
 use specforge_graph::{Graph, Node, Selected};
 use specforge_registry::{FieldRegistry, RegistryBuild};
 
@@ -53,11 +53,11 @@ pub struct EmitOptions<'a> {
     /// edge types DOT styles, the fields context and markdown keep, the forms markdown links by.
     /// Default: the empty build, a project with no extension.
     pub registries: &'a RegistryBuild,
-    /// Each entity's coverage verdict, by id (`ProjectCoverage::verdicts`).
-    /// With it, every node whose entity has a verdict carries its status as
+    /// Each entity's coverage status, by id (`ProjectCoverage::statuses`,
+    /// ADR 0216). With it, every node whose entity has one carries it as
     /// `coverage_status` (graph, context and brief; DOT draws none), and a
     /// token budget counts the key. Default: None — no node carries one.
-    pub coverage: Option<&'a BTreeMap<String, Verdict>>,
+    pub coverage: Option<&'a BTreeMap<String, Status>>,
 }
 
 /// Default: graph format 1.0 of the whole graph against the unversioned
@@ -185,7 +185,7 @@ struct Shape<'a> {
     /// How the schema is carried; `None`: not at all.
     attach: Option<SchemaAttachment>,
     fields: &'a FieldRegistry,
-    coverage: Option<&'a BTreeMap<String, Verdict>>,
+    coverage: Option<&'a BTreeMap<String, Status>>,
 }
 
 impl Shape<'_> {
@@ -254,13 +254,13 @@ impl Shape<'_> {
 }
 
 /// `node`'s coverage status, when `coverage` holds a verdict for it.
-fn status_of(node: &Node, coverage: Option<&BTreeMap<String, Verdict>>) -> Option<Status> {
-    coverage?.get(node.id.raw.as_str()).map(Verdict::status)
+fn status_of(node: &Node, coverage: Option<&BTreeMap<String, Status>>) -> Option<Status> {
+    coverage?.get(node.id.raw.as_str()).copied()
 }
 
 fn graph_nodes(
     graph: &Graph,
-    coverage: Option<&BTreeMap<String, Verdict>>,
+    coverage: Option<&BTreeMap<String, Status>>,
 ) -> Vec<crate::json::JsonNode> {
     graph
         .nodes()
@@ -272,7 +272,7 @@ fn graph_nodes(
 fn context_nodes(
     graph: &Graph,
     fields: &FieldRegistry,
-    coverage: Option<&BTreeMap<String, Verdict>>,
+    coverage: Option<&BTreeMap<String, Status>>,
 ) -> Vec<crate::context::ContextNode> {
     graph
         .nodes()
@@ -283,7 +283,7 @@ fn context_nodes(
 
 fn brief_nodes(
     graph: &Graph,
-    coverage: Option<&BTreeMap<String, Verdict>>,
+    coverage: Option<&BTreeMap<String, Status>>,
 ) -> Vec<crate::brief::BriefNode> {
     graph
         .nodes()

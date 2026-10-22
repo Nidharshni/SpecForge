@@ -31,4 +31,4 @@ pub use registry_ops::{
 pub use retry::{RetryPolicy, Retrying};
 pub use signing::{SigningKey, load_or_create_signing_key_at};
 pub use trust::{KnownKeys, load_known_keys_at, save_known_keys_at};
-pub use trust_flow::{Accepted, KeyChange, NewPin, PinSource, Trusted};
+pub use trust_flow::NewPin;

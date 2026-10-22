@@ -20,7 +20,10 @@ pub struct WasmTrapInfo {
 /// Compilation caching is a host-engine concern (wasmtime's native on-disk
 /// cache, configured at `ComponentRuntime` construction) — it is not part of
 /// the load contract.
-pub trait WasmRuntime: Send + Sync {
+///
+/// `Any` lets a test ask a shared runtime whether it is the in-process one
+/// ([`crate::testing::InProcessRuntime::of`]).
+pub trait WasmRuntime: std::any::Any + Send + Sync {
     /// Compile the component `bytes` and register it under `name`,
     /// replacing what was loaded under it. The bytes are the ones the
     /// caller checked: the runtime reads nothing else. A refusal's reason

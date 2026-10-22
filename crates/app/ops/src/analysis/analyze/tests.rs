@@ -88,7 +88,12 @@ fn loaded_at(
     )
     .unwrap();
     let entries: Vec<String> = entries.iter().map(|e| e.to_string()).collect();
-    specforge_installed::testing::install_enabled(root, &entries, &specforge_project::builtins());
+    specforge_installed::testing::install_enabled(
+        root,
+        &entries,
+        &specforge_project::builtins(),
+        &**runtime,
+    );
     let env = specforge_project::Environment::load(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(runtime.clone()),

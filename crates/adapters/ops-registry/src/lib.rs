@@ -11,19 +11,19 @@ mod reports;
 
 use reports::PolicyReports;
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_ops::asking::{ExpectedFrom, Question};
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME, Package,
-    Published, Publisher, Registry, Searched, TrustPolicy, UNREADABLE_MANIFEST, no_registry,
+    Published, Publisher, Registry, Searched, Signer, TrustPolicy, UNREADABLE_MANIFEST, UserKeys,
+    no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_package::Version;
 use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::{
-    Accepted, CredentialStore, HttpRegistryClient, KeyChange, NewPin, PinSource, PublishError,
-    RegistryClient, RegistryConfig, RegistryCredential, RegistryError, Retrying,
-    parse_registries_from_config, publish_to_registry, verify_registry_integrity,
+    CredentialStore, HttpRegistryClient, NewPin, PublishError, RegistryClient, RegistryConfig,
+    RegistryCredential, RegistryError, Retrying, TrustCheck, parse_registries_from_config,
+    publish_to_registry, verify_package_signature, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::sync::OnceLock;
@@ -182,14 +182,17 @@ pub fn configured(
 /// ([`Registry::open`]) or first asks it anything. It asks the one that serves a name, and hands ops only a package that passed the fetch policy:
 ///
 /// 1. the reply names the package and version asked for (R-TRUST-004);
-/// 2. the binary hashes to the reply's SHA-256 (R-OPS-002);
-/// 3. the manifest reads as an extension declaration (R-OPS-004; a `manifest.json` from before ADR 0012 is
+/// 2. the manifest reads as an extension declaration (R-OPS-004; a `manifest.json` from before ADR 0012 is
 ///    refused with a re-publish suggestion) naming the package and version asked for (R-TRUST-004);
-/// 4. the publisher signature verifies and the key matches the one expected for the name: the user's
-///    pin, else the key the project's lock records, else any (trust on first use) (R-TRUST-001..006).
-///    The decision is the package's publisher; [`Registry::pin`] writes it once the install is.
+/// 3. the lock's bytes: the version `specforge.lock` pins is served as the bytes it pins (R014);
+/// 4. the publisher signature verifies over the digests the reply describes, and the publisher is decided
+///    by [`TrustPolicy::decide`]: the key matches the one expected for the name (the user's pin, else the
+///    key the project's lock records, else any: trust on first use) (R-TRUST-001..006). The decision is
+///    the package's publisher; [`Registry::pin`] writes it once the install is;
+/// 5. the binary hashes to the reply's SHA-256 (R-OPS-002), so the signature covers it.
 ///
-/// A fetch writes nothing. The policy runs over any [`RegistryClient`]: HTTP unless
+/// Steps 1 to 4 are `published` (a dry run); a fetch then downloads for 5. A refused package is never
+/// downloaded (ADR 0213). A fetch writes nothing. The policy runs over any [`RegistryClient`]: HTTP unless
 /// [`ConfiguredRegistry::with_client`] gives another. Built without reading, touching the network or
 /// failing. [`Registry::open`] gives the refusal of the whole project (E063, E067, R012) before any
 /// request; a call made without opening fails with the same refusal.
@@ -274,7 +277,7 @@ struct Described<'r> {
 }
 
 impl ConfiguredRegistry {
-    /// The first half of the fetch policy, which writes nothing and downloads nothing: the registry
+    /// The first part of the fetch policy, before the publisher; it writes nothing and downloads nothing: the registry
     /// that serves `name`, its credential (R-AUTH-020/021, R010, R011, R012), the metadata of
     /// `name@version`, which must name that package and version (1), and its manifest, which must
     /// read as that package's declaration (3). The served manifest is the package's declaration
@@ -300,6 +303,42 @@ impl ConfiguredRegistry {
     }
 }
 
+impl ConfiguredRegistry {
+    /// The fetch policy up to the binary (1-4), which writes nothing and downloads nothing: the reply
+    /// and its manifest (1, 3, [`Self::described`]), the lock's bytes (R014, before any question), the
+    /// publisher signature over the digests the reply describes (R-TRUST-002), the user's store
+    /// (R-TRUST-006) and the publisher, decided by [`TrustPolicy::decide`] (R-TRUST-001, -003, -005).
+    /// A dry run asks this; a fetch asks it and then downloads (ADR 0213).
+    fn decided(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<(Described<'_>, Publisher), OpError> {
+        let described = self.described(name, version)?; // 1, 3: checked before the signature, so a refused package pins no key
+        policy.admits(name, version, &described.metadata.sha256)?; // R014: the lock's bytes, before any question
+        let publisher = match verify_package_signature(&described.metadata)
+            .map_err(refused_by_trust)?
+        {
+            TrustCheck::Unsigned => policy.decide(name, Signer::Unsigned, UserKeys::default()),
+            TrustCheck::Verified { key_id } => {
+                let known = specforge_registry_client::trust_flow::keys(&self.user.known_keys())
+                    .map_err(refused_by_trust)?;
+                policy.decide(
+                    name,
+                    Signer::Key(&key_id),
+                    UserKeys {
+                        pin: known.pin_for(name.as_str()),
+                        trusted: known.is_trusted(&key_id),
+                        denied: known.is_denied(&key_id),
+                    },
+                )
+            }
+        }?;
+        Ok((described, publisher))
+    }
+}
+
 impl Registry for ConfiguredRegistry {
     /// The configuration first (E063/E067, as publish refuses), then the user's store (R012).
     fn open(&self) -> Result<(), OpError> {
@@ -314,43 +353,27 @@ impl Registry for ConfiguredRegistry {
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
+        let (described, publisher) = self.decided(name, version, policy)?; // 1-4: nothing is downloaded yet
         let Described {
             registry,
             credential,
             metadata,
             declaration,
-        } = self.described(name, version)?; // 1, 3: checked before the signature, so a refused package pins no key
-        policy.admits(name, version, &metadata.sha256)?; // 1b: the lock's bytes, before the download or any question
+        } = described;
         let wasm = self
             .client
             .download(&metadata.wasm_url, registry, credential.as_ref())
             .map_err(failure)?;
         verify_registry_integrity(&wasm, &metadata.sha256)
-            .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 2
-
-        // Publisher signature and the TOFU pin policy; a key change is put to the policy's asking.
-        let decide = |change: &KeyChange| {
-            policy.asking.answers(&Question::KeyChange {
-                package: &change.package,
-                expected: &change.pinned,
-                offered: &change.offered,
-                from: match change.source {
-                    PinSource::User => ExpectedFrom::UserPin,
-                    PinSource::Lock => ExpectedFrom::Lock,
-                },
-            })
-        };
-        let trusted = specforge_registry_client::trust_flow::check(
-            &metadata.name,
-            &metadata,
-            &wasm,
-            policy.allow_unsigned,
-            &decide,
-            &self.user.known_keys(),
-            policy.locked_key(),
-        )
-        .map_err(refused_by_trust)?; // 4: R-TRUST-001..006, writes nothing
-        self.reported_by_policy.extend(trusted.diagnostics); // W155
+            .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 5: the signature covered this SHA-256
+        if publisher == Publisher::Unsigned {
+            self.reported_by_policy.extend([
+                specforge_registry_client::trust_flow::unsigned_accepted(
+                    &metadata.name,
+                    &metadata.version,
+                ),
+            ]); // W155
+        }
 
         Ok(Package {
             name: name.clone(),
@@ -358,21 +381,23 @@ impl Registry for ConfiguredRegistry {
             sha256: metadata.sha256,
             wasm,
             declaration,
-            publisher: match trusted.accepted {
-                Accepted::Unsigned => Publisher::Unsigned,
-                Accepted::Signed { key_id, first_use } => Publisher::Signed { key_id, first_use },
-                Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
-            },
+            publisher,
         })
     }
 
-    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
-        let described = self.described(name, version)?;
+    fn published(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Manifest, OpError> {
+        let (described, publisher) = self.decided(name, version, policy)?;
         Ok(Manifest {
             name: name.clone(),
             version: version.clone(),
             sha256: described.metadata.sha256,
             declaration: described.declaration,
+            publisher,
         })
     }
 

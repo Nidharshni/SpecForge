@@ -1571,14 +1571,7 @@ fn every_published_format_admits_a_nodes_coverage_status() {
     let schema = sample_schema();
     let mut graph = Graph::new();
     graph.add_node(node("alpha", "behavior", Some("Alpha")));
-    let verdicts = BTreeMap::from([(
-        "alpha".to_string(),
-        specforge_coverage::Verdict {
-            obligations: 1,
-            proven: 1,
-            ..Default::default()
-        },
-    )]);
+    let verdicts = BTreeMap::from([("alpha".to_string(), specforge_coverage::Status::Covered)]);
     for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
         let text = specforge_emitter::emit(
             &graph,
@@ -1605,7 +1598,7 @@ fn every_published_format_admits_a_nodes_coverage_status() {
         };
         assert_eq!(
             node_schema["properties"]["coverage_status"],
-            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered"]}),
+            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered", "exempt", "not_testable"]}),
             "{format:?}"
         );
         let required = node_schema["required"].as_array().unwrap();

@@ -147,7 +147,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     written in a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
-    is not a reference and is not edited. The response MUST include the list of
+    is not a reference and is not edited; a quoted reference is a reference,
+    edited inside its quotes. The response MUST include the list of
     TextEdit operations applied, each a span as find_references returns it
     (1-based lines and byte columns). When dry_run is true, the tool MUST return
     the rename plan (affected files and TextEdit operations) without applying
@@ -188,6 +189,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename never edits a nested project's files"
   verify unit "a rename is refused while a source that spells the ID does not parse"
   verify unit "renaming a spec block is refused: its name is a string, not an entity ID"
+  verify unit "a quoted reference is renamed inside its quotes, where find_references answers it"
   verify unit "a rename edits a declaration whose name is written below its kind"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
   verify integration "a rename that cannot put a file back names it in files_written"
@@ -349,7 +351,8 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     answer what specforge add --dry-run answers: the add judged and not
     committed, its refusal included, without modifying any file, pinning
     any key or downloading any Wasm module (a registry package is judged
-    by its published manifest). The tool MUST add
+    by its published manifest, and its publisher decided as the add decides
+    it). The tool MUST add
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.

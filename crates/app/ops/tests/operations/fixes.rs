@@ -169,8 +169,8 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
          memo epsilon \"Epsilon\" {\n}\n",
     )
     .unwrap();
-    specforge_installed::testing::install(dir.path(), &["@pin/untargeted"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(untargeted_rule);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@pin/untargeted"]);
     let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     let reported: Vec<String> = project
         .diagnostics()
@@ -247,8 +247,8 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
     let text =
         "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\n\nfeature untestable \"F\" {\n}\n";
     std::fs::write(dir.path().join("a.spec"), text).unwrap();
-    specforge_installed::testing::install(dir.path(), &["@test/verifiable"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(verifiable_kinds);
+    specforge_installed::testing::install(dir.path(), &runtime, &["@test/verifiable"]);
     let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     let fixes = fix::fixes(
         &Navigator::new(ProjectView::of(&project)),
@@ -415,7 +415,6 @@ fn invariants_project(target_kind: Option<&'static str>) -> (tempfile::TempDir, 
     )
     .unwrap();
     std::fs::write(dir.path().join("auth.spec"), DANGLING).unwrap();
-    specforge_installed::testing::install(dir.path(), &["@test/ext"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(move || {
         let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
         c.kind("behavior", |k| {
@@ -434,6 +433,7 @@ fn invariants_project(target_kind: Option<&'static str>) -> (tempfile::TempDir, 
         }
         c
     });
+    specforge_installed::testing::install(dir.path(), &runtime, &["@test/ext"]);
     let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     (dir, project)
 }

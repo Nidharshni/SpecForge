@@ -44,6 +44,8 @@ fn of<'f>(site: &Site<'_>, file: &'f SpecFile) -> FileDefaults<'f> {
 /// - **The result.** Only `site`'s block changes; it is canonical; no own field of it restates its default; a field
 ///   emptied over a default holds none (`[]` for a list, `{}` for a block field); the original `text` comes back
 ///   byte for byte when the block's canonical text did not change.
+/// - **Repeats.** The later entries of `field` (and of each key inside its first, a block field) go first: the graph
+///   never held them (ADR 0215). A verb that answers `Unchanged` leaves the text as it was, repeats included.
 /// - **Refusals.** `block_unreadable`; whatever `verb` refuses; `not_editable` when a field of one value over a
 ///   default is emptied (it cannot say none).
 pub fn change(
@@ -54,6 +56,9 @@ pub fn change(
 ) -> Result<String, Refusal<EditField>> {
     let mut block = Block::open(site, text)?;
     let before = block.text();
+    if block.drop_repeats(field) {
+        block = Block::open(site, &block.text())?; // spans read again: the field is now written once
+    }
     let copied = match of(site, block.file()).held(block.entity(), field) {
         Held::Inherited(default) => copy(site, &block, field, default),
         _ => None,

@@ -3,7 +3,7 @@ source: crates/surfaces/cli/tests/inspect_views.rs
 expression: "normalized(result, root)"
 ---
 {
-  "coverage_status": "uncovered",
+  "coverage_status": "exempt",
   "declared": false,
   "diagnostics": [
     {
@@ -26,7 +26,6 @@ expression: "normalized(result, root)"
     }
   ],
   "entity_id": "Status",
-  "exempt": true,
   "fields": {
     "variants": [
       "active",

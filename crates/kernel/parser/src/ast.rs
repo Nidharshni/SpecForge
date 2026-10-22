@@ -146,15 +146,75 @@ impl FieldMap {
         self.entries.push(entry);
     }
 
-    pub fn get(&self, key: &str) -> Option<&FieldValue> {
+    /// The entry of `key` a reader reads: its first (ADR 0215).
+    pub fn entry(&self, key: &str) -> Option<&FieldEntry> {
         // C3-10: intern the query once, then compare interned symbols
         // (u32 eq) per entry — previously every entry's key was resolved
         // to &str for a full string compare.
         let key_sym = Sym::new(key);
+        self.entries.iter().find(|e| e.key == key_sym)
+    }
+
+    pub fn get(&self, key: &str) -> Option<&FieldValue> {
+        self.entry(key).map(|e| &e.value)
+    }
+
+    /// This map with each key's first entry only, a block value's own map likewise: what the graph stores
+    /// (ADR 0215).
+    pub fn first_of_each_key(&self) -> FieldMap {
+        let mut seen: Vec<Sym> = Vec::new();
+        let mut out = FieldMap::new();
+        for entry in &self.entries {
+            if seen.contains(&entry.key) {
+                continue;
+            }
+            seen.push(entry.key);
+            let mut kept = entry.clone();
+            if let FieldValue::Block(inner) = &entry.value {
+                kept.value = FieldValue::Block(inner.first_of_each_key());
+            }
+            out.push_entry(kept);
+        }
+        out
+    }
+
+    /// Each later entry of a key, in written order, inside the first entry of a block field too (a later entry is
+    /// dropped whole, so its own inner repeats are not listed).
+    pub fn repeats(&self) -> Vec<Repeat<'_>> {
+        let mut out = Vec::new();
+        self.collect_repeats("", &mut out);
+        out
+    }
+
+    fn collect_repeats<'m>(&'m self, prefix: &str, out: &mut Vec<Repeat<'m>>) {
+        let mut firsts: Vec<&'m FieldEntry> = Vec::new();
+        for entry in &self.entries {
+            let path = format!("{prefix}{}", entry.key);
+            match firsts.iter().find(|f| f.key == entry.key) {
+                Some(first) => out.push(Repeat {
+                    path,
+                    first,
+                    later: entry,
+                }),
+                None => {
+                    firsts.push(entry);
+                    if let FieldValue::Block(inner) = &entry.value {
+                        inner.collect_repeats(&format!("{path}."), out);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Whether the block these fields were read from is a union (`kind name "Title" = a | b`) rather than braced
+    /// (`{ ... }`): it holds the parser's own variant list. Decided by the body's syntax, never by a field's name: a
+    /// braced block's member named `variants` is a field like any other, and so is a type union written as a
+    /// member's value (`variants a | b`, a [`FieldValue::TypeUnion`]). The registry's union exemption and the typed
+    /// edits read it (ADR 0219).
+    pub fn is_union(&self) -> bool {
         self.entries
             .iter()
-            .find(|e| e.key == key_sym)
-            .map(|e| &e.value)
+            .any(|e| matches!(e.value, FieldValue::VariantList(_)))
     }
 
     pub fn entries(&self) -> &[FieldEntry] {
@@ -172,6 +232,15 @@ impl FieldMap {
 pub struct Annotation {
     pub name: String,
     pub value: Option<String>,
+}
+
+/// A later entry of a key its map already holds (ADR 0215): `path` is its key, or `outer.key` inside the first
+/// entry of a block field, at any depth; `first` is the entry the key keeps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Repeat<'m> {
+    pub path: String,
+    pub first: &'m FieldEntry,
+    pub later: &'m FieldEntry,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -251,7 +320,7 @@ pub enum FieldValue {
     /// (`specforge_graph::Reading::references`), never decided here.
     List(Vec<ListItem>),
     /// A union body's variants (`type X = a | b`), under
-    /// [`UNION_VARIANTS_FIELD`] only.
+    /// [`UNION_VARIANTS_FIELD`] only; [`FieldMap::is_union`] reads it.
     VariantList(Vec<TypeMember>),
     Block(FieldMap),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.

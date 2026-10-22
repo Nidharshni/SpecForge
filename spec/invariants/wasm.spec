@@ -36,7 +36,8 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     no version (E073). `check`, `doctor`, `add`, `init`, `update` and `remove`, and
     the dry runs of `add` and `remove`, judge a peer by one rule over one
     set: the extensions the project's specforge.json entries load
-    (ADR 0041).
+    (ADR 0041). An installed extension is judged by what its module
+    declares, which its lock entry must record (E070).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"
@@ -45,6 +46,7 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
   verify unit "add, init, update and remove judge the set check judges: the extensions the project's entries load"
   verify unit "the lock plan's peer set of the project as it is names what the extension load loads, in entry order, from the entries it loads them by"
+  verify unit "the lock plan judges a locked extension by what its module declares, and one whose lock entry records another version or other peers is no member, as the load refuses it"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------
@@ -157,7 +159,8 @@ invariant registry_integrity "Registry Integrity" {
 invariant publisher_trust "Publisher Trust" {
   guarantee """
     A registry package is installed only when its publisher signature
-    verifies over the downloaded bytes and the served manifest, or when it
+    verifies over the digests the registry describes (which the downloaded
+    bytes must match) and the served manifest, or when it
     is unsigned and the user passed --allow-unsigned; a broken signature is
     never installed. The first verified key for a package is pinned, and a
     package signed by another key is refused unless the user consents. A
@@ -168,6 +171,7 @@ invariant publisher_trust "Publisher Trust" {
   verify integration "specforge add refuses an unsigned package without --allow-unsigned"
   verify integration "specforge add pins the publisher key and records it in specforge.lock"
   verify integration "specforge add refuses a package signed by another key than the pinned one"
+  verify integration "specforge add --dry-run refuses an unsigned package and a denied publisher key as specforge add does, downloading nothing"
 }
 
 invariant registry_reply_binding "Registry Reply Binding" {

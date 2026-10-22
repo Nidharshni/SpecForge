@@ -1,6 +1,6 @@
 # A written token is found by one finder
 
-**Status:** accepted (2026-10-19, architecture round 16, plan 06). Amends [ADR 0127](0127-the-linker-records-where-each-edge-is-written.md) The round-18 amendment's "coerced once" is `FieldForms::stored` ([ADR 0182](0182-the-graph-answers-what-a-blocks-field-holds.md)).
+**Status:** accepted (2026-10-19, architecture round 16, plan 06). D1 extended by [ADR 0218](0218-a-reference-token-spans-its-id.md): a token's span is its ID's, inside any quotes. Amends [ADR 0127](0127-the-linker-records-where-each-edge-is-written.md) The round-18 amendment's "coerced once" is `FieldForms::stored` ([ADR 0182](0182-the-graph-answers-what-a-blocks-field-holds.md)).
 D5 (navigation's tokens ask the graph's finder; its holders still read `Graph::written`), extends
 [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D11 (a default no block takes is one token, held by none)
 and [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md) D1 and D2 (the referrer scan is the finder;

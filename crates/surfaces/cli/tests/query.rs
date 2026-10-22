@@ -54,7 +54,7 @@ fn query_with_kind_filter() {
         .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
-        .command(&["query", "gamma", "--depth=1", "--kind=behavior"])
+        .command(&["query", "gamma", "--depth=1", "--kinds=behavior"])
         .output()
         .unwrap();
 

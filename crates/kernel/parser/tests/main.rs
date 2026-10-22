@@ -3,6 +3,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod body_shape;
 mod contracts;
 mod corpus_syntax;
 mod doc_spans;

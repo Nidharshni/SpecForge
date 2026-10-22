@@ -15,8 +15,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// What a publisher signs for a package: its name and version as its declaration states them, and the SHA-256 of
-/// the exact binary and manifest bytes uploaded. A registry builds it from the upload, and a client from the reply
-/// and the downloaded bytes. Equal content is what makes a signature verify on both.
+/// the exact binary and manifest bytes uploaded. A registry builds it from the upload, and a client from the digests
+/// the reply describes, before any download. Equal content is what makes a signature verify on both.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedContent {
     name: String,
@@ -33,6 +33,17 @@ impl SignedContent {
             name: name.to_string(),
             version: version.to_string(),
             wasm_sha256: sha256_hex(wasm),
+            manifest_sha256: sha256_hex(manifest.as_bytes()),
+        }
+    }
+
+    /// The content a reply describes: `wasm_sha256` is the binary's digest as the reply states it, so no download is
+    /// needed. Equal to [`SignedContent::of`] of the bytes that hash to `wasm_sha256`.
+    pub fn described(name: &str, version: &str, wasm_sha256: &str, manifest: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            version: version.to_string(),
+            wasm_sha256: wasm_sha256.to_string(),
             manifest_sha256: sha256_hex(manifest.as_bytes()),
         }
     }
@@ -252,6 +263,14 @@ mod tests {
 
     fn content() -> SignedContent {
         SignedContent::of(NAME, VERSION, WASM, MANIFEST)
+    }
+
+    #[test]
+    fn the_described_content_is_the_content_of_the_bytes_it_names() {
+        let described = SignedContent::described(NAME, VERSION, &sha256_hex(WASM), MANIFEST);
+        assert_eq!(described, content());
+        let signature = PackageSignature::sign(&key(), &content(), at());
+        assert!(signature.verify(&described).is_ok());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 # One MCP request pipeline; resources read through the view
 
 **Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). D1's "record its events" step is a handler recording through the call's event sink; `Ran` is gone (ADR 0057). D6 amended by ADR 0058 (the deltas are sent whole); D6's diagnostics delta is the session update's (ADR 0074), MCP adds its I017 and keeps no snapshot. Amends
-ADR 0004 "MCP tool table" (D4-e) and ADR 0017 D6 and D14's resource code.
+ADR 0004 "MCP tool table" (D4-e) and ADR 0017 D6 and D14's resource code. D4 amended by [ADR 0220](0220-a-kinds-list-written-as-text-is-read-by-one-rule.md) (a graph view's `kinds` is a kinds list; `graph/{entity_id}` is the query at its default depth, `context/{entity_id}` the scoped context export).
 
 `tools/call`, `resources/read` and `prompts/get` ran the same steps in three functions: read the
 request, look the name up, record the invocation, resolve the call target, run the handler, drain

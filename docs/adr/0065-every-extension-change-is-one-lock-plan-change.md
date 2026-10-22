@@ -3,6 +3,7 @@
 **Status:** accepted (2026-10-13, architecture round 8, plan 02). Amends ADR 0041 (amendments A5, B1), ADR 0028 (D4, D8,
 D9, D10) and ADR 0045 (D2). Amended (2026-10-21, architecture round 22, plan 10): D6's builtin specifier carries an optional `@requirement`, read as a package reference's and held to the embedded builtin.
 **D3 amended by [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) (round 22):** a dry run refuses a locked version served as other bytes (R014), from the manifest's SHA-256.
+**D3 reopened by [ADR 0213](0213-trust-is-decided-once-from-the-described-metadata-before-any-download.md) (round 24):** a dry run decides the publisher as the add does (R-TRUST-001/002/003/005/006); only what the binary itself can fail is not previewed.
 **D5 amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** `Origin::of` is `Resolution::origin`, and the inventory reads the recorded origin.
 
 ADR 0041 made the lock plan the one way `add`, `update` and `init` install, and its round-7 amendment made it judge the

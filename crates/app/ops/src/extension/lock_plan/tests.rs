@@ -173,15 +173,22 @@ fn plan_from<'a>(
     plan
 }
 
-/// A disk holding the module every lock entry of `installed` pins (`fixtures::entry` pins
-/// `b"old"`): the set a change leaves answers a locked extension by its module (ADR 0181 D3).
+/// A disk holding the module every lock entry of `installed` pins (`fixtures::entry` pins the module that
+/// spells its declaration): the set a change leaves answers a locked extension by its module (ADR 0181 D3).
 fn modules_of(installed: &Installed) -> &'static MemoryDisk {
     let disk = installed
         .lock()
         .entries()
         .iter()
         .fold(MemoryDisk::new(), |disk, entry| {
-            disk.with_file(installed.module_path(&entry.name), b"old")
+            disk.with_file(
+                installed.module_path(&entry.name),
+                &crate::extension::fixtures::module_of(
+                    entry.name.as_str(),
+                    &entry.version,
+                    &entry.peer_dependencies,
+                ),
+            )
         });
     Box::leak(Box::new(disk))
 }

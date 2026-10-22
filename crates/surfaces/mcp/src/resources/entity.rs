@@ -6,7 +6,7 @@ use crate::subscriptions::Watched;
 use crate::uri_template::Matched;
 
 /// `specforge://graph/{entity_id}`: the entity and its neighbours, the
-/// scoped graph export at depth 1 (a `depth` query widens it). A malformed
+/// scoped graph export at the query's default depth (`query::DEFAULT_DEPTH`; a `depth` query widens it). A malformed
 /// ID is `invalid_input` (the 400 case); a well-formed one that names no
 /// entity is the export's `entity_not_found` with its E003 (the 404 case).
 pub struct EntityResource;
@@ -14,14 +14,16 @@ pub struct EntityResource;
 impl CoreResource for EntityResource {
     const URI: &'static str = "specforge://graph/{entity_id}";
     const NAME: &'static str = "entity";
-    const DESCRIPTION: &'static str = "Subgraph rooted at a specific entity";
+    const DESCRIPTION: &'static str =
+        "An entity and its direct neighbours (a depth query widens it)";
     const CHANGES_WITH: Watched = Watched::Graph;
 
     fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
         let mut query = super::view::ViewQuery::parse(uri, Some("entity_id"))?;
         super::view::check_entity_id(query.scope.as_deref().unwrap_or_default())?;
-        // The entity and its immediate neighbors, not everything reachable.
-        query.depth.get_or_insert(1);
+        query
+            .depth
+            .get_or_insert(specforge_ops::read::query::DEFAULT_DEPTH);
         super::view::exported(view, &query, Format::Graph)
     }
 }

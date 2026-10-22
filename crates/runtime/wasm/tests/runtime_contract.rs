@@ -52,3 +52,31 @@ fn a_binary_is_served_under_the_name_it_is_loaded_as() {
     assert!(runtime.unload("@contract/served"));
     assert!(!runtime.unload("@contract/served"));
 }
+
+#[test]
+fn a_module_whose_bytes_spell_a_declaration_loads_under_any_name() {
+    use specforge_extension_sdk::PeerDependency;
+    use specforge_wasm::protocol::load_declaration;
+    use specforge_wasm::testing::spelled_module;
+
+    let peers = vec![PeerDependency {
+        name: "@acme/b".to_string(),
+        version: "^1.0".to_string(),
+        optional: false,
+    }];
+    let bytes = spelled_module("@acme/a", "2.3.4", &peers);
+    let runtime = InProcessRuntime::new();
+
+    assert_eq!(
+        runtime.declared_by("@acme/x", &bytes),
+        Some(("2.3.4".to_string(), peers.clone()))
+    );
+    runtime.load("@acme/x", &bytes).unwrap();
+    let loaded = load_declaration(&runtime, "@acme/x").unwrap();
+    assert_eq!(loaded.declaration.name(), "@acme/a");
+    assert_eq!(loaded.declaration.version(), "2.3.4");
+    assert_eq!(loaded.declaration.peers(), peers.as_slice());
+    // Bytes that spell nothing are no component, and declare nothing.
+    assert!(runtime.load("@acme/y", b"\0asm other").is_err());
+    assert_eq!(runtime.declared_by("@acme/y", b"\0asm other"), None);
+}

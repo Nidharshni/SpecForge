@@ -60,8 +60,9 @@ fn an_environment_reports_its_config_its_load_its_providers_then_its_build() {
         .to_string(),
     )
     .unwrap();
-    specforge_installed::testing::install(root, &[RULES]);
-    let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(rules));
+    let served = Arc::new(InProcessRuntime::new().with(rules));
+    specforge_installed::testing::install(root, &*served, &[RULES]);
+    let rt: SharedRuntime = served;
 
     let env = Environment::load(
         &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -228,20 +229,8 @@ fn an_entrys_load_diagnostics_come_together_in_entry_order() {
         json!({"extensions": ["@acme/a", "@acme/missing", "@acme/b"]}).to_string(),
     )
     .unwrap();
-    specforge_installed::testing::install(root, &["@acme/a", "@acme/b"]);
-    // `@acme/b`'s lock entry pins no hash: it loads with W149.
-    let mut lock = match Installed::at(root).lock().clone() {
-        specforge_installed::LockState::Read(lock) => lock,
-        other => panic!("{other:?}"),
-    };
-    for entry in &mut lock.entries {
-        if entry.name.as_str() == "@acme/b" {
-            entry.wasm_hash = String::new();
-        }
-    }
-    specforge_installed::write_lock_file(&lock, &root.join("specforge.lock")).unwrap();
     // `@acme/a` asks for more execution time than the host grants: W153.
-    let rt: SharedRuntime = Arc::new(
+    let served = Arc::new(
         InProcessRuntime::new()
             .with(|| {
                 let mut meta = ExtensionMeta::new("@acme/a", "1.0.0");
@@ -253,7 +242,19 @@ fn an_entrys_load_diagnostics_come_together_in_entry_order() {
             })
             .with(|| ContributionsBuilder::new(ExtensionMeta::new("@acme/b", "1.0.0"))),
     );
-
+    let rt: SharedRuntime = served.clone();
+    specforge_installed::testing::install(root, &*served, &["@acme/a", "@acme/b"]);
+    // `@acme/b`'s lock entry pins no hash: it loads with W149.
+    let mut lock = match Installed::at(root).lock().clone() {
+        specforge_installed::LockState::Read(lock) => lock,
+        other => panic!("{other:?}"),
+    };
+    for entry in &mut lock.entries {
+        if entry.name.as_str() == "@acme/b" {
+            entry.wasm_hash = String::new();
+        }
+    }
+    specforge_installed::write_lock_file(&lock, &root.join("specforge.lock")).unwrap();
     let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), Some(rt));
 
     // Each entry's diagnostics come right after the entry.

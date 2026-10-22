@@ -77,6 +77,7 @@ impl Served {
     /// in-process runtime serves, the project has installed: it loads through the production path.
     pub fn initialized_in(project: TestProject, runtime: SharedRuntime) -> Self {
         let project = project.installing_enabled();
+        project.record_declarations(&*runtime);
         Self::over(
             project,
             McpServer::new()

@@ -22,6 +22,7 @@ fn project(entries: Value, lock: Option<Value>) -> TestProject {
             .to_string(),
     );
     project.write("prod.wasm", product_wasm());
+    project.write("greet.wasm", specforge_component::committed::GREET.read());
     if let Some(lock) = lock {
         project.write("specforge.lock", lock.to_string());
     }
@@ -52,11 +53,11 @@ fn each_source_is_where_the_load_took_the_extension() {
         {"name": "@acme/stale", "version": "3.0.0", "source": "local:/x/stale.wasm", "wasm_hash": "h"},
     ]});
     let cases = [
-        // A file shadows a builtin's name.
+        // A file declaring a builtin's name is refused.
         (
             json!(["prod.wasm"]),
             None,
-            vec![row("@specforge/product", "file:prod.wasm", "loaded")],
+            vec![row("prod.wasm", "file:prod.wasm", "not_loaded")],
         ),
         // A builtin, and a file declaring it.
         (
@@ -75,11 +76,11 @@ fn each_source_is_where_the_load_took_the_extension() {
         ),
         // A repeat, and another text for one file.
         (
-            json!(["prod.wasm", "prod.wasm", "./prod.wasm"]),
+            json!(["greet.wasm", "greet.wasm", "./greet.wasm"]),
             None,
             vec![
-                row("./prod.wasm", "file:./prod.wasm", "not_loaded"),
-                row("@specforge/product", "file:prod.wasm", "loaded"),
+                row("./greet.wasm", "file:./greet.wasm", "not_loaded"),
+                row("@sdk/greet", "file:greet.wasm", "loaded"),
             ],
         ),
         // A builtin's name with a stray lock entry, and a lock entry no entry enables.
@@ -104,17 +105,19 @@ fn each_source_is_where_the_load_took_the_extension() {
             "{entries}: {doctor:?} vs {listed:?}"
         );
 
-        let removed = cli.document(&["remove", "@specforge/product", "--dry-run"]);
-        // A name two entries enable is refused (extension_conflict): no source to compare.
-        if let Some(source) = removed.json["source"].as_str() {
-            let loaded = listed
-                .iter()
-                .find(|(name, _, status)| name == "@specforge/product" && status == "loaded");
-            assert_eq!(
-                Some(source),
-                loaded.map(|(_, source, _)| source.as_str()),
-                "{entries}"
-            );
+        for (name, _, _) in listed.iter().filter(|(_, _, status)| status == "loaded") {
+            let removed = cli.document(&["remove", name, "--dry-run"]);
+            // A name two entries enable is refused (extension_conflict): no source to compare.
+            if let Some(source) = removed.json["source"].as_str() {
+                let loaded = listed
+                    .iter()
+                    .find(|(listed_name, _, status)| listed_name == name && status == "loaded");
+                assert_eq!(
+                    Some(source),
+                    loaded.map(|(_, source, _)| source.as_str()),
+                    "{entries}"
+                );
+            }
         }
     }
 }

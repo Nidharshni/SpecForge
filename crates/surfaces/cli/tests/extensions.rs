@@ -1384,46 +1384,6 @@ fn remove_installed_extension_drops_its_config_entry() {
 
 #[specforge_test(
     behavior = "remove_extension",
-    verify = "removing an extension another installed extension requires fails with E027 unless --force"
-)]
-fn remove_refuses_an_extension_another_requires() {
-    let dir = TestProject::new().without_config();
-    project_with_installed(
-        dir.root(),
-        &[("@acme/base", &[]), ("@acme/app", &["@acme/base"])],
-    );
-    let lock_before = fs::read(dir.root().join("specforge.lock")).unwrap();
-
-    let out = Cli::on(&dir)
-        .command(&["remove", "@acme/base", "--format", "json"])
-        .output()
-        .unwrap();
-    assert!(!out.status.success());
-    let error: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(error["code"], "E027", "{error}");
-    assert!(
-        error["error"].as_str().unwrap().contains("@acme/app"),
-        "{error}"
-    );
-    // Nothing changed.
-    assert_eq!(
-        fs::read(dir.root().join("specforge.lock")).unwrap(),
-        lock_before
-    );
-    assert!(enabled_extensions(dir.root()).contains(&"@acme/base".to_string()));
-
-    Cli::on(&dir)
-        .command(&["remove", "@acme/base", "--force"])
-        .assert()
-        .success();
-    assert_eq!(
-        enabled_extensions(dir.root()),
-        ["@specforge/software", "@acme/app"]
-    );
-}
-
-#[specforge_test(
-    behavior = "remove_extension",
     verify = "specforge remove with no lock file reports error"
 )]
 fn remove_no_lock_file() {

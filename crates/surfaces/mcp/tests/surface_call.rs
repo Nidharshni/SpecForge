@@ -472,7 +472,7 @@ fn extension_enabled_after_serving()
         .file("main.spec", "")
         .serve_in(ext.runtime() as std::sync::Arc<dyn specforge_wasm::runtime::WasmRuntime>);
     // The project installs what its runtime serves, then enables it.
-    specforge_installed::testing::install(server.root(), &[EXT]);
+    specforge_installed::testing::install(server.root(), &*ext.runtime(), &[EXT]);
     server.write("specforge.json", &config(&[EXT]));
     (server, ext)
 }
@@ -675,7 +675,7 @@ fn a_query_the_resource_cannot_read_is_refused_naming_its_key() {
         ("specforge://graph?depth=1&depth=2", "depth"),
         ("specforge://graph?scope=alpha&root=alpha", "root"),
         ("specforge://graph?max_tokens=-1", "max_tokens"),
-        ("specforge://graph?kinds=behavior,", "kinds"),
+        ("specforge://graph?kinds=behavior&kinds=feature", "kinds"),
         ("specforge://graph?scope=", "scope"),
         ("specforge://graph?depth", "depth"),
         ("specforge://context/alpha?root=zeta", "root"),

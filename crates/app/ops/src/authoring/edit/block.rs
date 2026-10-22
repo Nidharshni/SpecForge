@@ -3,7 +3,7 @@
 //! changes. `site` holds what the kind's registry answers about the entity; `verbs` the edits that change a block.
 
 use super::path;
-use super::write::written;
+use super::write::{NOT_EDITABLE, written};
 use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, codes};
@@ -68,6 +68,32 @@ pub fn canonical(site: &Site<'_>, text: &str) -> Result<String, Refusal<EditFiel
     }
 }
 
+/// Refused `not_editable` when `site`'s block, as `text` parses, is a union (`kind name = a | b`,
+/// [`specforge_parser::FieldMap::is_union`]): its body holds only its variants, so it has no field to set, unset,
+/// link or unlink and no verify statement to add or remove. Retitle and delete take a union (ADR 0219).
+pub fn refuse_union(site: &Site<'_>, text: &str) -> Result<(), Refusal<EditField>> {
+    let file = parse(text, site.key);
+    let index = position(&file, site).ok_or_else(|| unreadable(site.id))?;
+    if !file.entities[index].fields.is_union() {
+        return Ok(());
+    }
+    Err(OpError::new(
+        OpErrorKind::InvalidInput,
+        NOT_EDITABLE,
+        format!(
+            "'{id}' is a union ({kind} {id} = ...): its body holds only its variants",
+            id = site.id,
+            kind = site.kind
+        ),
+    )
+    .with_entity(site.id)
+    .with_suggestion(format!(
+        "retitle and delete take a union; write its variants in {} by hand",
+        site.key
+    ))
+    .about(EditField::Entity))
+}
+
 impl Block {
     pub fn open(site: &Site<'_>, text: &str) -> Result<Block, Refusal<EditField>> {
         let text = canonical(site, text)?;
@@ -121,12 +147,27 @@ impl Block {
         self.entity().span.end_line - 1
     }
 
-    pub fn entry(&self, name: &str) -> Option<&FieldEntry> {
-        self.entity()
+    /// Removes the later entries of `name` (and, inside its first entry, of each key it holds) that the graph build
+    /// drops (E081, ADR 0215); whether a line went. The spans are stale after it: the block is opened again.
+    pub fn drop_repeats(&mut self, name: &str) -> bool {
+        let nested = format!("{name}.");
+        let mut spans: Vec<SourceSpan> = self
+            .entity()
             .fields
-            .entries()
-            .iter()
-            .find(|e| e.key.as_str() == name)
+            .repeats()
+            .into_iter()
+            .filter(|r| r.path == name || r.path.starts_with(&nested))
+            .filter_map(|r| r.later.value_span.clone())
+            .collect();
+        spans.sort_by_key(|s| std::cmp::Reverse(s.start_line));
+        for span in &spans {
+            self.remove(span.start_line - 1, span.end_line - 1);
+        }
+        !spans.is_empty()
+    }
+
+    pub fn entry(&self, name: &str) -> Option<&FieldEntry> {
+        self.entity().fields.entry(name)
     }
 
     /// The leading whitespace of `line`.

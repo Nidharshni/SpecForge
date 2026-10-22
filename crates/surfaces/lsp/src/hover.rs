@@ -6,8 +6,10 @@
 use specforge_common::{Diagnostic, SourceSpan};
 use specforge_graph::Node;
 use specforge_ops::OpError;
+use specforge_ops::read::coverage::STATUS;
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts, quote};
 use specforge_parser::{FieldValue, ListItem, TypeMember, Written};
+use specforge_project::coverage::Status;
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
 use tower_lsp::lsp_types::{Position, Range};
@@ -123,9 +125,7 @@ pub fn entity(
     let mut sections: Vec<String> = vec![header_section];
 
     // Section 2: its coverage
-    if let Some(line) = coverage_line(facts, coverage) {
-        sections.push(format!("**Coverage** · {line}"));
-    }
+    sections.push(format!("**Coverage** · {}", coverage_line(facts, coverage)));
 
     // Section 3: its references (Refers to), by field
     let outgoing = &facts.references.outgoing;
@@ -233,54 +233,46 @@ fn is_headline(value: &FieldValue, headline: Option<&str>) -> bool {
     }
 }
 
-/// The Coverage line after `**Coverage** · `: as `specforge.inspect`
-/// reports the entity's coverage. `None` for an entity whose kind is not
-/// testable and that declares no obligations.
-fn coverage_line(
-    facts: &EntityFacts,
-    coverage: &Result<EntityCoverage, OpError>,
-) -> Option<String> {
-    let standing = facts.standing;
-    let declares = standing.declares_obligations();
-    if !standing.testable && !declares {
-        return None;
-    }
-    if standing.exempt() {
-        return Some(if standing.obligated() {
-            "exempt: it owes none (a union or an exempting field)".to_string()
-        } else {
-            "exempt: its kind need not declare obligations".to_string()
-        });
-    }
+/// The Coverage line after `**Coverage** · `: the status `specforge.inspect`
+/// reports (ADR 0216), why an entity that does not count does not, then its
+/// proof when it counts or declares obligations; the report's error, for
+/// every entity, when the recorded report cannot be read.
+fn coverage_line(facts: &EntityFacts, coverage: &Result<EntityCoverage, OpError>) -> String {
     let coverage = match coverage {
         Ok(coverage) => coverage,
         Err(error) => {
-            return Some(format!(
+            return format!(
                 "the recorded test report cannot be read ({}): {error}",
                 error.code
-            ));
+            );
         }
     };
-    let verdict = &coverage.verdict;
-    let mut line = format!(
-        "`{}` · {}/{} obligations proven",
-        specforge_ops::read::coverage::STATUS.name_of(coverage.status()),
-        verdict.proven,
-        verdict.obligations
-    );
-    if coverage.recorded {
-        let plural = if verdict.tests == 1 { "" } else { "s" };
-        line.push_str(&format!(" · {} test{plural}", verdict.tests));
-        if verdict.failing > 0 {
-            line.push_str(&format!(" · {} failing", verdict.failing));
+    let mut line = format!("`{}`", STATUS.name_of(coverage.status));
+    match coverage.status {
+        Status::Exempt if facts.standing.obligated() => {
+            line.push_str(" · it owes none (a union or an exempting field)")
         }
-    } else {
-        line.push_str(" · no test report recorded");
+        Status::Exempt => line.push_str(" · its kind need not declare obligations"),
+        Status::NotTestable => line.push_str(" · its kind is not testable, so it does not count"),
+        Status::Covered | Status::Partial | Status::Uncovered => {}
     }
-    if !standing.testable {
-        line.push_str(" · its kind is not testable, so it does not count");
+    let verdict = &coverage.verdict;
+    if coverage.status.counts() || verdict.obligations > 0 {
+        line.push_str(&format!(
+            " · {}/{} obligations proven",
+            verdict.proven, verdict.obligations
+        ));
+        if coverage.recorded {
+            let plural = if verdict.tests == 1 { "" } else { "s" };
+            line.push_str(&format!(" · {} test{plural}", verdict.tests));
+            if verdict.failing > 0 {
+                line.push_str(&format!(" · {} failing", verdict.failing));
+            }
+        } else {
+            line.push_str(" · no test report recorded");
+        }
     }
-    Some(line)
+    line
 }
 
 /// Returns markdown-formatted hover content for a field name within an entity block.

@@ -35,6 +35,9 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     never on the order they are written in. A declared single reference and a derived
     edge are in none (ADR 0093 D7, ADR 0204). W061 has no span: it is about its entities
     (ADR 0016 D7).
+    A block that writes a key twice, at any depth, MUST be E081 at each later
+    entry, and its node MUST hold the first entry of each key; a later entry's
+    names stay tokens and link nothing (ADR 0215).
   """
   verify unit "graph contains one node per entity"
   verify unit "graph contains one edge per resolved reference"
@@ -54,6 +57,9 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "detects self-referencing cycle"
   verify unit "no false positives for acyclic graph"
   verify unit "same ID with different kinds does not produce E002"
+  verify unit "a field written twice in one block is E081, and the node holds its first entry, at any depth"
+  verify unit "a later entry's names stay tokens a rename edits, and link nothing"
+  verify unit "an update reports a field written twice as the cold build does"
 }
 
 behavior apply_file_defaults "Apply File Defaults" {

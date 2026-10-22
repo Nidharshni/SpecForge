@@ -59,7 +59,7 @@ pub(crate) fn project_with_extension() -> tempfile::TempDir {
         r#"{"name": "p", "version": "0.1.0", "extensions": ["@acme/x"]}"#,
     )
     .unwrap();
-    specforge_installed::testing::install(dir.path(), &["@acme/x"]);
+    specforge_installed::testing::install(dir.path(), &hooked(|_| Ok(())), &["@acme/x"]);
     dir
 }
 
@@ -126,7 +126,6 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
     std::fs::create_dir_all(dir.path().join("spec")).unwrap();
     let files = copy_at_old_format(&repo.join("spec"), &dir.path().join("spec"));
     assert!(files > 100, "the corpus is the dogfood spec: {files}");
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
     let runtime = specforge_project::testing::component_runtime();
 
     let outcome = run(
@@ -649,12 +648,12 @@ fn extension(
     verify = "hooks invoked in deterministic extension load order"
 )]
 fn a_required_peer_cycle_does_not_stop_the_hooks() {
-    let dir = project_enabling(&["@acme/a", "@acme/b"]);
     let runtime = Arc::new(
         InProcessRuntime::new()
             .with(extension("@acme/a", "migrate_a", &["@acme/b"], |_| Ok(())))
             .with(extension("@acme/b", "migrate_b", &["@acme/a"], |_| Ok(()))),
     );
+    let dir = project_enabling(&runtime, &["@acme/a", "@acme/b"]);
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
@@ -684,11 +683,11 @@ fn a_required_peer_cycle_does_not_stop_the_hooks() {
 }
 
 /// A project enabling `extensions`, with one file at the old format version.
-fn project_enabling(extensions: &[&str]) -> tempfile::TempDir {
+fn project_enabling(runtime: &InProcessRuntime, extensions: &[&str]) -> tempfile::TempDir {
     let dir = project();
     let config = serde_json::json!({"name": "p", "version": "0.1.0", "extensions": extensions});
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install(dir.path(), extensions);
+    specforge_installed::testing::install(dir.path(), runtime, extensions);
     dir
 }
 
@@ -771,7 +770,6 @@ fn an_empty_hook_name_is_skipped_silently() {
     verify = "hook returning error collects diagnostic and continues"
 )]
 fn a_hook_that_answers_an_error_is_recorded_and_the_next_one_runs() {
-    let dir = project_enabling(&["@acme/a", "@acme/b"]);
     let runtime = Arc::new(
         InProcessRuntime::new()
             .with(extension("@acme/a", "migrate_a", &[], |_| {
@@ -779,6 +777,7 @@ fn a_hook_that_answers_an_error_is_recorded_and_the_next_one_runs() {
             }))
             .with(extension("@acme/b", "migrate_b", &[], |_| Ok(()))),
     );
+    let dir = project_enabling(&runtime, &["@acme/a", "@acme/b"]);
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
@@ -812,12 +811,12 @@ fn a_hook_that_answers_an_error_is_recorded_and_the_next_one_runs() {
 fn hooks_run_in_dependency_order_every_time() {
     // `@acme/b` is listed first and peer-depends on `@acme/a`.
     let order = || {
-        let dir = project_enabling(&["@acme/b", "@acme/a"]);
         let runtime = Arc::new(
             InProcessRuntime::new()
                 .with(extension("@acme/b", "migrate_b", &["@acme/a"], |_| Ok(())))
                 .with(extension("@acme/a", "migrate_a", &[], |_| Ok(()))),
         );
+        let dir = project_enabling(&runtime, &["@acme/b", "@acme/a"]);
         let outcome = run(
             &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
             Some(runtime.clone()),
@@ -839,7 +838,6 @@ fn hooks_run_in_dependency_order_every_time() {
     verify = "extension in failed lifecycle state has hook skipped"
 )]
 fn an_extension_that_failed_to_load_runs_no_hook() {
-    let dir = project_enabling(&["@acme/broken", "@acme/ok"]);
     let runtime = Arc::new(
         InProcessRuntime::new()
             .with(extension("@acme/broken", "migrate_broken", &[], |_| Ok(())))
@@ -854,6 +852,7 @@ fn an_extension_that_failed_to_load_runs_no_hook() {
                 }),
             ),
     );
+    let dir = project_enabling(&runtime, &["@acme/broken", "@acme/ok"]);
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
@@ -886,7 +885,6 @@ fn a_hook_over_its_deadline_is_a_trap_and_the_next_one_runs() {
     // The component runtime enforces the deadline (its own tests prove it);
     // here the host's reading of the extension's declared limit and of the
     // trap it answers: a failure of that hook, and the next still runs.
-    let dir = project_enabling(&["@acme/slow", "@acme/b"]);
     let runtime = Arc::new(
         InProcessRuntime::new()
             .with(|| {
@@ -910,6 +908,7 @@ fn a_hook_over_its_deadline_is_a_trap_and_the_next_one_runs() {
                 }),
             ),
     );
+    let dir = project_enabling(&runtime, &["@acme/slow", "@acme/b"]);
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),

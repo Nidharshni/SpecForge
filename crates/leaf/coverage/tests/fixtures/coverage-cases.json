@@ -145,7 +145,7 @@
     "expect": {
       "findings": [],
       "verdicts": {
-        "no_lost_login": {"obligations": 1, "proven": 1, "unproven": [], "undeclared": [], "tests": 0, "failing": 0, "is_proven": true, "status": "covered"}
+        "no_lost_login": {"obligations": 1, "proven": 1, "unproven": [], "undeclared": [], "tests": 0, "failing": 0, "is_proven": true, "status": "not_testable"}
       },
       "summary": {
         "testable_total": 0, "testable_verified": 0, "testable_proven": 0, "testable_exempt": 0, "obligations": 1, "obligation_kinds": {"property": 1},
@@ -183,10 +183,10 @@
       ],
       "verdicts": {
         "login": {"obligations": 1, "proven": 1, "unproven": [], "undeclared": [], "tests": 1, "failing": 0, "is_proven": true, "status": "covered"},
-        "Status": {"obligations": 0, "proven": 0, "unproven": [], "undeclared": [], "tests": 0, "failing": 0, "is_proven": false, "status": "uncovered"},
+        "Status": {"obligations": 0, "proven": 0, "unproven": [], "undeclared": [], "tests": 0, "failing": 0, "is_proven": false, "status": "exempt"},
         "Payload": {"obligations": 1, "proven": 1, "unproven": [], "undeclared": [], "tests": 1, "failing": 0, "is_proven": true, "status": "covered"},
-        "signin": {"obligations": 0, "proven": 0, "unproven": [], "undeclared": [], "tests": 1, "failing": 0, "is_proven": false, "status": "uncovered"},
-        "no_lost_login": {"obligations": 1, "proven": 0, "unproven": ["no login is lost"], "undeclared": [], "tests": 0, "failing": 0, "is_proven": false, "status": "uncovered"}
+        "signin": {"obligations": 0, "proven": 0, "unproven": [], "undeclared": [], "tests": 1, "failing": 0, "is_proven": false, "status": "not_testable"},
+        "no_lost_login": {"obligations": 1, "proven": 0, "unproven": ["no login is lost"], "undeclared": [], "tests": 0, "failing": 0, "is_proven": false, "status": "not_testable"}
       },
       "summary": {
         "testable_total": 2, "testable_verified": 2, "testable_proven": 2, "testable_exempt": 1, "obligations": 3, "obligation_kinds": {"unit": 3},

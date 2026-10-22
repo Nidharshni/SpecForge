@@ -31,7 +31,9 @@ fn finished(plan: LockPlan<'_>) -> Done {
 fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing() {
     let dir = enabled_project(vec![entry("@acme/base", "1.0.0", "local:base.wasm", &[])]);
     let installed = Installed::at(dir.path());
-    let runtime = InProcessRuntime::new().binary(b"old", declaring("@acme/base", "1.0.0", &[]));
+    // The module the entry pins spells the declaration it records.
+    let old = crate::extension::fixtures::module_of("@acme/base", "1.0.0", &[]);
+    let runtime = InProcessRuntime::new();
     let module = std::fs::read(installed.module_path(&PackageName::parse("@acme/base").unwrap()));
     let lock = std::fs::read(installed.lock_path()).unwrap();
 
@@ -43,7 +45,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Commit,
         no_registry(),
     );
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert!(plan.staged.is_empty());
     assert_eq!(asked, Answer::Unchanged);
     let done = finished(plan);
@@ -52,7 +54,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
 
     // Control: no entry enables it, so the install changes the project.
     let mut plan = base_plan(&installed, &runtime, &[], Purpose::Preview, no_registry());
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert_eq!(asked, Answer::Changes);
     finished(plan);
 
@@ -66,10 +68,33 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Preview,
         no_registry(),
     );
-    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
     assert_eq!(asked, Answer::Changes);
     finished(plan);
-    assert_eq!(module.unwrap(), b"old");
+    assert_eq!(module.unwrap(), old);
+
+    // Control: a module that declares other peers than its entry records is reinstalled.
+    let mut lying = entry(
+        "@acme/base",
+        "1.0.0",
+        "local:base.wasm",
+        &[("@acme/x", "^1")],
+    );
+    lying.wasm_hash = specforge_installed::hex_sha256(&old);
+    let dir = enabled_project(vec![lying]);
+    let installed = Installed::at(dir.path());
+    let path = installed.module_path(&PackageName::parse("@acme/base").unwrap());
+    std::fs::write(path, &old).unwrap();
+    let mut plan = base_plan(
+        &installed,
+        &runtime,
+        &["@acme/base"],
+        Purpose::Preview,
+        no_registry(),
+    );
+    let asked = plan.install(Ask(0), local(&runtime, &old, "other.wasm"));
+    assert_eq!(asked, Answer::Changes);
+    finished(plan);
 }
 
 #[test]

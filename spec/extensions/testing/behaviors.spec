@@ -112,6 +112,9 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
     is proven.
     The summary MUST report the discharge funnel (entities with
     obligations, proven, formally discharged, report failures).
+    Per entity, the rule answers one status: not_testable when its kind is
+    not testable, exempt when it is testable and does not count, and
+    otherwise covered, partial or uncovered as its verdict proves it.
   """
   ensures {
     intent_scored        "entities without obligations are A001, invariants A002"
@@ -130,6 +133,7 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
   verify unit "an entity whose obligations are all formally discharged is proven without tests"
   verify unit "entities W004 exempts are not A001 and leave the testable count"
   verify unit "an entity counts toward coverage when its kind is testable and it owes or declares obligations, and is exempt when testable and neither"
+  verify unit "an entity's status is not_testable when its kind is not testable, exempt when it is testable and does not count, and otherwise how its verdict proves it"
   verify unit "the rule reads a pass entity as the host decided it, with no risk unless the grading caller sets one"
   verify unit "without a risk grading no kind is risk-tallied and nothing is A002"
 }

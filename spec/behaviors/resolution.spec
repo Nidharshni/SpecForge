@@ -157,7 +157,9 @@ behavior link_entity_references "Link Entity References" {
     match exists. A reference whose field declares a target kind and that
     names an existing entity of another kind MUST be E022 at the
     reference, whether or not a loaded extension declares that kind; it
-    still links, so navigation and rename reach it.
+    still links, so navigation and rename reach it. A quoted reference is
+    written at its ID, inside its quotes: its E003, E022 or I004 is there,
+    and so is the token navigation reads (ADR 0218).
   """
   verify unit "reference list IDs create graph edges"
   verify unit "unresolvable reference produces E003"
@@ -174,6 +176,7 @@ behavior link_entity_references "Link Entity References" {
   verify unit "a single reference to an existing entity of another kind than its field's target kind is E022 at the reference"
   verify contract "Link Entity References: entity reference linking holds — registries_populated, all_files_parsed, all_references_resolved, no_silent_ignoring"
   verify unit "E003 span covers exactly the unresolved identifier token"
+  verify unit "a quoted reference is written at its ID, inside its quotes"
   verify unit "cross-file duplicate entity ID produces E002 naming the first declaration"
   verify unit "same ID different kind across files warns W060 with both kinds named"
 }

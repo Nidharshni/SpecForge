@@ -360,22 +360,22 @@ E028: Extension load or execution failure
 An extension failed somewhere in its lifecycle: its binary is missing,
 unreadable or does not load as a component, or `specforge.lock` can't be read so
 nothing is known to be installed (a `.wasm` file entry of `specforge.json` also
-when the file declares another name than the entry writes, or an extension
-another entry already loads); its handshake or one of its describe categories
-failed or does not parse, so its declaration cannot be read (`specforge add` and
-`specforge publish` refuse such a binary); or a call the host makes on the
-loaded extension failed. The host calls ten exports: the handshake and describe,
-a command, an MCP tool, an MCP resource, a compiler pass, a collector, a custom
-validator, a scanner and the migration hook. Each call fails when the export
-traps (a limit of its sandbox included: its time, its fuel or its memory, the
-trap naming which), when the extension does not route it, or when it answers
-output that is not the protocol type the operation owes (a collector's test
-whose status is not `passed`, `failed` or `skipped`, say); the message names the
-operation, the export and the extension (`command cmd__x() of '@acme/x' trapped:
-...`). What the failure costs is the operation's: a check pass's is the
-compile's error, an analyze pass's a finding of that pass, a scanner's makes
-`infer` approximate. Report the failure to the extension's author, and confirm
-the extension is installed and up to date.
+when the file declares another name than the entry writes, the name of a
+builtin, or an extension another entry already loads); its handshake or one of
+its describe categories failed or does not parse, so its declaration cannot be
+read (`specforge add` and `specforge publish` refuse such a binary); or a call
+the host makes on the loaded extension failed. The host calls ten exports: the
+handshake and describe, a command, an MCP tool, an MCP resource, a compiler
+pass, a collector, a custom validator, a scanner and the migration hook. Each
+call fails when the export traps (a limit of its sandbox included: its time, its
+fuel or its memory, the trap naming which), when the extension does not route
+it, or when it answers output that is not the protocol type the operation owes
+(a collector's test whose status is not `passed`, `failed` or `skipped`, say);
+the message names the operation, the export and the extension (`command cmd__x()
+of '@acme/x' trapped: ...`). What the failure costs is the operation's: a check
+pass's is the compile's error, an analyze pass's a finding of that pass, a
+scanner's makes `infer` approximate. Report the failure to the extension's
+author, and confirm the extension is installed and up to date.
 
 Owner: core
 Level: error
@@ -850,10 +850,10 @@ E070: Installed extension does not match its lock entry
 An installed extension's binary, `.specforge/extensions/<name>/extension.wasm`,
 is not the one its `specforge.lock` entry pins: its SHA-256 differs from the
 recorded hash (it was changed or replaced after install), or it declares another
-extension than the entry names. It is not loaded, and `check` fails. Reinstall
-it with the command the suggestion names (`specforge add <path>` for a local
-install, `specforge add <name>@<version>` for a registry one); `specforge
-doctor` lists it as `stale_hash`.
+extension, another version or other peers than the entry records. It is not
+loaded, and `check` fails. Reinstall it with the command the suggestion names
+(`specforge add <path>` for a local install, `specforge add <name>@<version>`
+for a registry one); `specforge doctor` lists it as `stale_hash`.
 
 Owner: core
 Level: error
@@ -1030,6 +1030,23 @@ a value its field does not take, …). Fix what they name first: create the
 referenced entity, give the required field, or make both changes in one
 `specforge.edit` call. `delete --unlink-references` removes the references a
 delete would leave dangling.
+
+Owner: core
+Level: error
+```
+
+## E081
+
+```
+E081: Field written twice in one block
+
+A block writes one field (an entry of a block field, a member of a type) more
+than once. A field holds one value: the graph keeps the first and every output,
+check and rule reads it; the message names the first's line. Delete the later
+line, or give every value in the first: a list field takes all its items in one
+list (`ports [a, b]`), a block field all its entries in one block. A typed edit
+that changes the field (`set`, `unset`, `link`, `unlink`) removes the later
+lines itself. A repeat in a `defaults` block is E078.
 
 Owner: core
 Level: error
@@ -1243,7 +1260,7 @@ Level: info
 ```
 I020: Unknown entity kind in a filter
 
-A kind filter (`specforge export --kinds`, `specforge query --kind`, `specforge
+A kind filter (`specforge export --kinds`, `specforge query --kinds`, `specforge
 explore --kind`, `specforge model --kinds`, and the `kinds` or `kind` of the
 `specforge.export`, `specforge.query`, `specforge.search`, `specforge.list`,
 `specforge.coverage` and `specforge.model` MCP tools, the explore prompt and the

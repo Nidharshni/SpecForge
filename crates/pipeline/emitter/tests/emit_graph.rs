@@ -272,14 +272,7 @@ fn without_verdicts_no_node_carries_a_coverage_status() {
             obligations: Vec::new(),
         });
     }
-    let verdicts = BTreeMap::from([(
-        "alpha".to_string(),
-        specforge_coverage::Verdict {
-            obligations: 1,
-            proven: 1,
-            ..Default::default()
-        },
-    )]);
+    let verdicts = BTreeMap::from([("alpha".to_string(), specforge_coverage::Status::Covered)]);
     for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
         let emit = |coverage| {
             specforge_emitter::emit(

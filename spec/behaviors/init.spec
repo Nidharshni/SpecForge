@@ -325,8 +325,12 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     the extension load admits it, an installed extension of that name whose module is missing or
     changed included) MUST NOT be installed or enabled beside it: the add is refused
     with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
+    A .wasm file entry that declares a builtin's name is never admitted, so it does not stand in
+    the way of enabling that builtin.
     Only a named entry (name, or name@version as older adds wrote it) makes an extension already
-    enabled or already present.
+    enabled or already present, and an installed one is present only when it is pinned at this
+    version with these bytes and its module declares what its lock entry records: an add over an
+    entry that does not rewrites it from the module.
     A dry run is the add's lock plan judged and not committed: it answers
     what the add would answer for each specifier (planned, with the
     builtins it would enable as peers_enabled), or the refusal the add
@@ -391,6 +395,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "add extension appends to extensions list"
   verify unit "an add over a specforge.json changed since it was read writes nothing"
   verify unit "a .wasm file entry never makes an install already present"
+  verify unit "an add of a builtin over a .wasm file entry that declares its name enables the builtin"
   verify integration "add --format json lists the files it wrote in files_written"
   verify integration "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
   verify unit "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"
@@ -408,6 +413,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
   verify unit "a required builtin peer the embedded builtin does not satisfy is refused before anything is written"
   verify unit "add duplicate extension is a no-op with info message"
+  verify unit "an add of an installed extension whose lock entry records other than its module declares rewrites the entry from the module"
   verify unit "a dry run of an extension already present answers as the add would, whatever its source"
   verify unit "add extension with no specforge.json rejects with error and exit code 1"
   verify unit "add unresolvable extension rejects with diagnostic"

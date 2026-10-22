@@ -82,7 +82,7 @@ pub(crate) enum Asked {
     Changes,
     /// The project already has it: a named entry of `specforge.json` enables it, and for an install
     /// the lock pins it at the version asked, with the same bytes and kind of source, its module on
-    /// disk the one pinned. The change leaves it as it is.
+    /// disk the one pinned and declaring what the entry records. The change leaves it as it is.
     Unchanged,
 }
 
@@ -425,8 +425,8 @@ impl<'a> LockPlan<'a> {
     }
 
     /// `name`'s lock entry when the project already has it as `same` accepts: the lock the plan
-    /// opened pins it, its module on disk is the one pinned, and an entry of the `specforge.json`
-    /// the plan opened names it (a `.wasm` file entry never makes it present: the check refuses it,
+    /// opened pins it, its module on disk is the one pinned and declares what the entry records (the
+    /// load admits it, ADR 0217), and an entry of the `specforge.json` the plan opened names it (a `.wasm` file entry never makes it present: the check refuses it,
     /// ADR 0160). What the project has before the change, never the staged lock.
     fn unchanged(
         &self,
@@ -435,8 +435,16 @@ impl<'a> LockPlan<'a> {
     ) -> Option<&LockFileEntry> {
         let entry = self
             .installed
-            .verified(name.as_str(), self.declarations.disk())
-            .filter(|e| same(e))?;
+            .lock()
+            .entries()
+            .iter()
+            .find(|e| e.name == *name)
+            .filter(|e| same(e))
+            .filter(|e| {
+                self.declarations
+                    .locked(self.installed, e)
+                    .is_some_and(|declared| e.declares(&declared).is_ok())
+            })?;
         let enabled = self
             .config
             .entries()

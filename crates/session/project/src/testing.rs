@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use specforge_common::{ExtensionEntry, ProjectRoot};
+use specforge_wasm::WasmRuntime;
 use specforge_wasm::testing::InProcessRuntime;
 
 use crate::{CompiledProject, ProjectSession, SharedRuntime, Update};
@@ -152,7 +153,12 @@ impl TestProject {
     /// Install `names` as [`Self::serving`] would, for a test that passes its own runtime to
     /// [`Self::compile_in`] or [`Self::session_in`].
     pub fn installing(self, names: &[&str]) -> Self {
-        specforge_installed::testing::install(self.root(), names);
+        let nothing = InProcessRuntime::new();
+        let runtime: &dyn WasmRuntime = match &self.served {
+            Some(served) => served.as_ref(),
+            None => &nothing,
+        };
+        specforge_installed::testing::install(self.root(), runtime, names);
         self
     }
 
@@ -257,7 +263,14 @@ impl TestProject {
 
     /// The project compiled with `runtime`.
     pub fn compile_in(&self, runtime: SharedRuntime) -> CompiledProject {
+        self.record_declarations(&*runtime);
         CompiledProject::compile(&self.project_root(), Some(runtime))
+    }
+
+    /// The project's environment loaded in `runtime`, as [`Self::compile_in`] loads it.
+    pub fn environment_in(&self, runtime: SharedRuntime) -> crate::Environment {
+        self.record_declarations(&*runtime);
+        crate::Environment::load(&self.project_root(), Some(runtime))
     }
 
     /// The project compiled with no runtime: no extension loads (structure only).
@@ -279,6 +292,7 @@ impl TestProject {
 
     /// The project opened with `runtime` for every load.
     pub fn session_in(&self, runtime: SharedRuntime) -> ProjectSession {
+        self.record_declarations(&*runtime);
         ProjectSession::open_with_runtime(&self.project_root(), Some(runtime))
     }
 
@@ -310,8 +324,17 @@ impl TestProject {
         }
     }
 
-    /// Install what `specforge.json` enables and is neither a builtin nor a `.wasm` file.
+    /// Install what `specforge.json` enables and is neither a builtin nor a `.wasm` file, as [`Self::serving`] does.
     fn install_enabled(&self) {
+        match &self.served {
+            Some(served) => self.install_in(served.as_ref()),
+            None => self.install_in(&InProcessRuntime::new()),
+        }
+    }
+
+    /// Install the enabled extensions that are neither builtins nor `.wasm` files, each recording the version and
+    /// peers `runtime` serves for it: for a test whose own runtime is built beside the project.
+    pub fn install_in(&self, runtime: &dyn WasmRuntime) {
         let entries: Vec<String> = match (&self.extensions, &self.config) {
             (Some(chosen), _) => chosen.clone(),
             (None, Some(config)) => config["extensions"]
@@ -322,9 +345,27 @@ impl TestProject {
                         .collect()
                 })
                 .unwrap_or_default(),
-            (None, None) => Vec::new(),
+            // A raw config: what is on disk.
+            (None, None) => {
+                specforge_common::read_project_config(self.root())
+                    .config
+                    .extensions
+            }
         };
-        specforge_installed::testing::install_enabled(self.root(), &entries, &crate::builtins());
+        specforge_installed::testing::install_enabled(
+            self.root(),
+            &entries,
+            &crate::builtins(),
+            runtime,
+        );
+    }
+
+    /// Make the lock entries record the version and peers `runtime` serves for the installed modules, when it is
+    /// the in-process runtime: what an install of those extensions would have recorded.
+    pub fn record_declarations(&self, runtime: &dyn WasmRuntime) {
+        if InProcessRuntime::of(runtime).is_some() {
+            specforge_installed::testing::record_declarations(self.root(), runtime);
+        }
     }
 
     /// Write `specforge.json`, its `extensions` merged in. It is what `specforge init` writes: pretty-printed,

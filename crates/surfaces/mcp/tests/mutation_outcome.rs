@@ -510,7 +510,7 @@ fn previews_are_no_mutation() {
     let reply = call_tool(
         &mut installed,
         "specforge.add_extension",
-        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.1.0"], "dry_run": true}),
     );
     assert_eq!(
         tool_json(&reply)["added"][0]["action"],
@@ -1001,7 +1001,7 @@ fn a_preview_reply_has_no_files_written() {
     let reply = call_tool(
         &mut installed,
         "specforge.add_extension",
-        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.1.0"], "dry_run": true}),
     );
     assert!(tool_json(&reply).get("files_written").is_none(), "{reply}");
     assert!(
@@ -1013,14 +1013,14 @@ fn a_preview_reply_has_no_files_written() {
 }
 
 /// The greet module installed from a registry (a `source: registry` lock
-/// entry) and enabled: what `specforge add @sdk/greet@0.0.0-test` leaves.
+/// entry) and enabled: what `specforge add @sdk/greet@0.1.0` leaves.
 fn registry_installed_greet() -> Served {
     let project = TestProject::new().enabling(&[GREET]);
-    specforge_installed::testing::install_module(
-        project.root(),
-        GREET,
-        &std::fs::read(greet_blob()).unwrap(),
+    let (blob, runtime) = (
+        std::fs::read(greet_blob()).unwrap(),
+        project.component_runtime(),
     );
+    specforge_installed::testing::install_module(project.root(), runtime.as_ref(), GREET, &blob);
     project.serve_components()
 }
 
@@ -1035,7 +1035,7 @@ fn a_dry_run_is_a_preview_whatever_the_operation_answers() {
     let reply = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.1.0"], "dry_run": true}),
     );
     let payload = tool_json(&reply);
     assert_eq!(payload["added"][0]["action"], "already_present", "{reply}");

@@ -246,6 +246,59 @@ fn every_field_an_entity_writes_has_one_text() {
     assert_eq!(seen, rules);
 }
 
+#[specforge_test_macros::test(
+    behavior = "snapshot_entities_once",
+    verify = "a field written twice reads as its first entry to declarative rules, custom validators and compiler passes"
+)]
+fn a_field_written_twice_reads_as_its_first_entry_to_every_reader() {
+    let dir = TestProject::new()
+        .config(|c| {
+            c["name"] = "repeated".into();
+            c["spec_root"] = "spec".into();
+        })
+        .enabling(&[EXT])
+        .installing_enabled()
+        .files(&[
+            (
+                "spec/main.spec",
+                "item zeta \"Zeta\" {\n  values [low]\n  values [high]\n  mix [1]\n  mix [2]\n  \
+             doc \"doc.md\"\n}\n",
+            ),
+            ("spec/doc.md", "# doc\n"),
+        ]);
+    let runtime = runtime();
+    let (_, diagnostics) = compile(&dir, &runtime);
+
+    let call = runtime
+        .calls()
+        .into_iter()
+        .find(|c| c.export == "validate__echo" && c.input["entity"]["id"] == "zeta")
+        .expect("the validator saw zeta");
+    assert_eq!(call.input["entity"]["fields"].as_array().unwrap().len(), 3);
+    let expected: serde_json::Map<String, Value> =
+        [("values", "low"), ("mix", "1"), ("doc", "doc.md")]
+            .iter()
+            .map(|(k, v)| (k.to_string(), Value::from(*v)))
+            .collect();
+    assert_eq!(validator_fields(&runtime, "zeta"), expected);
+    assert_eq!(
+        pass_entity(&runtime, "zeta")["fields"],
+        Value::Object(expected)
+    );
+    let rules: Vec<String> = reported(&diagnostics, "P2")
+        .into_iter()
+        .filter(|m| m.contains("zeta."))
+        .collect();
+    assert_eq!(
+        rules,
+        [
+            "P200 declarative rule sees zeta.values = 'low'",
+            "P201 declarative rule sees zeta.mix = '1'",
+        ]
+    );
+    assert_eq!(reported(&diagnostics, "E081").len(), 2);
+}
+
 /// `item`, with rules reading the written-but-empty `values` and
 /// `requires`: `non_empty` (E100, E101) and `missing_required_field`
 /// (E102, E103), and a custom validator (E104).

@@ -2,7 +2,8 @@
 //! proves of the entity snapshot's entities (ADR 0019, ADR 0004 D2-f).
 //!
 //! Every surface that asks what an entity's recorded tests prove (stats,
-//! the coverage view, inspect's coverage, query with coverage, the review,
+//! the coverage view, inspect's coverage, an entity's coverage status
+//! (`statuses`), query with coverage, the review,
 //! the trace prompt's unverified entities, an extension command's
 //! evidence) reads it here, so they cannot disagree. Who is testable and
 //! what an entity declares are the snapshot's standing
@@ -175,9 +176,18 @@ impl ProjectCoverage {
         self.verdicts.get(id)
     }
 
-    /// The entity's status; an entity the graph doesn't have is uncovered.
-    pub fn status(&self, id: &str) -> Status {
-        self.verdict(id).map_or(Status::Uncovered, Verdict::status)
+    /// Each entity's coverage status (ADR 0216), by id: its standing's status
+    /// for its verdict. What a query's export nodes carry as `coverage_status`.
+    pub fn statuses(&self) -> BTreeMap<String, Status> {
+        self.entities
+            .iter()
+            .filter_map(|(record, standing)| {
+                Some((
+                    record.id.clone(),
+                    standing.status(self.verdict(&record.id)?),
+                ))
+            })
+            .collect()
     }
 
     /// Whether the entity counts toward coverage (ADR 0004 D2-b) and is not
@@ -527,12 +537,23 @@ mod tests {
         let tests: TestReport = serde_json::from_str(&report("passed")).unwrap();
         let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
         let login = project.entities().standing("login").unwrap().clone();
-        assert!(login.testable && login.counts() && !login.exempt());
+        assert!(login.testable && login.counts() && !login.counting().exempt());
         assert!(!coverage.is_unverified("login"), "proven");
         assert!(
             coverage.is_unverified("logout"),
             "counts and owes an obligation"
         );
         assert!(!coverage.is_unverified("nobody"));
+    }
+
+    #[test]
+    fn statuses_are_each_standings_status_for_its_verdict() {
+        let project = Scored::new();
+        let tests: TestReport = serde_json::from_str(&report("passed")).unwrap();
+        let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
+        let statuses = coverage.statuses();
+        assert_eq!(statuses["login"], Status::Covered);
+        assert_eq!(statuses["logout"], Status::Uncovered);
+        assert_eq!(statuses.len(), coverage.verdicts.len());
     }
 }

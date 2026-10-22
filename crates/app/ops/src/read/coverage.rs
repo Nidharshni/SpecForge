@@ -33,12 +33,9 @@ pub struct CoverageQuery<'q> {
 pub struct CoverageRow {
     pub entity_id: String,
     pub kind: String,
-    /// Its kind is testable.
-    pub testable: bool,
-    /// A testable-kind entity that owes no obligations and declares none
-    /// (W004 exempts it): it does not count toward coverage
-    /// (`Standing::exempt`).
-    pub exempt: bool,
+    /// Its coverage status (ADR 0216): whether it counts and, when it does,
+    /// how it is proven.
+    pub status: Status,
     pub verdict: Verdict,
 }
 
@@ -47,32 +44,25 @@ impl CoverageRow {
         CoverageRow {
             entity_id: record.id.clone(),
             kind: record.kind.clone(),
-            testable: standing.testable,
-            exempt: standing.exempt(),
+            status: standing.status(verdict),
             verdict: verdict.clone(),
         }
     }
 
-    pub fn status(&self) -> Status {
-        self.verdict.status()
-    }
-
     /// One row as every surface writes it (`McpCoverageResult`):
     /// `entity_id`, `kind`, `status`, `declared`,
-    /// `linked`, `evidence_collected`, `obligations`, `proven`, `unproven`,
-    /// `exempt`.
+    /// `linked`, `evidence_collected`, `obligations`, `proven`, `unproven`.
     pub fn document(&self) -> CoverageRowDocument {
         CoverageRowDocument {
             entity_id: self.entity_id.clone(),
             kind: self.kind.clone(),
-            status: self.status(),
+            status: self.status,
             declared: self.declared(),
             linked: self.linked(),
             evidence_collected: self.linked(),
             obligations: self.verdict.obligations,
             proven: self.verdict.proven,
             unproven: self.verdict.unproven.clone(),
-            exempt: self.exempt,
         }
     }
 
@@ -100,7 +90,6 @@ pub struct CoverageRowDocument {
     pub obligations: usize,
     pub proven: usize,
     pub unproven: Vec<String>,
-    pub exempt: bool,
 }
 
 /// The rows a query selects, and the project's coverage summary.
@@ -110,10 +99,12 @@ pub struct CoverageOutcome {
     pub summary: Summary,
 }
 
-/// The coverage view. With no `entity_id`: the entities that count toward
-/// coverage, so `rows.len() == summary.testable_total`, narrowed by kind
-/// and status, in entity id order. With `entity_id`: that entity, counted
-/// or not (an exempt row says so), one the graph lacks is
+/// The coverage view. With no `entity_id` and no `status`: the entities that
+/// count toward coverage ([`Status::counts`]), so `rows.len() ==
+/// summary.testable_total`. With `status`: the selected entities of that
+/// status, named or not, so `exempt` and `not_testable` reach the entities
+/// that do not count. With `entity_id` alone: that entity, whatever its
+/// status. Narrowed by kind, in entity id order; one the graph lacks is
 /// [`crate::view::not_found`] (E003), refused before the recorded report is
 /// read. A recorded report that cannot be read is the error.
 pub fn coverage(
@@ -132,9 +123,7 @@ pub fn coverage(
     let rows = view
         .entities()
         .iter()
-        .filter(|(record, standing)| {
-            selected.contains(&record.id) && (selection.entity.is_some() || standing.counts())
-        })
+        .filter(|(record, _)| selected.contains(&record.id))
         .filter_map(|(record, standing)| {
             Some(CoverageRow::of(
                 record,
@@ -142,7 +131,10 @@ pub fn coverage(
                 coverage.verdict(&record.id)?,
             ))
         })
-        .filter(|row| query.status.is_none_or(|status| row.status() == status))
+        .filter(|row| match query.status {
+            Some(status) => row.status == status,
+            None => selection.entity.is_some() || row.status.counts(),
+        })
         .collect();
     let outcome = CoverageOutcome {
         rows,
@@ -174,6 +166,18 @@ pub const STATUS: OptionTable<Status> = OptionTable {
             help: "none proven",
             value: Status::Uncovered,
         },
+        Choice {
+            name: "exempt",
+            aliases: &[],
+            help: "does not count: a testable kind, owing and declaring no obligations",
+            value: Status::Exempt,
+        },
+        Choice {
+            name: "not_testable",
+            aliases: &[],
+            help: "does not count: its kind is not testable",
+            value: Status::NotTestable,
+        },
     ],
     default: None,
 };
@@ -183,12 +187,20 @@ mod tests {
     use super::*;
     use specforge_test_macros::test as specforge_test;
 
+    const ALL: [Status; 5] = [
+        Status::Covered,
+        Status::Partial,
+        Status::Uncovered,
+        Status::Exempt,
+        Status::NotTestable,
+    ];
+
     #[specforge_test(
         behavior = "read_views_over_the_project_view",
         verify = "a coverage row is one JSON document on every surface"
     )]
     fn the_filter_names_are_the_written_statuses() {
-        for status in [Status::Covered, Status::Partial, Status::Uncovered] {
+        for status in ALL {
             assert_eq!(
                 serde_json::to_value(status).unwrap(),
                 serde_json::Value::from(STATUS.name_of(status)),
@@ -199,7 +211,7 @@ mod tests {
 
     #[test]
     fn status_names_parse_and_others_are_refused_with_the_closest() {
-        for status in [Status::Covered, Status::Partial, Status::Uncovered] {
+        for status in ALL {
             assert_eq!(STATUS.parse(STATUS.name_of(status)), Ok(status));
             assert_eq!(
                 serde_json::to_value(status).unwrap(),
@@ -212,7 +224,7 @@ mod tests {
         assert_eq!(error.code, "invalid_input");
         assert_eq!(
             error.message,
-            "Unknown coverage status: coverd. Expected: covered, partial, uncovered"
+            "Unknown coverage status: coverd. Expected: covered, partial, uncovered, exempt, not_testable"
         );
         assert_eq!(error.suggestion.as_deref(), Some("did you mean 'covered'?"));
     }

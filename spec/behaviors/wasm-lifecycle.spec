@@ -30,7 +30,7 @@ behavior load_wasm_module "Load Wasm Module" {
   ensures {
     extension_loaded_emitted     "extension_loaded event is emitted on successful module load"
     extension_loaded_via_runtime "the binary is loaded into the runtime engine (component compilation itself is cached by the engine — see compile_wasm_component_with_cache)"
-    tampered_binary_refused      "a binary whose hash no longer matches the specforge.lock pin, or that declares another extension than its lock entry, is refused with E070"
+    tampered_binary_refused      "a binary whose hash no longer matches the specforge.lock pin, or that declares another extension, version or peers than its lock entry records, is refused with E070"
     missing_binary_diagnosed     "missing .wasm binary produces ExtensionError diagnostic"
   }
   contract   """
@@ -39,8 +39,8 @@ behavior load_wasm_module "Load Wasm Module" {
     specforge.lock pin (refusing a mismatch with E070; a lock entry
     without a hash, written before pinning, MUST load with the warning
     W149), and load those same bytes into the Wasm runtime. A loaded
-    binary that declares another extension than its lock entry MUST be
-    refused with E070.
+    binary that declares another extension, another version or other
+    peers than its lock entry records MUST be refused with E070.
     Component compilation caching is the engine's concern (see
     compile_wasm_component_with_cache). Missing .wasm files MUST produce
     an ExtensionError diagnostic.
@@ -48,6 +48,7 @@ behavior load_wasm_module "Load Wasm Module" {
   produces   [extension_loaded]
   verify unit "loads .wasm binary from manifest path"
   verify unit "tampered installed binary refused via E070 lockfile pin"
+  verify integration "a lock entry whose binary declares another version or other peers is refused with E070 through check, and add of its file rewrites it"
   verify unit "legacy lockfile entry without hash loads with W149"
   verify unit "the hash is checked over the bytes the runtime compiles"
   verify unit "missing .wasm produces ExtensionError"

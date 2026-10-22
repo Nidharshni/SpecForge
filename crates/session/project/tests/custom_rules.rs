@@ -136,7 +136,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
 fn an_unresolvable_wasm_function_is_w112_on_load() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(&dir.project_root(), Some(Arc::new(rules_extension())));
+    let env = dir.environment_in(Arc::new(rules_extension()));
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'validate__absent'");
@@ -164,7 +164,7 @@ fn an_unresolvable_wasm_function_is_w112_on_load() {
 fn a_custom_rule_without_a_wasm_function_is_w112_and_not_registered() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(&dir.project_root(), Some(Arc::new(rules_extension())));
+    let env = dir.environment_in(Arc::new(rules_extension()));
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'E903'");

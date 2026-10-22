@@ -33,7 +33,7 @@ pub fn mcp_responses(served: &mut Served, calls: &[Value]) -> Vec<Value> {
         .collect()
 }
 
-/// Call MCP tools on `served`; one result per call, in order: the tool's JSON
+/// Call MCP tools or resources on `served`; one result per call, in order: the tool's or the resource's JSON
 /// content, `{"isError": content}` for an error result, or `{"error": ...}`
 /// for a JSON-RPC error ([`mcp_responses`]).
 pub fn mcp_calls(served: &mut Served, calls: &[Value]) -> Vec<Value> {
@@ -43,8 +43,12 @@ pub fn mcp_calls(served: &mut Served, calls: &[Value]) -> Vec<Value> {
             if !resp["error"].is_null() {
                 return json!({"error": resp["error"]});
             }
-            let Some(text) = resp["result"]["content"][0]["text"].as_str() else {
-                return resp["result"].clone();
+            let result = &resp["result"];
+            let Some(text) = result["content"][0]["text"]
+                .as_str()
+                .or(result["contents"][0]["text"].as_str())
+            else {
+                return result.clone();
             };
             let content = serde_json::from_str(text).unwrap_or_else(|_| json!({"text": text}));
             if resp["result"]["isError"] == true {

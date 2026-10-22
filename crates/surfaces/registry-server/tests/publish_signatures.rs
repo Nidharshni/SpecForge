@@ -191,20 +191,10 @@ fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publisha
     let bytes = client
         .download(&metadata.wasm_url, &registry, None)
         .unwrap();
-    let home = tempfile::tempdir().unwrap();
-    let trusted = specforge_registry_client::trust_flow::check(
-        "@test/signed-ext",
-        &metadata,
-        &bytes,
-        false,
-        &|_| false,
-        &home.path().join("known-keys.json"),
-        None,
-    )
-    .expect("the published package verifies");
+    assert_eq!(&bytes, wasm, "the published bytes");
     assert!(matches!(
-        trusted.accepted,
-        specforge_registry_client::Accepted::Signed { .. }
+        specforge_registry_client::verify_package_signature(&metadata),
+        Ok(specforge_registry_client::TrustCheck::Verified { .. })
     ));
 }
 

@@ -425,6 +425,7 @@ behavior prepare_rename "Prepare Rename" {
   verify unit "prepare rename answers on a name written below its kind"
   verify unit "prepare rename answers on a default no block takes"
   verify unit "prepare rename answers on a reference in a duplicate declaration"
+  verify unit "prepare rename answers on a quoted reference, inside its quotes"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
   verify unit "prepare rename from a document the project does not build answers that rename is not available"
   verify unit "prepare rename from a document opened since the compile waits for it"
@@ -467,7 +468,8 @@ behavior rename_entity_id "Rename Entity ID" {
     a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
-    is not a reference and is not edited. The edits are positions in the
+    is not a reference and is not edited; a quoted reference is a reference,
+    edited inside its quotes. The edits are positions in the
     text the project was compiled from: a rename over a file whose text (an
     open buffer, else the file on disk) is no longer that text MUST be
     refused as ContentModified (-32801), never applied from stale positions;
@@ -498,6 +500,7 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename to a name the project already writes for no entity is refused naming each place"
   verify unit "rename refuses a capture the graph shows no new edge for"
   verify unit "rename onto an unresolved reference is refused as a capture"
+  verify unit "rename edits a quoted reference inside its quotes"
   verify unit "a rename is refused while a source that spells the new ID does not parse"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
@@ -585,7 +588,8 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     statements and either owe obligations (a no_verify_statements rule
     applies to their kind) or are of a testable kind; an entity a union
     body or an exempting flag exempts is offered none, since a stub there
-    is not an obligation it owes (a union has no block to hold one). A
+    is not an obligation it owes (a union has no block to hold one; a block is a
+    union by its syntax, so a braced block whose member is named `variants` is offered one). A
     stub fixes the diagnostic of the rule that reports its entity, and
     none when no rule reports it. The code actions offered for a request are those
     whose diagnostic, or whose entity, overlaps the requested range. The code action MUST add verify stub declarations
@@ -618,6 +622,7 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "the verify stub is laid out with the file's format configuration"
   verify unit "a client that resolves code actions gets a stub's edits on resolve"
   verify unit "a verify stub is offered for an entity whose block field holds an entry named verify"
+  verify unit "a verify stub is offered and planned for a braced block whatever its members are named"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 
@@ -951,12 +956,14 @@ behavior code_action_replace_unresolved "Code Action: Replace an Unresolved Refe
   contract   """
     For an unresolved reference (E003) or import (E025) whose data names a
     close match (did_you_mean), the LSP and MCP specforge.suggest_fixes MUST
-    offer one quick fix that replaces the unresolved token with the match.
+    offer one quick fix that replaces the unresolved token with the match
+    (inside its quotes for a quoted reference).
     Target, path and match MUST be read from the diagnostic's data, never
     its message or suggestion text.
   """
   verify unit "an unresolved reference with a close match is replaced at its token"
   verify unit "an unresolved import with a close match is replaced inside its quotes"
+  verify unit "a quoted unresolved reference with a close match is replaced inside its quotes"
   verify unit "the replacement is read from the diagnostic's data, whatever its message says"
 }
 

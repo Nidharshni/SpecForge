@@ -52,13 +52,9 @@ pub struct EntityFacts<'v> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityCoverage {
     pub verdict: Verdict,
+    /// Its coverage status (ADR 0216), its standing's for the verdict.
+    pub status: Status,
     pub recorded: bool,
-}
-
-impl EntityCoverage {
-    pub fn status(&self) -> Status {
-        self.verdict.status()
-    }
 }
 
 /// The coverage of an entity `inspect` answered, under the one rule, over the
@@ -68,13 +64,17 @@ impl EntityCoverage {
 /// cannot be used is its E045 (ADR 0029 D1): MCP inspect fails on it (ADR 0004
 /// D2-e), the hover shows it (ADR 0015 I3).
 pub fn coverage(view: &ProjectView, facts: &EntityFacts) -> Result<EntityCoverage, OpError> {
-    view.recorded().map(|recorded| EntityCoverage {
-        verdict: recorded
+    view.recorded().map(|recorded| {
+        let verdict: Verdict = recorded
             .coverage
             .verdict(facts.node.id.raw.as_str())
             .cloned()
-            .unwrap_or_default(),
-        recorded: recorded.report.is_some(),
+            .unwrap_or_default();
+        EntityCoverage {
+            status: facts.standing.status(&verdict),
+            verdict,
+            recorded: recorded.report.is_some(),
+        }
     })
 }
 

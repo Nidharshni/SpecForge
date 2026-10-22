@@ -9,11 +9,10 @@ use specforge_package::{DeclaredPackage, PackageName, Version, VersionRequiremen
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::super::{
-    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched,
-    TrustPolicy,
+    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched, Signer,
+    TrustPolicy, UserKeys,
 };
 use crate::OpError;
-use crate::asking::{ExpectedFrom, Question};
 
 /// One version a [`MemoryRegistry`] publishes. Its name and version are its declaration's, so it can never
 /// describe another package (a reply the configured registry refuses before ops sees it).
@@ -103,9 +102,9 @@ pub enum Asked {
 /// `specforge_ops_registry::ConfiguredRegistry`. It serves what it publishes as the configured registry
 /// serves a package that passed the fetch policy, refuses as it refuses (both are held to
 /// [`assert_registry_contract`](super::contract::assert_registry_contract)), and records what it was asked and what it accepted. It verifies no
-/// signature; it decides a publisher against its own pins and the policy's locked key as the configured
-/// registry does, and records pins only through [`Registry::pin`]. A publish is signed by the key id
-/// `"in-memory"`.
+/// signature and reads no store: it holds the user's pins, trusted and denied keys as data and decides a
+/// publisher with [`TrustPolicy::decide`], as the configured registry does. It records pins only through
+/// [`Registry::pin`]. A publish is signed by the key id `"in-memory"`.
 #[derive(Debug, Default)]
 pub struct MemoryRegistry {
     held: Mutex<Vec<Published>>,
@@ -114,6 +113,10 @@ pub struct MemoryRegistry {
     accepted: Mutex<Vec<(PackageName, Version)>>,
     /// The user's pins: what `pinning` set up and `pin` recorded.
     pins: Mutex<BTreeMap<PackageName, String>>,
+    /// The user's `trusted_keys`: a change to one is accepted without a question.
+    trusted: Vec<String>,
+    /// The user's `denied_keys`: refused whatever the consent.
+    denied: Vec<String>,
     /// `pin` refuses with R-TRUST-006 and records nothing.
     refusing_pins: bool,
     /// A file `pin` makes read-only before it refuses: a failed change that cannot put it back.
@@ -166,6 +169,18 @@ impl MemoryRegistry {
         self
     }
 
+    /// `key_id` is on the user's `trusted_keys`.
+    pub fn trusting(mut self, key_id: &str) -> Self {
+        self.trusted.push(key_id.to_string());
+        self
+    }
+
+    /// `key_id` is on the user's `denied_keys`.
+    pub fn denying(mut self, key_id: &str) -> Self {
+        self.denied.push(key_id.to_string());
+        self
+    }
+
     /// What is pinned now, by name.
     pub fn pins(&self) -> BTreeMap<PackageName, String> {
         self.pins.lock().unwrap().clone()
@@ -197,73 +212,55 @@ impl MemoryRegistry {
         self.refusing_open.clone().map_or(Ok(()), Err)
     }
 
-    /// The publisher of a package signed by `key_id`: held to the user's pin for `name`, else to the
-    /// key the project's lock records, else accepted on first use. A key change is put to the
-    /// policy's `asking`.
-    fn decide(
-        &self,
-        name: &PackageName,
-        key_id: &str,
-        policy: TrustPolicy<'_>,
-    ) -> Result<Publisher, OpError> {
-        let signed = |first_use| Publisher::Signed {
-            key_id: key_id.to_string(),
-            first_use,
-        };
-        let users = self.pins.lock().unwrap().get(name).cloned();
-        let (expected, from_lock) = match (users, policy.locked_key()) {
-            (Some(pinned), _) => (pinned, false),
-            (None, Some(locked)) => (locked.to_string(), true),
-            (None, None) => return Ok(signed(true)),
-        };
-        if expected == key_id {
-            return Ok(signed(from_lock));
-        }
-        let consents = policy.asking.answers(&Question::KeyChange {
-            package: name.as_str(),
-            expected: &expected,
-            offered: key_id,
-            from: if from_lock {
-                ExpectedFrom::Lock
-            } else {
-                ExpectedFrom::UserPin
-            },
-        });
-        if !consents {
-            let what = if from_lock {
-                format!("specforge.lock records '{expected}'")
-            } else {
-                format!("pinned '{expected}'")
-            };
-            let locked_too = !from_lock && policy.locked_key() == Some(key_id);
-            let also = if locked_too {
-                " (the key specforge.lock records)"
-            } else {
-                ""
-            };
-            return Err(OpError::coded(crate::OpErrorKind::PermissionDenied,
-                codes::R_TRUST_003,
-                format!(
-                    "key change rejected for '{name}': {what} but package is signed '{key_id}'{also}"
-                ),
-            )
-            .with_suggestion(format!(
-                "if you trust the new key, accept it with `specforge add` or `specforge update` in a \
-                 terminal (`specforge add --yes` and `specforge update --yes` accept it without asking); or add '{key_id}' to trusted_keys"
-            )));
-        }
-        Ok(Publisher::Repinned {
-            key_id: key_id.to_string(),
-            previous: expected,
-        })
-    }
-
     /// A package this registry knows but lists no version of: `versions` answers `Ok(vec![])`, as a
     /// registry may (the wire allows an empty list; ours answers 404). Not part of the contract.
     pub fn listing_none(mut self, name: &str) -> Self {
         self.listing_none
             .push(PackageName::parse(name).expect("a package name"));
         self
+    }
+
+    /// The published `name@version` and its publisher, decided by [`TrustPolicy::decide`] over the
+    /// user's pins, trusted and denied keys: R006 for a version it does not hold, R014 when the policy's
+    /// lock pin pins this version as other bytes (before any question), R-TRUST-001, -003 or -005 as the
+    /// decision refuses. What `published` and `fetch` share. Records `asked` first.
+    fn decided(
+        &self,
+        asked: Asked,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<(Published, Publisher), OpError> {
+        self.opened()?;
+        self.asked.lock().unwrap().push(asked);
+        let held = self.held.lock().unwrap();
+        let Some(published) = held
+            .iter()
+            .find(|p| p.name() == *name && p.version() == *version)
+        else {
+            return Err(not_found(name, version));
+        };
+        policy.admits(name, version, &hex_sha256(&published.wasm))?;
+        let pins = self.pins.lock().unwrap();
+        let is = |keys: &[String]| {
+            published
+                .key_id
+                .as_ref()
+                .is_some_and(|key| keys.contains(key))
+        };
+        let publisher = policy.decide(
+            name,
+            published
+                .key_id
+                .as_deref()
+                .map_or(Signer::Unsigned, Signer::Key),
+            UserKeys {
+                pin: pins.get(name).map(String::as_str),
+                trusted: is(&self.trusted),
+                denied: is(&self.denied),
+            },
+        )?;
+        Ok((published.clone(), publisher))
     }
 }
 
@@ -299,75 +296,42 @@ impl Registry for MemoryRegistry {
         Ok(versions)
     }
 
-    /// What it publishes as `name@version`, without its binary: R006 as `fetch` for a version it does
-    /// not hold; else the declaration it was published with and `hex_sha256` of its bytes. Asks no
-    /// question and decides no publisher: an unsigned package is answered too.
-    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
-        self.opened()?;
-        self.asked
-            .lock()
-            .unwrap()
-            .push(Asked::Published(name.clone(), version.clone()));
-        let held = self.held.lock().unwrap();
-        let Some(published) = held
-            .iter()
-            .find(|p| p.name() == *name && p.version() == *version)
-        else {
-            return Err(not_found(name, version));
-        };
+    /// What it publishes as `name@version`, without its binary: the declaration it was published with,
+    /// `hex_sha256` of its bytes and its publisher, decided as `fetch` decides it. Downloads nothing.
+    fn published(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Manifest, OpError> {
+        let asked = Asked::Published(name.clone(), version.clone());
+        let (published, publisher) = self.decided(asked, name, version, policy)?;
         Ok(Manifest {
             name: name.clone(),
             version: version.clone(),
             sha256: hex_sha256(&published.wasm),
-            declaration: published.declaration.clone(),
+            declaration: published.declaration,
+            publisher,
         })
     }
 
-    /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
-    /// R014 when the policy's lock pin pins this version as other bytes (before anything else),
-    /// R-TRUST-001 "package '{name}' is not signed" (suggestion "allow unsigned packages for this install to
-    /// accept the risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
-    /// publisher. A signed package's publisher is decided against the key expected for `name` (the
-    /// user's pin, else `policy.locked_key()`): first use without one, `first_use: false` when it
-    /// matches the user's pin, a key change otherwise (`Repinned` when `policy.asking` consents,
-    /// else R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
+    /// The package published as `name@version`: [`Self::published`]'s refusals, else its bytes,
+    /// `hex_sha256(bytes)`, its declaration and its publisher. Nothing is pinned: that is
+    /// [`Registry::pin`].
     fn fetch(
         &self,
         name: &PackageName,
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
-        self.opened()?;
-        self.asked
-            .lock()
-            .unwrap()
-            .push(Asked::Fetch(name.clone(), version.clone()));
-        let held = self.held.lock().unwrap();
-        let Some(published) = held
-            .iter()
-            .find(|p| p.name() == *name && p.version() == *version)
-        else {
-            return Err(not_found(name, version));
-        };
-        policy.admits(name, version, &hex_sha256(&published.wasm))?;
-        if published.key_id.is_none() && !policy.allow_unsigned {
-            return Err(OpError::coded(
-                crate::OpErrorKind::PermissionDenied,
-                codes::R_TRUST_001,
-                format!("package '{name}' is not signed"),
-            )
-            .with_suggestion("allow unsigned packages for this install to accept the risk"));
-        }
-        let publisher = match &published.key_id {
-            None => Publisher::Unsigned,
-            Some(key_id) => self.decide(name, key_id, policy)?,
-        };
+        let asked = Asked::Fetch(name.clone(), version.clone());
+        let (published, publisher) = self.decided(asked, name, version, policy)?;
         Ok(Package {
             name: name.clone(),
             version: version.clone(),
             sha256: hex_sha256(&published.wasm),
-            wasm: published.wasm.clone(),
-            declaration: published.declaration.clone(),
+            wasm: published.wasm,
+            declaration: published.declaration,
             publisher,
         })
     }

@@ -537,7 +537,11 @@ fn installed_project(extra: &str) -> tempfile::TempDir {
             .to_string(),
     )
     .unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    specforge_installed::testing::install_configured(
+        dir.path(),
+        &specforge_project::builtins(),
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    );
     std::fs::write(
         dir.path().join("main.spec"),
         format!("behavior alpha \"Alpha\" {{\n}}\n{extra}"),

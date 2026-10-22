@@ -92,14 +92,21 @@ fn a_list_on_a_single_value_field_is_an_error() {
 
 #[test]
 fn the_message_describes_the_value_by_its_shape() {
-    let found = e061(
-        "  points {\n    a \"x\"\n  }\n  points expr { a < 1 }\n  points string | int\n  \
-         points 2026-10-07\n  points [1, x]\n",
-    );
-    let given: Vec<&str> = found
-        .iter()
-        .map(|(m, _)| m.rsplit("was given ").next().unwrap())
-        .collect();
+    // One value per block: a key written twice is E081, and the node keeps its first entry (ADR 0215).
+    let given: Vec<String> = [
+        "  points {\n    a \"x\"\n  }\n",
+        "  points expr { a < 1 }\n",
+        "  points string | int\n",
+        "  points 2026-10-07\n",
+        "  points [1, x]\n",
+    ]
+    .iter()
+    .map(|body| {
+        let found = e061(body);
+        assert_eq!(found.len(), 1, "{found:?}");
+        found[0].0.rsplit("was given ").next().unwrap().to_string()
+    })
+    .collect();
     assert_eq!(
         given,
         [

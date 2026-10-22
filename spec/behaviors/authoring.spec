@@ -88,6 +88,11 @@ behavior edit_entity_field "Edit an Entity Field" {
     title; a spec block's title is its name, and a retitle of it is
     refused not_editable. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
+    A set, unset, link or unlink of a field the block writes twice first removes its later entries, which the
+    graph does not hold (E081, ADR 0215). A union (`kind name = a | b`) holds only its variants: a set,
+    unset, link, unlink, add-verify or remove-verify of it is refused not_editable before its field is
+    read, whatever the field; a retitle and a delete take it. Whether a block is a union is the parse's
+    answer, never a field's name (ADR 0219).
   """
   verify unit "set writes the value in the form its field declares"
   verify unit "a multi-line value is laid out with the project's format configuration"
@@ -98,6 +103,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
+  verify unit "every verb that changes a field written twice leaves the block writing it once, holding what it says"
   verify unit "every verb reads a field.entry path the same way"
   verify unit "an entry of a block field written as a value is refused"
   verify unit "every verb leaves a field holding what it says, own or inherited"
@@ -106,6 +112,8 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "retitle replaces the header title"
   verify unit "retitle of a spec block is refused: its title is its name"
   verify unit "retitle of an untitled union writes the title after its name, never over a variant"
+  verify unit "every member edit of a union is refused as one not_editable, before its field is read"
+  verify unit "retitle and delete take a union"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {
@@ -152,6 +160,7 @@ behavior edit_entity_obligation "Edit an Entity Obligation" {
   verify unit "remove-verify removes the statement, never a block field's entry named verify"
   verify unit "add-verify writes after the last statement, never inside a block field"
   verify unit "add-verify on a union is refused as not_editable, a union has no verify statements"
+  verify unit "add-verify on a braced block writes the statement whatever its members are named"
 }
 
 behavior delete_entity "Delete an Entity" {

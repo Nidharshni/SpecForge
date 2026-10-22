@@ -77,8 +77,9 @@ impl Registry for Refusing {
         &self,
         name: &PackageName,
         version: &specforge_package::Version,
+        policy: crate::registry::TrustPolicy<'_>,
     ) -> Result<crate::registry::Manifest, OpError> {
-        crate::registry::Unconfigured("add").published(name, version)
+        crate::registry::Unconfigured("add").published(name, version, policy)
     }
 
     fn pin(&self, pins: &[crate::registry::KeyPin]) -> Result<(), OpError> {

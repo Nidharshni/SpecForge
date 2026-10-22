@@ -422,7 +422,10 @@ behavior expose_context_as_mcp_resource "Expose Context as MCP Resource" {
   contract   """
     In MCP server mode, the system MUST register a specforge://context resource
     that returns the current graph in a token-optimized context format. The output
-    MUST be equivalent to specforge export --format=context. The resource MUST
+    MUST be equivalent to specforge export --format=context.
+    specforge://context/{entity_id} is that export scoped to the entity
+    (specforge export --format context --scope <entity_id>): everything it
+    reaches, unless a depth query narrows it. The resource MUST
     refresh after each recompilation. Agents SHOULD prefer this resource when they
     need full project understanding within a constrained token budget.
   """

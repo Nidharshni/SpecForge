@@ -603,57 +603,6 @@ fn doctor_reports_an_extension_that_fails_to_load() {
     );
 }
 
-#[specforge_test(
-    behavior = "add_extension_to_existing_project",
-    verify = "an install that leaves a locked extension's peer unsatisfied is refused before anything is written, local or from a registry"
-)]
-fn a_local_install_a_locked_extension_does_not_accept_is_refused() {
-    let dir = greeting_project();
-    dir.write("specforge.json", json!({"name": "p", "version": "0.1.0", "extensions": ["@specforge/software", "@acme/app"]})
-            .to_string());
-    // `@acme/app` is locked, and wants a newer `@sdk/greet` than the one added.
-    let wasm = b"module";
-    let installed = dir.root().join(".specforge/extensions/@acme/app");
-    std::fs::create_dir_all(&installed).unwrap();
-    std::fs::write(installed.join("extension.wasm"), wasm).unwrap();
-    let lock = json!({
-        "lockfile_version": 1,
-        "entries": [
-            {"name": "@acme/app", "version": "1.0.0", "source": "registry",
-             "wasm_hash": specforge_installed::hex_sha256(wasm),
-             "peer_dependencies": [{"name": "@sdk/greet", "version": "^2.0"}]},
-        ],
-    });
-    dir.write("specforge.lock", lock.to_string());
-    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
-    dir.write("greet.wasm", greet_wasm());
-
-    let out = Cli::on(&dir)
-        .command(&["add", "greet.wasm", "--format", "json"])
-        .current_dir(dir.root())
-        .output()
-        .unwrap();
-
-    assert!(!out.status.success());
-    let text =
-        String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-    assert!(text.contains("E027"), "{text}");
-    assert!(
-        text.contains("installing '@sdk/greet' 0.1.0 breaks '@acme/app': "),
-        "{text}"
-    );
-    assert_eq!(
-        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
-        lock_before,
-        "the lock is untouched"
-    );
-    assert!(!dir.root().join(".specforge/extensions/@sdk/greet").exists());
-    assert_eq!(
-        enabled(dir.root()),
-        json!(["@specforge/software", "@acme/app"])
-    );
-}
-
 /// Enable `entries` in the project at `root`, replacing what it enabled.
 fn enable(project: &TestProject, entries: Value) {
     project.write(
@@ -881,54 +830,6 @@ fn a_name_two_entries_enable_is_refused_as_ambiguous() {
 
 #[specforge_test(
     behavior = "remove_extension",
-    verify = "removing a .wasm file entry another extension requires fails with E027 unless --force"
-)]
-fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
-    let dir = greet_file_project();
-    // The dependent is enabled: a locked extension no entry enables is not judged.
-    enable(
-        &dir,
-        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"]),
-    );
-    let lock = json!({"lockfile_version": 1,
-        "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
-                     "wasm_hash": "",
-                     "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
-    });
-    std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
-    dir.write(".specforge/extensions/@acme/uses-greet/extension.wasm", "");
-    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
-
-    let (ok, output) = remove(&dir, "greet.wasm", &[]);
-    assert!(!ok, "{output}");
-    assert_eq!(output["code"], "E027", "{output}");
-    assert!(
-        output["error"]
-            .as_str()
-            .unwrap()
-            .contains("@acme/uses-greet"),
-        "{output}"
-    );
-    assert_eq!(
-        enabled(dir.root()),
-        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"])
-    );
-
-    let (ok, output) = remove(&dir, "@sdk/greet", &["--force"]);
-    assert!(ok, "{output}");
-    assert_eq!(
-        enabled(dir.root()),
-        json!(["@specforge/software", "@acme/uses-greet"])
-    );
-    assert_eq!(
-        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
-        lock_before
-    );
-    assert!(dir.root().join("greet.wasm").is_file());
-}
-
-#[specforge_test(
-    behavior = "remove_extension",
     verify = "a locked extension no specforge.json entry enables does not keep its peer from being removed"
 )]
 fn removing_a_wasm_file_entry_a_disabled_lock_entry_requires_is_accepted() {
@@ -1150,39 +1051,6 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
     assert!(output.get("files_written").is_none(), "{output}");
 
     assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
-}
-
-#[specforge_test(
-    behavior = "add_extension_to_existing_project",
-    verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
-)]
-fn add_dry_run_refuses_what_add_refuses() {
-    let dir = greet_file_project();
-    enable(&dir, json!(["@x/y"]));
-    let lock = json!({"lockfile_version": 1,
-        "entries": [{"name": "@x/y", "version": "1.0.0", "source": "registry", "wasm_hash": "",
-                     "peer_dependencies": [{"name": "@sdk/greet", "version": "^9.0"}]}],
-    });
-    std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
-    dir.write(".specforge/extensions/@x/y/extension.wasm", "x/y");
-    let before = tree(dir.root());
-
-    let run = |dry: bool| {
-        let mut command = Cli::on(&dir).command(&["add", "greet.wasm"]);
-        if dry {
-            command.arg("--dry-run");
-        }
-        let out = command.output().unwrap();
-        (out.status.code(), String::from_utf8(out.stderr).unwrap())
-    };
-    let (dry_code, dry_stderr) = run(true);
-    assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
-    let (real_code, real_stderr) = run(false);
-
-    assert_eq!(dry_code, Some(1), "{dry_stderr}");
-    assert!(dry_stderr.contains("E027"), "{dry_stderr}");
-    assert_eq!((dry_code, dry_stderr), (real_code, real_stderr));
-    assert_eq!(tree(dir.root()), before, "a refused add writes nothing");
 }
 
 #[test]

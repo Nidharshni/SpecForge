@@ -201,7 +201,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let config = json!({ "name": "p", "version": "0.1.0", "extensions": [EXT] });
         std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-        specforge_installed::testing::install(dir.path(), &[EXT]);
+        specforge_installed::testing::install(dir.path(), &audit_extension(), &[EXT]);
         std::fs::write(dir.path().join("a.spec"), spec).unwrap();
         dir
     }

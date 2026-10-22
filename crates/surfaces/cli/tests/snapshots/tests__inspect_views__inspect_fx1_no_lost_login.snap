@@ -3,7 +3,7 @@ source: crates/surfaces/cli/tests/inspect_views.rs
 expression: "normalized(result, root)"
 ---
 {
-  "coverage_status": "uncovered",
+  "coverage_status": "not_testable",
   "declared": true,
   "diagnostics": [
     {
@@ -26,7 +26,6 @@ expression: "normalized(result, root)"
     }
   ],
   "entity_id": "no_lost_login",
-  "exempt": false,
   "fields": {
     "expression": "once logged in, a session stays until logout",
     "property_type": "safety"

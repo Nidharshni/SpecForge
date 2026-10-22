@@ -38,9 +38,8 @@ pub struct Reply {
     testable: bool,
     /// Whether it declares obligations.
     declared: bool,
-    /// It does not count toward coverage (the coverage row's `exempt`).
-    exempt: bool,
-    /// Whether its kind must declare obligations: why it is exempt.
+    /// Whether its kind must declare obligations: why an `exempt` entity is
+    /// exempt.
     obligated: bool,
     /// The extension that declares its kind.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -57,6 +56,8 @@ pub struct Reply {
     verify_declarations: Option<Vec<String>>,
     referenced_by: Vec<String>,
     refers_to: Vec<String>,
+    /// Whether it counts and, when it does, how it is proven (ADR 0216), as
+    /// `specforge.coverage`'s row says.
     coverage_status: specforge_project::coverage::Status,
     /// The diagnostics about the entity, in the shape `specforge.validate`
     /// reports them.
@@ -106,7 +107,6 @@ impl Reply {
             title: node.title.as_ref().map(ToString::to_string),
             testable: facts.standing.testable,
             declared,
-            exempt: facts.standing.exempt(),
             obligated: facts.standing.obligated(),
             source_extension: facts.kind.map(|kind| kind.source_extension.to_string()),
             source_span: node.source_span.clone(),
@@ -116,7 +116,7 @@ impl Reply {
                 .then(|| facts.obligations.iter().map(obligation_text).collect()),
             referenced_by: refs.referenced_by().into_iter().map(String::from).collect(),
             refers_to: refs.refers_to().into_iter().map(String::from).collect(),
-            coverage_status: coverage.status(),
+            coverage_status: coverage.status,
             // The diagnostics about the entity: those its data names it in,
             // else those inside its block (ADR 0016); never by its message.
             diagnostics: DiagnosticList(facts.diagnostics.iter().map(|d| (*d).clone()).collect()),

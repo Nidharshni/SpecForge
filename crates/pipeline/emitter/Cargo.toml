@@ -19,7 +19,7 @@ specforge-registry = { workspace = true }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-diagnostics = { path = "../../leaf/diagnostics" }
 specforge-common = { path = "../../kernel/common" }
-# A node's coverage status (`Verdict::status`): pure, no I/O (ADR 0004 D1-d).
+# A node's coverage status (`specforge_coverage::Status`): pure, no I/O (ADR 0004 D1-d).
 specforge-coverage = { path = "../../leaf/coverage" }
 serde.workspace = true
 serde_json.workspace = true

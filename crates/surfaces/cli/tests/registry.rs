@@ -1374,7 +1374,7 @@ fn a_refused_install_pins_no_key_so_the_locked_version_installs_again() {
     let refused = t.run(&["add", "@sdk/greet@0.2.0", "--yes", "--format", "json"]);
 
     assert!(!refused.status.success());
-    assert_eq!(json_of(&refused)["code"], "R-RES-006");
+    assert_eq!(json_of(&refused)["code"], "E028");
     assert!(
         !stderr_of(&refused).contains("W156"),
         "{}",
@@ -1416,7 +1416,7 @@ fn a_refused_update_pins_no_key() {
         })
         .unwrap_or_else(|| panic!("no greet row: {json}"));
     assert_eq!(greet["status"], "failed", "{json}");
-    assert_eq!(greet["code"], "R-RES-006", "{json}");
+    assert_eq!(greet["code"], "E028", "{json}");
     assert!(
         !stderr_of(&output).contains("W156"),
         "{}",

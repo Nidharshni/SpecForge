@@ -3,6 +3,7 @@
 
 use crate::support::*;
 use serde_json::{Value, json};
+use specforge_extension_sdk::prelude::*;
 use specforge_test::prelude::*;
 
 /// A file that is not one of the project's sources is `file_not_found`
@@ -224,6 +225,58 @@ fn find_references_and_rename_agree_on_a_duplicate_declaration() {
     let want = vec![(2, 10, 2, 14), (6, 10, 6, 14), (9, 6, 9, 10)];
     assert_eq!(ranges, want, "{renamed}");
     assert_eq!(spans, want, "{found}");
+}
+
+/// A quoted reference is a reference: find_references lists it and rename edits it, at its ID inside the quotes (ADR 0218).
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a quoted reference is renamed inside its quotes, where find_references answers it"
+)]
+fn find_references_and_rename_agree_on_a_quoted_reference() {
+    let quoted = "behavior a \"A\" {\n  ports [\"Repo\"]\n}\n\nport Repo \"Repo\" {\n}\n";
+    let extension = TestExtension::named("@specforge/quoted").declaring(|c| {
+        c.kind("behavior", |k| {
+            k.field("ports", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("port");
+            });
+        });
+        c.kind("port", |_| {});
+    });
+    let mut server = TestProject::new()
+        .file("main.spec", quoted)
+        .serve(&[extension]);
+    let found = call_tool(
+        &mut server,
+        "specforge.find_references",
+        json!({"entity_id": "Repo", "include_declaration": true}),
+    );
+    let found: Value = serde_json::from_str(&tool_text(&found)).unwrap();
+    let mut spans: Vec<(i64, i64, i64, i64)> = found["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| {
+            assert_eq!(l["precision"], "token", "{l}");
+            quad(&l["source_span"])
+        })
+        .collect();
+    let renamed = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "Repo", "new_name": "Store", "dry_run": true}),
+    );
+    let renamed: Value = serde_json::from_str(&tool_text(&renamed)).unwrap();
+    let mut ranges: Vec<(i64, i64, i64, i64)> = renamed["edits"]
+        .as_array()
+        .expect("a plan, not a refusal")
+        .iter()
+        .map(|e| quad(&e["range"]))
+        .collect();
+    spans.sort_unstable();
+    ranges.sort_unstable();
+    let want = vec![(2, 11, 2, 15), (5, 6, 5, 10)];
+    assert_eq!(spans, want, "{found}");
+    assert_eq!(ranges, want, "{renamed}");
 }
 
 fn quad(span: &Value) -> (i64, i64, i64, i64) {

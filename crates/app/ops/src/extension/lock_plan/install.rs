@@ -132,7 +132,7 @@ impl<'a> LockPlan<'a> {
     /// published declaration: its version and its peers, the publisher's key id, `source:
     /// registry`. Its binary is not loaded: [`Self::check`] loads it after the gate. Nothing is
     /// pinned for the user: the publisher the fetch decided is pinned when the plan commits. For a
-    /// preview, its [`Manifest`] only: nothing is downloaded and no publisher is decided. E063
+    /// preview, its [`Manifest`], its publisher decided as the fetch decides it: nothing is downloaded. E063
     /// when the plan fetches from no registry. A registry entry that pins no hash is fetched again,
     /// which pins it (W149).
     pub(crate) fn fetch(
@@ -161,17 +161,16 @@ impl<'a> LockPlan<'a> {
         let Some((fetching, runtime)) = self.fetching else {
             return Err(crate::registry::no_registry(self.operation));
         };
+        let policy = TrustPolicy::new(fetching.allow_unsigned, self.caller.asking())
+            .locked(self.installed.locked(name).map(LockedPin::of));
         if self.purpose == Purpose::Preview {
-            let manifest = fetching.registry.published(name, version)?;
-            if let Some(pin) = self.installed.locked(name).map(LockedPin::of) {
-                // No download: the manifest names the bytes (ADR 0201).
-                pin.admits(name, version, &manifest.sha256)?;
-            }
+            // Decided as the fetch decides it, downloading nothing (ADR 0213).
+            let manifest = fetching.registry.published(name, version, policy)?;
             let pin = Pin {
                 name: manifest.name,
                 version: manifest.version.to_string(),
                 source: LockSource::Registry,
-                key_id: None,
+                key_id: manifest.publisher.key_id().map(str::to_string),
                 peers: manifest.declaration.peers().to_vec(),
             };
             return Ok(Install {
@@ -183,8 +182,6 @@ impl<'a> LockPlan<'a> {
                 },
             });
         }
-        let policy = TrustPolicy::new(fetching.allow_unsigned, self.caller.asking())
-            .locked(self.installed.locked(name).map(LockedPin::of));
         let mut package = fetching.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));
         let pin = Pin {

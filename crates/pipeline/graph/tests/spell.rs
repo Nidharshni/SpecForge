@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+use specforge_common::{SourceSpan, Sym};
 use specforge_graph::field_form::{FieldForm, FieldForms, spell};
 use specforge_graph::{FieldValue, Written};
 use specforge_protocol_types::FieldType;
@@ -158,4 +159,44 @@ fn spelled_writes_the_given_form() {
         "gh.issue:1"
     );
     assert_eq!(spell::spelled("7", Written::Literal), "7");
+}
+
+#[test]
+fn id_span_is_the_id_inside_its_quotes() {
+    let on = |start_line: usize, end_line: usize, start_col: usize, end_col: usize| SourceSpan {
+        file: Sym::new("p.spec"),
+        start_line,
+        start_col,
+        end_line,
+        end_col,
+    };
+    // (written, the value's span, the id, the id's span as (start_col, end_col))
+    let escaped = "us\ter";
+    let nasty = "a\"\"\"\"b";
+    let table = [
+        (Written::Bare, on(1, 1, 11, 15), "user", (11, 15)),
+        (Written::Quoted, on(1, 1, 11, 17), "user", (12, 16)),
+        (Written::Quoted, on(1, 1, 11, 21), "user", (14, 18)),
+        // Padding inside triple quotes: no fixed offset.
+        (Written::Quoted, on(1, 1, 11, 23), "user", (11, 23)),
+        // An escape: no bytes spell the id.
+        (Written::Quoted, on(1, 1, 11, 19), escaped, (11, 19)),
+        (Written::Quoted, on(1, 2, 11, 17), "user", (11, 17)),
+        // A literal is never shrunk: `007` reads as the id `7`.
+        (Written::Literal, on(1, 1, 11, 14), "7", (11, 14)),
+        // Six wider, but not an entity id.
+        (Written::Quoted, on(1, 1, 11, 23), nasty, (11, 23)),
+    ];
+    for (written, span, id, (start_col, end_col)) in table {
+        let got = spell::id_span(written, &span, id);
+        assert_eq!(
+            (got.start_col, got.end_col),
+            (start_col, end_col),
+            "{written:?} {id:?}"
+        );
+        assert_eq!(
+            (got.start_line, got.end_line),
+            (span.start_line, span.end_line)
+        );
+    }
 }
