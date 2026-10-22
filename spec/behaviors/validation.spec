@@ -90,6 +90,7 @@ behavior require_block_titles "Require Block Titles" {
   verify unit "an untitled union is E076"
   verify unit "define, spec and ref blocks are not E076"
   verify unit "E076 needs no extension and follows the file in an incremental build"
+  verify unit "E076 names specforge migrate exactly where migrate writes the title"
 }
 
 // ── Domain-Specific Validation ──────────────────────────────

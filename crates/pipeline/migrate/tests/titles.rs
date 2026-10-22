@@ -187,3 +187,64 @@ fn a_header_whose_name_is_on_its_second_line_takes_its_title_after_the_name() {
         "feature\n  second_auth \"Second Auth\" {\n  status proposed\n}\n"
     );
 }
+
+#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "add_missing_titles",
+    verify = "a blank title is replaced where it is written: the doc comment, else the id in words"
+)]
+fn a_blank_title_is_replaced_where_it_is_written() {
+    let rows = [
+        (
+            "// The login session\ntype session \"\" {\n  status draft\n}\n",
+            "type session \"The login session\" {\n  status draft\n}\n",
+        ),
+        (
+            "type T \"  \" {\n}\n\n// States.\ntype S \"\" = a | b\n",
+            "type T \"T\" {\n}\n\ntype S \"States.\" = a | b\n",
+        ),
+        ("type T \"\\t\" {\n}\n", "type T \"T\" {\n}\n"),
+        ("type T \"\n\" {\n}\n", "type T \"T\" {\n}\n"),
+        (
+            "feature\n  second_auth \"\" {\n  status proposed\n}\n",
+            "feature\n  second_auth \"Second Auth\" {\n  status proposed\n}\n",
+        ),
+        (
+            "// An issue\nref gh.issue:42 \"\"\n",
+            "ref gh.issue:42 \"An issue\"\n",
+        ),
+    ];
+    let failures: Vec<String> = rows
+        .iter()
+        .filter_map(|(input, expected)| {
+            let got = migrated(input);
+            (got != *expected || migrated(&got) != got)
+                .then(|| format!("{input:?} -> {got:?}, expected {expected:?}"))
+        })
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+#[specforge_test(
+    behavior = "add_missing_titles",
+    verify = "a spec block is left alone, its blank name included"
+)]
+fn a_spec_blocks_blank_name_is_left_alone() {
+    let text = "// About\nspec \"\" {\n}\n";
+    assert_eq!(migrated(text), text);
+}
+
+#[specforge_test(
+    behavior = "add_missing_titles",
+    verify = "the changes beyond the steps drop only a title the step added"
+)]
+fn beyond_steps_drops_a_title_written_over_a_blank_one() {
+    let build = |text: &str| build_graph(&[parse(text, "a.spec")]).0;
+    let before = build("type A \"\" {\n}\n\ntype B \"Old\" {\n}\n");
+    let after = build("type A \"A\" {\n}\n\ntype B \"New\" {\n}\n");
+
+    let delta = beyond_steps(compute_graph_delta(&before, &after), &before);
+
+    let ids: Vec<&str> = delta.modified_nodes.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(ids, ["B"], "{delta:?}");
+}

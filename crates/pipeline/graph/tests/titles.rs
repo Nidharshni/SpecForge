@@ -79,3 +79,26 @@ fn e076_needs_no_extension_and_follows_the_file_in_an_incremental_build() {
     build.apply([FileChange::Parsed(parse("type X \"X\" {\n}\n", "a.spec"))]);
     assert!(build.diagnostics().is_empty(), "{:?}", build.diagnostics());
 }
+
+#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "require_block_titles",
+    verify = "E076 names specforge migrate exactly where migrate writes the title"
+)]
+fn a_spec_blocks_e076_names_its_name_not_migrate() {
+    let (_, diagnostics) = build_graph(&[parse("spec \"\" {\n}\n\ntype X {\n}\n", "a.spec")]);
+    let help = |line: usize| {
+        diagnostics
+            .iter()
+            .find(|d| d.code == "E076" && d.span.as_ref().is_some_and(|s| s.start_line == line))
+            .and_then(|d| d.suggestion.clone())
+            .unwrap_or_default()
+    };
+
+    assert!(
+        help(1).contains("its name") && !help(1).contains("migrate"),
+        "{}",
+        help(1)
+    );
+    assert!(help(4).contains("specforge migrate"), "{}", help(4));
+}
