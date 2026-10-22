@@ -87,7 +87,8 @@ fn the_configured_registry_over_memory_keeps_the_registry_contract() {
 
 #[test]
 fn a_published_manifest_is_read_without_downloading_the_binary() {
-    use specforge_ops::registry::Registry;
+    use specforge_ops::asking::Asking;
+    use specforge_ops::registry::{Registry, TrustPolicy};
     use specforge_package::{PackageName, Version};
     use specforge_registry_client::testing::CallKind;
 
@@ -113,7 +114,11 @@ fn a_published_manifest_is_read_without_downloading_the_binary() {
     let base = PackageName::parse("@contract/base").unwrap();
 
     let manifest = registry
-        .published(&base, &Version::parse("1.1.0").unwrap())
+        .published(
+            &base,
+            &Version::parse("1.1.0").unwrap(),
+            TrustPolicy::new(false, Asking::Nobody),
+        )
         .unwrap();
 
     assert_eq!(manifest.name, base);

@@ -9,7 +9,7 @@ use specforge_package::{DeclaredPackage, PackageName, Version, VersionRequiremen
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::super::{
-    Found, KeyPin, Manifest, Package, Published as Receipt, Registry, Searched, Signer,
+    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched, Signer,
     TrustPolicy, UserKeys,
 };
 use crate::OpError;
@@ -219,6 +219,49 @@ impl MemoryRegistry {
             .push(PackageName::parse(name).expect("a package name"));
         self
     }
+
+    /// The published `name@version` and its publisher, decided by [`TrustPolicy::decide`] over the
+    /// user's pins, trusted and denied keys: R006 for a version it does not hold, R014 when the policy's
+    /// lock pin pins this version as other bytes (before any question), R-TRUST-001, -003 or -005 as the
+    /// decision refuses. What `published` and `fetch` share. Records `asked` first.
+    fn decided(
+        &self,
+        asked: Asked,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<(Published, Publisher), OpError> {
+        self.opened()?;
+        self.asked.lock().unwrap().push(asked);
+        let held = self.held.lock().unwrap();
+        let Some(published) = held
+            .iter()
+            .find(|p| p.name() == *name && p.version() == *version)
+        else {
+            return Err(not_found(name, version));
+        };
+        policy.admits(name, version, &hex_sha256(&published.wasm))?;
+        let pins = self.pins.lock().unwrap();
+        let is = |keys: &[String]| {
+            published
+                .key_id
+                .as_ref()
+                .is_some_and(|key| keys.contains(key))
+        };
+        let publisher = policy.decide(
+            name,
+            published
+                .key_id
+                .as_deref()
+                .map_or(Signer::Unsigned, Signer::Key),
+            UserKeys {
+                pin: pins.get(name).map(String::as_str),
+                trusted: is(&self.trusted),
+                denied: is(&self.denied),
+            },
+        )?;
+        Ok((published.clone(), publisher))
+    }
 }
 
 impl Registry for MemoryRegistry {
@@ -253,79 +296,42 @@ impl Registry for MemoryRegistry {
         Ok(versions)
     }
 
-    /// What it publishes as `name@version`, without its binary: R006 as `fetch` for a version it does
-    /// not hold; else the declaration it was published with and `hex_sha256` of its bytes. Asks no
-    /// question and decides no publisher: an unsigned package is answered too.
-    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
-        self.opened()?;
-        self.asked
-            .lock()
-            .unwrap()
-            .push(Asked::Published(name.clone(), version.clone()));
-        let held = self.held.lock().unwrap();
-        let Some(published) = held
-            .iter()
-            .find(|p| p.name() == *name && p.version() == *version)
-        else {
-            return Err(not_found(name, version));
-        };
+    /// What it publishes as `name@version`, without its binary: the declaration it was published with,
+    /// `hex_sha256` of its bytes and its publisher, decided as `fetch` decides it. Downloads nothing.
+    fn published(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Manifest, OpError> {
+        let asked = Asked::Published(name.clone(), version.clone());
+        let (published, publisher) = self.decided(asked, name, version, policy)?;
         Ok(Manifest {
             name: name.clone(),
             version: version.clone(),
             sha256: hex_sha256(&published.wasm),
-            declaration: published.declaration.clone(),
+            declaration: published.declaration,
+            publisher,
         })
     }
 
-    /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
-    /// R014 when the policy's lock pin pins this version as other bytes (before anything else),
-    /// else its bytes, `hex_sha256(bytes)`, its declaration and its publisher, decided by
-    /// [`TrustPolicy::decide`] over the user's pins, trusted and denied keys (R-TRUST-001, -003, -005).
-    /// Nothing is pinned: that is [`Registry::pin`].
+    /// The package published as `name@version`: [`Self::published`]'s refusals, else its bytes,
+    /// `hex_sha256(bytes)`, its declaration and its publisher. Nothing is pinned: that is
+    /// [`Registry::pin`].
     fn fetch(
         &self,
         name: &PackageName,
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
-        self.opened()?;
-        self.asked
-            .lock()
-            .unwrap()
-            .push(Asked::Fetch(name.clone(), version.clone()));
-        let held = self.held.lock().unwrap();
-        let Some(published) = held
-            .iter()
-            .find(|p| p.name() == *name && p.version() == *version)
-        else {
-            return Err(not_found(name, version));
-        };
-        policy.admits(name, version, &hex_sha256(&published.wasm))?;
-        let pins = self.pins.lock().unwrap();
-        let publisher = policy.decide(
-            name,
-            published
-                .key_id
-                .as_deref()
-                .map_or(Signer::Unsigned, Signer::Key),
-            UserKeys {
-                pin: pins.get(name).map(String::as_str),
-                trusted: published
-                    .key_id
-                    .as_ref()
-                    .is_some_and(|key| self.trusted.contains(key)),
-                denied: published
-                    .key_id
-                    .as_ref()
-                    .is_some_and(|key| self.denied.contains(key)),
-            },
-        )?;
+        let asked = Asked::Fetch(name.clone(), version.clone());
+        let (published, publisher) = self.decided(asked, name, version, policy)?;
         Ok(Package {
             name: name.clone(),
             version: version.clone(),
             sha256: hex_sha256(&published.wasm),
-            wasm: published.wasm.clone(),
-            declaration: published.declaration.clone(),
+            wasm: published.wasm,
+            declaration: published.declaration,
             publisher,
         })
     }

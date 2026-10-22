@@ -57,13 +57,14 @@ fn the_registry_manifest_is_what_a_dry_run_judges() {
     let registry = MemoryRegistry::new().serving(published.clone());
 
     let manifest = registry
-        .published(&published.name(), &published.version())
+        .published(&published.name(), &published.version(), refuse(true))
         .unwrap();
 
     assert_eq!(manifest.name, published.name());
     assert_eq!(manifest.version, published.version());
     assert_eq!(manifest.sha256, hex_sha256(b"\0asm tool"));
     assert_eq!(manifest.declaration, published.declaration);
+    assert_eq!(manifest.publisher, Publisher::Unsigned);
     assert_eq!(
         registry.asked(),
         [Asked::Published(published.name(), published.version())],

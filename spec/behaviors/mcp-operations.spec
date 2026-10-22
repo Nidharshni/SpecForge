@@ -349,7 +349,8 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     answer what specforge add --dry-run answers: the add judged and not
     committed, its refusal included, without modifying any file, pinning
     any key or downloading any Wasm module (a registry package is judged
-    by its published manifest). The tool MUST add
+    by its published manifest, and its publisher decided as the add decides
+    it). The tool MUST add
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.

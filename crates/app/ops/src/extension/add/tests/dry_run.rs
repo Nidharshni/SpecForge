@@ -269,7 +269,6 @@ fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
     behavior = "verify_publisher_signature",
     verify = "a dry run refuses what the add's trust decision refuses, downloading nothing"
 )]
-#[ignore = "flipped by T4"]
 fn a_dry_run_refuses_what_the_trust_decision_refuses() {
     let registry = || {
         MemoryRegistry::new()
@@ -284,7 +283,15 @@ fn a_dry_run_refuses_what_the_trust_decision_refuses() {
                 )
                 .signed_by("k2"),
             )
+            .serving(
+                Published::new(
+                    b"\0asm denied".to_vec(),
+                    declaration("@acme/denied", "1.0.0", &[]),
+                )
+                .signed_by("k3"),
+            )
             .pinning("@acme/tool", "k1")
+            .denying("k3")
     };
     let dir = add_project(Vec::new());
     let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
@@ -299,6 +306,7 @@ fn a_dry_run_refuses_what_the_trust_decision_refuses() {
     for (spec, code) in [
         ("@acme/plain@1.0.0", "R-TRUST-001"),
         ("@acme/tool@1.0.0", "R-TRUST-003"),
+        ("@acme/denied@1.0.0", "R-TRUST-005"),
     ] {
         let real = add(&request(spec, false), &registry(), &runtime()).unwrap_err();
         assert_eq!(real.error.code, code, "{spec}");

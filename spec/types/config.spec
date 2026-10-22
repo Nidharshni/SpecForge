@@ -199,6 +199,8 @@ type RegistryManifest "What a registry says it publishes as one version, without
   sha256      string
   /// The declaration it was published with (its manifest).
   declaration ExtensionDeclaration
+  /// The publisher key the trust decision accepted; absent when unsigned.
+  key_id      string @optional
   verify unit "RegistryManifest schema is valid"
 }
 

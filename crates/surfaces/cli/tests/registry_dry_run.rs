@@ -18,7 +18,6 @@ fn add_greet(dir: &TestProject, extra: &[&str]) -> (bool, serde_json::Value) {
     invariant = "publisher_trust",
     verify = "specforge add --dry-run refuses an unsigned package and a denied publisher key as specforge add does, downloading nothing"
 )]
-#[ignore = "flipped by T4"]
 fn a_dry_run_refuses_what_the_add_refuses_and_downloads_nothing() {
     let denied = specforge_registry_client::SigningKey::generate();
     let cases = [(None, "R-TRUST-001"), (Some(denied), "R-TRUST-005")];

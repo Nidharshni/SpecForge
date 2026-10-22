@@ -948,9 +948,9 @@ behavior verify_registry_integrity "Verify Registry Integrity" {
   verify contract "Verify Registry Integrity: registry integrity verification holds — wasm_binary_downloaded, registry_response_available, hash_verified, mismatch_aborts, lock_file_updated, integrity_verified_emitted"
 }
 
-// Package trust after the SHA256 check (docs/registry-trust.md). The
-// registry is not the trust anchor: these checks use only the bytes
-// downloaded, the metadata and manifest served, and the user's pins.
+// Package trust, decided from the registry's reply before its binary is
+// downloaded (docs/registry-trust.md). The registry is not the trust anchor:
+// these checks use only the metadata and manifest served, and the user's pins.
 
 behavior check_registry_reply "Check Registry Reply" {
   invariants [registry_reply_binding, registry_integrity]
@@ -1025,9 +1025,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   types      [PackageMetadata, ExtensionError]
   ports      [RegistryClient]
   requires {
-    reply_checked "The registry reply passed the SHA256 check and names the package requested"
+    reply_checked "The registry reply names the package requested and its manifest reads"
   }
   ensures {
+    decided_before_download  "The publisher is decided from the reply before the binary is downloaded, and a dry run decides it as the add does"
     broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
@@ -1036,10 +1037,12 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
   contract   """
     A registry package's Ed25519 publisher signature MUST be verified
     over the canonical payload {name, version, wasmSha256, manifestSha256,
-    signedAt} re-derived from the downloaded Wasm bytes and the manifest
-    the registry serves, with the public key carried in the signature
-    object. A signature that doesn't verify (tampered binary or swapped
-    manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
+    signedAt} built from the name, version, SHA-256 and manifest the
+    registry describes, before the binary is downloaded; the downloaded
+    bytes MUST then hash to that SHA-256, so the signature covers them. A
+    dry run MUST decide the same, downloading nothing. The public key is
+    carried in the signature object. A signature that doesn't verify (other
+    digests or a swapped manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
     NOT bypass it; one that isn't a package signature makes the reply
     unreadable (R009, check_registry_reply). A package with no signature MUST
     be refused with R-TRUST-001 unless the user passes --allow-unsigned;

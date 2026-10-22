@@ -369,7 +369,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
 
     // C11: the published manifest is what a fetch answers, without the binary
     let manifest = registry
-        .published(&fresh, &fresh_version)
+        .published(&fresh, &fresh_version, refuse(false))
         .unwrap_or_else(|e| panic!("C11: published of a held version fails: {e:?}"));
     assert_eq!(
         (manifest.name.clone(), manifest.version.clone()),
@@ -381,12 +381,64 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         manifest.declaration, served.declaration,
         "C11: declaration as fetch"
     );
+    assert_eq!(
+        manifest.publisher, served.publisher,
+        "C11: publisher as fetch"
+    );
     let error = registry
-        .published(&base, &Version::parse("9.9.9").unwrap())
+        .published(&base, &Version::parse("9.9.9").unwrap(), refuse(false))
         .unwrap_err();
     assert!(
         error.is(codes::R006),
         "C11: an unknown version as fetch refuses it: {error:?}"
+    );
+
+    // C13: published decides as fetch decides, downloading nothing
+    let published_as =
+        |name: &PackageName, version: &Version, policy| registry.published(name, version, policy);
+    let error = published_as(&plain, &one, refuse(false)).unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_001),
+        "C13: an unsigned package is refused as fetch refuses it: {error:?}"
+    );
+    assert_eq!(
+        published_as(&plain, &one, refuse(true)).unwrap().publisher,
+        Publisher::Unsigned,
+        "C13: an unsigned package allowed has no key"
+    );
+    assert_eq!(
+        published_as(&base, &one_one, refuse(false))
+            .unwrap()
+            .publisher,
+        Publisher::Signed {
+            key_id: signer.clone(),
+            first_use: false
+        },
+        "C13: the pinned signer, as fetch answered after C8"
+    );
+    let error = published_as(&app_name, &app_version, refuse(false)).unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C13: a key change is refused as fetch refuses it: {error:?}"
+    );
+    assert_eq!(
+        published_as(
+            &app_name,
+            &app_version,
+            TrustPolicy::new(false, Asking::Yes)
+        )
+        .unwrap()
+        .publisher,
+        Publisher::Repinned {
+            key_id: app_signer.clone(),
+            previous: "contract-other".to_string()
+        },
+        "C13: consent to a key change, as fetch"
+    );
+    let error = published_as(&denied, &one, TrustPolicy::new(true, Asking::Yes)).unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_005),
+        "C13: a denied key beats consent: {error:?}"
     );
 
     // R-S

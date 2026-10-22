@@ -157,7 +157,8 @@ invariant registry_integrity "Registry Integrity" {
 invariant publisher_trust "Publisher Trust" {
   guarantee """
     A registry package is installed only when its publisher signature
-    verifies over the downloaded bytes and the served manifest, or when it
+    verifies over the digests the registry describes (which the downloaded
+    bytes must match) and the served manifest, or when it
     is unsigned and the user passed --allow-unsigned; a broken signature is
     never installed. The first verified key for a package is pinned, and a
     package signed by another key is refused unless the user consents. A

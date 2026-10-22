@@ -238,7 +238,6 @@ fn a_locked_version_served_as_other_bytes_is_refused_before_its_download() {
     behavior = "verify_publisher_signature",
     verify = "a package the trust decision refuses is refused before its download"
 )]
-#[ignore = "flipped by T4"]
 fn an_unsigned_package_is_refused_before_its_download() {
     let served = serving(&["1.0.0"]); // unsigned
     let dir = project_with(&default_registry(served.root().as_str()));
