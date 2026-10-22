@@ -9,7 +9,6 @@ const CYCLE: &str = "behavior alpha \"A\" {\n  depends_on [beta]\n}\nbehavior be
     behavior = "present_diagnostics_as_json",
     verify = "a diagnostic about entities without a span of its own is located at the first one's block"
 )]
-#[ignore = "flipped by T3"]
 fn a_spanless_diagnostic_about_entities_is_located_at_the_first_ones_block() {
     let dir = TestProject::new()
         .config(|c| c["name"] = "c".into())

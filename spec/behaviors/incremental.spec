@@ -407,7 +407,7 @@ behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
   verify unit "total diagnostic set matches full rebuild"
   verify unit "a diagnostic is unchanged in a delta only when every presented part is"
   verify unit "an update reports the diagnostics it added and removed"
-  verify unit "a diagnostic without a span is unchanged when only its entities move"
+  verify unit "a diagnostic about entities moves with the first one's block"
   verify performance "file change to diagnostics emitted within 100ms"
   verify contract "Emit Incremental Diagnostics: incremental diagnostics holds for the declared obligations"
 }
@@ -617,8 +617,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     is never computed. The session never waits on a subscriber, so a slow
     one cannot delay the compilation pipeline. The LSP does not use these
     deltas: it publishes every file's diagnostics as the editor shows
-    them, a spanless one placed at its entity's name
-    (emit_live_diagnostics), which a delta of the diagnostics as JSON
+    them (emit_live_diagnostics), which a delta of the diagnostics as JSON
     presents them does not describe, and asks its client to refresh
     semantic tokens (provide_semantic_tokens, behaviors/lsp.spec).
   """

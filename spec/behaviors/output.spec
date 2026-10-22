@@ -1111,7 +1111,9 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
     entries with code, severity, message and suggestion (null when there
     is none), the span nested under span (file, start_line, start_col,
     end_line, end_col; null without a location), and the span's start
-    flat as file, line and column (null without a location). The shape
+    flat as file, line and column (null without a location; a diagnostic
+    about entities without a span of its own is located at the first one's
+    block, ADR 0227). The shape
     is a superset of the nested and the flat shapes these surfaces used
     before, so no reader of either breaks. A diagnostic that carries a
     typed payload (DiagnosticData, e.g. the target of an unresolved

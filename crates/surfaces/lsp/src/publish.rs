@@ -30,7 +30,7 @@ pub struct Publication {
 pub struct FilePublication {
     /// As the client receives them.
     pub diagnostics: Vec<Diagnostic>,
-    /// As code actions read them back (spanless ones placed).
+    /// As code actions read them back.
     pub placed: Vec<specforge_common::Diagnostic>,
     /// The editor's version of the text these diagnostics are positions in
     /// (the buffer the project was compiled from); `None` for a file
@@ -40,8 +40,8 @@ pub struct FilePublication {
 
 impl Publication {
     /// What the project reports now: a diagnostic on the file its span
-    /// names; one without a span about entities at the first one's name,
-    /// related information at each other's (ADR 0016); one about none on
+    /// names (the compiled project locates one about entities, ADR 0227),
+    /// related information at each other entity's name; one about none on
     /// `edited`, else on the anchor while it is open, else on the first
     /// open document. Targets: every file with diagnostics, every file
     /// published before, `edited` and `touched`.
@@ -60,18 +60,7 @@ impl Publication {
         let mut by_file: BTreeMap<String, FilePublication> = BTreeMap::new();
         let mut anchor = None;
         for diagnostic in &diagnostics {
-            let mut related = Vec::new();
-            let placed = match &diagnostic.span {
-                Some(_) => diagnostic.clone(),
-                None => match place_at_subjects(&compiled, &nav, diagnostic) {
-                    Some((at, others)) => {
-                        related = others;
-                        at
-                    }
-                    None => diagnostic.clone(),
-                },
-            };
-            let key = match &placed.span {
+            let key = match &diagnostic.span {
                 Some(span) => span.file.as_str().to_string(),
                 None => match &nowhere {
                     Some(key) => {
@@ -81,13 +70,14 @@ impl Publication {
                     None => continue,
                 },
             };
-            let mut lsp = diagnostic_to_lsp(&placed, |span| compiled.compiled_range(span));
+            let mut lsp = diagnostic_to_lsp(diagnostic, |span| compiled.compiled_range(span));
+            let related = also_about(&compiled, &nav, diagnostic);
             if !related.is_empty() {
                 lsp.related_information = Some(related);
             }
             let file = by_file.entry(key).or_default();
             file.diagnostics.push(lsp);
-            file.placed.push(placed);
+            file.placed.push(diagnostic.clone());
         }
         let mut targets: BTreeSet<String> = touched.iter().cloned().collect();
         targets.extend(files.published_keys().map(str::to_string));
@@ -105,36 +95,31 @@ impl Publication {
     }
 }
 
-/// A spanless diagnostic about entities, placed at the first one's name,
-/// and the related information pointing at each other's name. `None`
-/// when its data names no entity the graph holds.
-fn place_at_subjects(
+/// Related information at the name of each entity a diagnostic's data names but the first,
+/// which the compiled project located it at (ADR 0016 D7, ADR 0227).
+fn also_about(
     compiled: &Compiled,
     nav: &specforge_ops::read::navigate::Navigator<'_>,
     diagnostic: &specforge_common::Diagnostic,
-) -> Option<(
-    specforge_common::Diagnostic,
-    Vec<DiagnosticRelatedInformation>,
-)> {
+) -> Vec<DiagnosticRelatedInformation> {
+    if diagnostic.data.is_none() {
+        return Vec::new();
+    }
     let subjects = specforge_ops::read::navigate::subjects(compiled.state().graph(), diagnostic);
-    let (first, others) = subjects.split_first()?;
-    let name = |node: &specforge_graph::Node| {
-        nav.definition(node.id.raw.as_str())
-            .map(|d| d.name)
-            .unwrap_or_else(|_| node.source_span.clone())
-    };
-    let mut placed = diagnostic.clone();
-    placed.span = Some(name(first));
-    let related = others
+    subjects
         .iter()
+        .skip(1)
         .filter_map(|node| {
+            let name = nav
+                .definition(node.id.raw.as_str())
+                .map(|d| d.name)
+                .unwrap_or_else(|_| node.source_span.clone());
             Some(DiagnosticRelatedInformation {
-                location: compiled.location(&name(node))?,
+                location: compiled.location(&name)?,
                 message: format!("also about '{}'", node.id.raw),
             })
         })
-        .collect();
-    Some((placed, related))
+        .collect()
 }
 
 /// A diagnostic as the client receives it; `range_of` converts its span.

@@ -1581,9 +1581,9 @@ const CYCLE: &str = "behavior alpha \"A\" {\n  depends_on [beta]\n}\nbehavior be
 
 #[specforge_test(
     behavior = "emit_incremental_diagnostics",
-    verify = "a diagnostic without a span is unchanged when only its entities move"
+    verify = "a diagnostic about entities moves with the first one's block"
 )]
-fn a_diagnostic_without_a_span_is_unchanged_when_only_its_entities_move() {
+fn a_diagnostic_about_entities_moves_with_its_first_entity() {
     let dir = project(
         r#"{"name":"c","extensions":["@specforge/software"]}"#,
         &[("cycle.spec", CYCLE)],
@@ -1597,8 +1597,8 @@ fn a_diagnostic_without_a_span_is_unchanged_when_only_its_entities_move() {
     let update = disk_changed(&mut session, &["cycle.spec"]).unwrap();
     assert_eq!(w061(&update.diagnostics), 1, "still reported");
     let delta = update.diagnostics_delta();
-    assert_eq!(w061(&delta.added.0), 0, "{delta:?}");
-    assert_eq!(w061(&delta.removed.0), 0, "{delta:?}");
+    assert_eq!(w061(&delta.added.0), 1, "{delta:?}");
+    assert_eq!(w061(&delta.removed.0), 1, "{delta:?}");
 }
 
 /// `update`'s delta takes what the session reported before it (`previous`)

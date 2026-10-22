@@ -34,7 +34,8 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     set from the smallest id and back; it depends only on the references,
     never on the order they are written in. A declared single reference and a derived
     edge are in none (ADR 0093 D7, ADR 0204). W061 has no span: it is about its entities
-    (ADR 0016 D7).
+    (ADR 0016 D7), and the compiled project locates it at the first one's
+    block (ADR 0227).
     A block that writes a key twice, at any depth, MUST be E081 at each later
     entry, and its node MUST hold the first entry of each key; a later entry's
     names stay tokens and link nothing (ADR 0215).

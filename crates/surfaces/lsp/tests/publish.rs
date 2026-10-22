@@ -90,9 +90,9 @@ const CYCLE: &str = "behavior alpha \"A\" {\n  depends_on [beta]\n}\nbehavior be
 
 #[spec(
     behavior = "emit_live_diagnostics",
-    verify = "a spanless diagnostic about entities is published at the first one's name"
+    verify = "a diagnostic about entities is published at the first one's block, with related information at each other's name"
 )]
-fn a_spanless_cycle_goes_on_the_first_entitys_name() {
+fn a_spanless_cycle_goes_on_the_first_entitys_block() {
     let (dir, mut state) = project(
         SOFTWARE,
         &[
@@ -109,12 +109,14 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
         .iter()
         .find(|d| d.code == Some(tower_lsp::lsp_types::NumberOrString::String("W061".into())))
         .expect("W061 on the cycle's file");
-    let at = |r: &tower_lsp::lsp_types::Range| (r.start.line, r.start.character, r.end.character);
-    assert_eq!(at(&w061.range), (0, 9, 14), "alpha's name");
+    let at = |r: &tower_lsp::lsp_types::Range| {
+        (r.start.line, r.start.character, r.end.line, r.end.character)
+    };
+    assert_eq!(at(&w061.range), (0, 0, 2, 1), "alpha's block");
     let related = w061.related_information.as_ref().expect("the others");
     assert_eq!(related.len(), 1);
     assert_eq!(related[0].location.uri, cycle);
-    assert_eq!(at(&related[0].location.range), (3, 9, 13), "beta's name");
+    assert_eq!(at(&related[0].location.range), (3, 9, 3, 13), "beta's name");
     // What code actions read back carries the placed span.
     let placed = publication.files["cycle.spec"]
         .placed
