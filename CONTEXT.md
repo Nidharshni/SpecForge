@@ -576,7 +576,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - how many obligations it declares.
 
   It **declares** obligations when it has at least one (`Standing::declares_obligations`). It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
-  when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
+  when testable and owing or declaring, and is **exempt** when testable and neither (its **Coverage status** says so): the coverage
   rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
   (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
   input's `owes_none` is not this word: it says the entity owes none, and such an entity still counts
@@ -890,8 +890,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`source_entity`, `target_entity`, `missing_link_type`, `gap_context`). A missing entry is a warning; an
   unresolved or misordered entry fails the plan.
 - **Verdict**: an entity's obligations, the proven ones, and the tests that bear on them. It gives
-  both "proven" (the gate) and the covered/partial/uncovered status (the MCP view)
+  "proven" (the gate) and, for an entity that counts, the covered/partial/uncovered of its **Coverage status**
   (`specforge_coverage::Verdict`).
+- **Coverage status**: an entity's coverage at a glance, one of `covered`, `partial`, `uncovered` (it counts; how its
+  verdict proves it), `exempt` (testable, owing and declaring none) or `not_testable` (its kind is not testable): the
+  coverage rule's `Counting::status`, asked through `Standing::status`. The coverage view, inspect, the hover and a
+  query with coverage write it (ADR 0216).
 - **Operation**: one user-level command (init, add, remove, …) as a typed request and outcome,
   independent of surface. What its request's values mean (a default, a value standing for another, arguments that
   exclude or need each other) is the operation's, read once in ops; a surface only spells the arguments (ADR 0101); an argument that names an entity, the request's subject or a filter, is refused by the operation when the graph lacks it, and a depth needs the entity it counts from; an argument a surface owns that picks which reader answers (the infer prompt's `scope`) refuses a value it does not know, never reading it as a default.
@@ -959,7 +963,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
   --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
-  status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
+  status (`coverage_status`) when the export is given the statuses, as a query with coverage is (ADR 0007).
 - **Review document**: the graph export in the markdown format (ADR 0152), for a person who signs: one section
   per selected entity headed `## <kind> \`<id>\` — <title>`, its normative fields quoted, its other fields, its
   Links (each linked entity's kind and title; an unresolved reference marked so), the entities that reference
