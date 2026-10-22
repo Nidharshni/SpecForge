@@ -16,8 +16,9 @@ use std::sync::{Arc, Mutex};
 
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime, WasmTrapInfo};
 use specforge_wasm::sandbox::Limits;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, Resource};
 use wasmtime::{Cache, CacheConfig, Config, Engine, Store};
+use wasmtime_wasi::p2::DynPollable;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 wasmtime::component::bindgen!({
@@ -38,47 +39,74 @@ struct HostState {
     memory: MemoryCeiling,
 }
 
-/// Refuses any linear-memory growth past `bytes`, trapping the call;
-/// records the refusal so the call's trap is named `memory_limit_exceeded`
-/// whatever way wasmtime wraps the error (ADR 0037).
+/// Refuses any growth that takes the instance's memories and tables, all
+/// counted together, past `bytes`, trapping the call; records the refusal
+/// so the call's trap is named `memory_limit_exceeded` whatever way
+/// wasmtime wraps the error (ADR 0037).
 struct MemoryCeiling {
     bytes: usize,
+    /// What every memory and table of the instance holds now.
+    used: usize,
     refused: Option<usize>,
 }
+
+/// What one table element is counted as: a function reference is a
+/// pointer.
+const TABLE_ELEMENT_BYTES: usize = size_of::<usize>();
 
 impl MemoryCeiling {
     fn of(limits: Limits) -> Self {
         MemoryCeiling {
             bytes: (limits.memory_mb as usize) << 20,
+            used: 0,
             refused: None,
         }
+    }
+
+    /// Admits one memory or table going from `current` to `desired` bytes
+    /// within the instance's total, or traps.
+    fn grow(&mut self, current: usize, desired: usize) -> wasmtime::Result<()> {
+        let total = self.used.saturating_sub(current).saturating_add(desired);
+        if total > self.bytes {
+            self.refused = Some(total);
+            wasmtime::bail!(
+                "memory limit exceeded: {total} bytes in all asked, {} MiB allowed",
+                self.bytes >> 20
+            );
+        }
+        self.used = total;
+        Ok(())
     }
 }
 
 impl wasmtime::ResourceLimiter for MemoryCeiling {
     fn memory_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        if desired > self.bytes {
-            self.refused = Some(desired);
-            wasmtime::bail!(
-                "memory limit exceeded: {desired} bytes asked, {} MiB allowed",
-                self.bytes >> 20
-            );
+        if maximum.is_some_and(|max| desired > max) {
+            return Ok(false);
         }
-        Ok(maximum.is_none_or(|max| desired <= max))
+        self.grow(current, desired)?;
+        Ok(true)
     }
 
     fn table_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        Ok(maximum.is_none_or(|max| desired <= max))
+        if maximum.is_some_and(|max| desired > max) {
+            return Ok(false);
+        }
+        self.grow(
+            current.saturating_mul(TABLE_ELEMENT_BYTES),
+            desired.saturating_mul(TABLE_ELEMENT_BYTES),
+        )?;
+        Ok(true)
     }
 }
 
@@ -94,6 +122,28 @@ fn no_capabilities() -> WasiCtx {
         .allow_udp(false)
         .allow_ip_name_lookup(false)
         .build()
+}
+
+/// A guest waiting on a timer would block the host thread out of the
+/// epoch deadline's reach (it fires only while guest code runs), holding
+/// the extension's lock for as long as it asks. So the two calls that make
+/// a timer trap instead: a guest has nothing else to wait on, as it holds no
+/// stream or socket that can block.
+fn refuse_timers(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
+    linker.allow_shadowing(true);
+    // shortcut: the version wasmtime-wasi 49 links; a wasmtime upgrade that
+    // changes it fails `an_extension_waiting_on_a_timer_does_not_block_the_host`.
+    let mut clock = linker.instance("wasi:clocks/monotonic-clock@0.2.12")?;
+    for subscribe in ["subscribe-duration", "subscribe-instant"] {
+        clock.func_wrap(
+            subscribe,
+            |_, (_,): (u64,)| -> wasmtime::Result<(Resource<DynPollable>,)> {
+                wasmtime::bail!("the sandbox has no timer to wait on (ADR 0037)")
+            },
+        )?;
+    }
+    linker.allow_shadowing(false);
+    Ok(())
 }
 
 impl WasiView for HostState {
@@ -303,6 +353,7 @@ impl ComponentRuntime {
         let mut linker: Linker<HostState> = Linker::new(&self.engine);
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
             .map_err(|e| format!("failed to add WASI to linker: {e}"))?;
+        refuse_timers(&mut linker).map_err(|e| format!("failed to refuse WASI timers: {e}"))?;
 
         let table = wasmtime_wasi::ResourceTable::new();
         let mut store = Store::new(
@@ -463,12 +514,27 @@ impl WasmRuntime for ComponentRuntime {
                 // limits, as a guest that panics in one call must not take
                 // the extension down for the rest of the process (an MCP
                 // session).
-                if let Ok((fresh_store, fresh_bindings)) =
-                    self.fresh_instance(component, *fuel, *limits)
-                {
-                    *store = fresh_store;
-                    *bindings = fresh_bindings;
-                }
+                // One that cannot start (its own limits refuse it) is
+                // unloaded, so later calls say it is gone instead of failing
+                // on the dead instance.
+                let message = match self.fresh_instance(component, *fuel, *limits) {
+                    Ok((fresh_store, fresh_bindings)) => {
+                        *store = fresh_store;
+                        *bindings = fresh_bindings;
+                        message
+                    }
+                    Err(why) => {
+                        // The plugin's lock goes first: `apply_limits` takes
+                        // the map's, then a plugin's.
+                        drop(instance);
+                        if let Ok(mut plugins) = self.plugins.lock()
+                            && plugins.get(name).is_some_and(|p| Arc::ptr_eq(p, &plugin))
+                        {
+                            plugins.remove(name);
+                        }
+                        format!("{message}; it could not be restarted ({why}) and is unloaded")
+                    }
+                };
                 WasmCallResult::Trap(WasmTrapInfo {
                     kind: kind.to_string(),
                     message,

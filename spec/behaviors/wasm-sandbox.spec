@@ -49,6 +49,8 @@ behavior enforce_wasm_sandbox "Enforce Wasm Sandbox" {
   verify unit "an export reaches no directory: the root and a directory it is told about can be neither listed, read nor written"
   verify unit "an export reaches no network: it can neither connect to a listening port nor resolve a name"
   verify unit "a call that crosses a limit traps with the limit's kind, and the next call gets a fresh instance under the same limits"
+  verify unit "an extension waiting on a timer is stopped instead of blocking the host"
+  verify unit "an extension that cannot be restarted after a trap is unloaded, and its next call says why"
   verify contract "Enforce Wasm Sandbox: Wasm sandbox enforcement holds — sandbox_policy_configured, wasm_runtime_available, no_capability_granted, memory_limit_enforced, execution_time_enforced, deadline_never_early, violations_trapped"
 }
 

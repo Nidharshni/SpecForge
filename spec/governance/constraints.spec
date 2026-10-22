@@ -378,7 +378,8 @@ constraint wasm_memory_limit "Wasm Memory Limit" {
   priority    critical
   metric      """
     Each Wasm extension instance MUST be limited to its declared
-    max_memory_mb of linear memory, at most 512 MB; an extension declaring
+    max_memory_mb of linear memory and tables, all its memories counted
+    together, at most 512 MB; an extension declaring
     no limit MUST be limited to 512 MB. A growth past the limit MUST trap
     the call (memory_limit_exceeded, reported as E028). No limit is shared
     across extensions: one extension's memory never fails another
@@ -388,6 +389,9 @@ constraint wasm_memory_limit "Wasm Memory Limit" {
   protects    [wasm_sandbox_integrity]
   verify unit "an extension growing past its memory limit traps"
   verify unit "an extension declaring no memory limit is held to the 512 MB ceiling"
+  verify unit "the memory limit holds for every memory of an extension together"
+  verify unit "an extension cannot grow a shared memory past its memory limit"
+  verify unit "an extension cannot grow a table without bound"
 }
 
 constraint wasm_sandbox_enforcement "Wasm Sandbox Enforcement" {

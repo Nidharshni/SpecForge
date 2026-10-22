@@ -72,16 +72,46 @@ fn trap_message(result: &WasmCallResult) -> &str {
 ///   them when `fill` is set (so the growth costs real memory; without it
 ///   the pages stay virtual and a test is cheap);
 /// - answers `Ok(answer)`.
+fn bridge_component(pages: u32, spin: u32, fill: bool, answer: &str) -> Vec<u8> {
+    let fill_pages = if fill {
+        "(memory.fill (i32.mul (local.get $old) (i32.const 65536)) (i32.const 1)
+          (i32.mul (i32.const PAGES) (i32.const 65536)))"
+    } else {
+        ""
+    };
+    let body = r#"
+      (local.set $left (i32.const SPIN))
+      (block $done
+        (loop $again
+          (br_if $done (i32.eqz (local.get $left)))
+          (local.set $left (i32.sub (local.get $left) (i32.const 1)))
+          (br $again)))
+      (if (i32.ne (i32.const PAGES) (i32.const 0))
+        (then
+          (local.set $old (memory.grow (i32.const PAGES)))
+          FILL))"#
+        .replace("FILL", fill_pages)
+        .replace("PAGES", &pages.to_string())
+        .replace("SPIN", &spin.to_string());
+    custom_bridge("", "", &body, answer)
+}
+
+/// A `specforge:bridge` component whose `call` runs `body` (wat
+/// instructions, with the locals `$left` and `$old` free to use), then
+/// answers `Ok(answer)`. `outside` is component-level wat placed before the
+/// core module (imports, other core modules and instances). `host` is wat
+/// placed first in the core module: its imports, all from a module `"host"`
+/// that `outside` defines as the core instance `$host`, then any other
+/// declaration.
 ///
 /// The result is lowered through a return area at offset 0: the `ok`
 /// discriminant (0), the answer's pointer (16) and its length. The answer
 /// itself sits at offset 16 and the bump allocator (`realloc`, for the
 /// arguments the host lowers) starts at 8192.
-fn bridge_component(pages: u32, spin: u32, fill: bool, answer: &str) -> Vec<u8> {
+fn custom_bridge(outside: &str, host: &str, body: &str, answer: &str) -> Vec<u8> {
     let escaped: String = answer.bytes().map(|byte| format!("\\{byte:02x}")).collect();
-    let fill_pages = if fill {
-        "(memory.fill (i32.mul (local.get $old) (i32.const 65536)) (i32.const 1)
-          (i32.mul (i32.const PAGES) (i32.const 65536)))"
+    let with = if outside.contains("(core instance $host") {
+        r#"(with "host" (instance $host))"#
     } else {
         ""
     };
@@ -90,7 +120,9 @@ fn bridge_component(pages: u32, spin: u32, fill: bool, answer: &str) -> Vec<u8> 
   (type $call_sig
     (func (param "name" string) (param "export-name" string) (param "input" (list u8))
       (result (result (list u8) (error string)))))
+  OUTSIDE
   (core module $core
+    IMPORTS
     (memory (export "memory") 1)
     (data (i32.const 16) "ANSWER")
     (global $heap (mut i32) (i32.const 8192))
@@ -107,21 +139,12 @@ fn bridge_component(pages: u32, spin: u32, fill: bool, answer: &str) -> Vec<u8> 
     (func (export "call") (param i32 i32 i32 i32 i32 i32) (result i32)
       (local $left i32)
       (local $old i32)
-      (local.set $left (i32.const SPIN))
-      (block $done
-        (loop $again
-          (br_if $done (i32.eqz (local.get $left)))
-          (local.set $left (i32.sub (local.get $left) (i32.const 1)))
-          (br $again)))
-      (if (i32.ne (i32.const PAGES) (i32.const 0))
-        (then
-          (local.set $old (memory.grow (i32.const PAGES)))
-          FILL))
+      BODY
       (i32.store (i32.const 0) (i32.const 0))
       (i32.store (i32.const 4) (i32.const 16))
       (i32.store (i32.const 8) (i32.const ANSWER_LEN))
       (i32.const 0)))
-  (core instance $inst (instantiate $core))
+  (core instance $inst (instantiate $core WITH))
   (func $lifted (type $call_sig)
     (canon lift
       (core func $inst "call")
@@ -130,11 +153,12 @@ fn bridge_component(pages: u32, spin: u32, fill: bool, answer: &str) -> Vec<u8> 
       string-encoding=utf8))
   (export "call" (func $lifted)))
 "#
-    .replace("FILL", fill_pages)
+    .replace("OUTSIDE", outside)
+    .replace("IMPORTS", host)
+    .replace("WITH", with)
+    .replace("BODY", body)
     .replace("ANSWER_LEN", &answer.len().to_string())
-    .replace("ANSWER", &escaped)
-    .replace("PAGES", &pages.to_string())
-    .replace("SPIN", &spin.to_string());
+    .replace("ANSWER", &escaped);
     wat::parse_str(wat).expect("the bridge component's wat parses")
 }
 
@@ -324,4 +348,165 @@ fn the_sandbox_contract_holds() {
         elapsed >= Duration::from_millis(50),
         "trapped before the budget elapsed: {elapsed:?}"
     );
+}
+
+/// A runtime serving `@repro/limits`, a custom bridge guest held to a
+/// memory limit of 32 MB. Its handshake is not called, so `body` runs only
+/// in the calls a test makes.
+fn custom_guest(outside: &str, host: &str, body: &str) -> Result<ComponentRuntime, String> {
+    guest_held_to(32, outside, host, body)
+}
+
+/// [`custom_guest`] held to a memory limit of `mb` MB.
+fn guest_held_to(
+    mb: u32,
+    outside: &str,
+    host: &str,
+    body: &str,
+) -> Result<ComponentRuntime, String> {
+    let runtime = ComponentRuntime::new();
+    runtime.load("@repro/limits", &custom_bridge(outside, host, body, "{}"))?;
+    runtime.apply_limits(
+        "@repro/limits",
+        Limits {
+            memory_mb: mb,
+            ..Limits::CEILING
+        },
+    );
+    Ok(runtime)
+}
+
+/// A core module exporting `grow`, growing its own memory, instantiated as
+/// `$other`, and the `$host` instance handing that `grow` to the bridge's
+/// core module. `memory` is the other module's memory declaration.
+fn second_memory(memory: &str) -> String {
+    r#"
+  (core module $other_module
+    MEMORY
+    (func (export "grow") (param i32) (result i32) (memory.grow (local.get 0))))
+  (core instance $other (instantiate $other_module))
+  (core instance $host (export "grow" (func $other "grow")))"#
+        .replace("MEMORY", memory)
+}
+
+#[specforge_test(
+    constraint = "wasm_memory_limit",
+    verify = "the memory limit holds for every memory of an extension together"
+)]
+fn the_memory_limit_counts_every_memory_together() {
+    // Two memories of 24 MiB each: neither passes 32 MB alone, together
+    // they do.
+    let runtime = custom_guest(
+        &second_memory("(memory 1)"),
+        r#"(import "host" "grow" (func $grow_other (param i32) (result i32)))"#,
+        "(drop (memory.grow (i32.const 384))) (drop (call $grow_other (i32.const 384)))",
+    )
+    .expect("the two-memory guest instantiates");
+    let result = runtime.call_export("@repro/limits", "anything", b"{}");
+    assert_eq!(trap_kind(&result), "memory_limit_exceeded", "{result:?}");
+}
+
+#[specforge_test(
+    constraint = "wasm_memory_limit",
+    verify = "an extension cannot grow a shared memory past its memory limit"
+)]
+fn a_shared_memory_cannot_pass_the_memory_limit() {
+    // 64 MiB of shared memory under a 32 MB limit: refused at load (the
+    // engine does not enable shared memory), or trapped when it grows.
+    let loaded = custom_guest(
+        &second_memory("(memory 1 65536 shared)"),
+        r#"(import "host" "grow" (func $grow_other (param i32) (result i32)))"#,
+        "(drop (call $grow_other (i32.const 1024)))",
+    );
+    if let Ok(runtime) = loaded {
+        let result = runtime.call_export("@repro/limits", "anything", b"{}");
+        assert_eq!(trap_kind(&result), "memory_limit_exceeded", "{result:?}");
+    }
+}
+
+#[specforge_test(
+    constraint = "wasm_memory_limit",
+    verify = "an extension cannot grow a table without bound"
+)]
+fn a_table_cannot_grow_without_bound() {
+    // A table declaring no maximum, grown by ten million entries at once.
+    let runtime = custom_guest(
+        "",
+        "(table $table 1 funcref)",
+        "(drop (table.grow $table (ref.null func) (i32.const 10000000)))",
+    )
+    .expect("the table guest instantiates");
+    let result = runtime.call_export("@repro/limits", "anything", b"{}");
+    assert_eq!(trap_kind(&result), "memory_limit_exceeded", "{result:?}");
+}
+
+#[specforge_test(
+    behavior = "enforce_wasm_sandbox",
+    verify = "an extension waiting on a timer is stopped instead of blocking the host"
+)]
+fn an_extension_waiting_on_a_timer_does_not_block_the_host() {
+    // The guest asks WASI for a 5 s timer and blocks on it. Epoch
+    // interruption only fires while guest code runs, so the wait itself
+    // must be refused.
+    let clock = r#"
+  (import "wasi:io/poll@0.2.0" (instance $poll
+    (export "pollable" (type (sub resource)))
+    (export "[method]pollable.block" (func (param "self" (borrow 0))))))
+  (alias export $poll "pollable" (type $pollable))
+  (import "wasi:clocks/monotonic-clock@0.2.0" (instance $clock
+    (alias outer 1 $pollable (type))
+    (export "pollable" (type (eq 0)))
+    (export "subscribe-duration" (func (param "when" u64) (result (own 1))))))
+  (core func $block (canon lower (func $poll "[method]pollable.block")))
+  (core func $subscribe (canon lower (func $clock "subscribe-duration")))
+  (core instance $host
+    (export "block" (func $block))
+    (export "subscribe" (func $subscribe)))"#;
+    let runtime = custom_guest(
+        clock,
+        r#"(import "host" "block" (func $block (param i32)))
+    (import "host" "subscribe" (func $subscribe (param i64) (result i32)))"#,
+        "(call $block (call $subscribe (i64.const 5000000000)))",
+    )
+    .expect("the sleeping guest instantiates");
+    runtime.apply_limits(
+        "@repro/limits",
+        Limits {
+            execution_ms: 100,
+            ..Limits::CEILING
+        },
+    );
+    let start = Instant::now();
+    let result = runtime.call_export("@repro/limits", "anything", b"{}");
+    let elapsed = start.elapsed();
+    assert!(!answered(&result), "the wait was not refused: {result:?}");
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "the call blocked the host for {elapsed:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "enforce_wasm_sandbox",
+    verify = "an extension that cannot be restarted after a trap is unloaded, and its next call says why"
+)]
+fn an_extension_that_cannot_restart_is_unloaded_with_its_reason() {
+    // 18 pages (over 1 MiB) at instantiation, which the 512 MB ceiling
+    // admits; under its 1 MB limit, the first growth traps and no fresh
+    // instance can start.
+    let runtime = guest_held_to(
+        1,
+        &second_memory("(memory 17)"),
+        r#"(import "host" "grow" (func $grow_other (param i32) (result i32)))"#,
+        "(drop (memory.grow (i32.const 1)))",
+    )
+    .expect("the guest instantiates under the ceiling");
+    let first = runtime.call_export("@repro/limits", "anything", b"{}");
+    assert_eq!(trap_kind(&first), "memory_limit_exceeded", "{first:?}");
+    assert!(
+        trap_message(&first).contains("could not be restarted"),
+        "{first:?}"
+    );
+    let next = runtime.call_export("@repro/limits", "anything", b"{}");
+    assert_eq!(trap_kind(&next), "extension_not_found", "{next:?}");
 }
