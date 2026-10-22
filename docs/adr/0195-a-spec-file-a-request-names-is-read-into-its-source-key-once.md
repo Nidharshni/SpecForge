@@ -1,6 +1,6 @@
 # A spec file a request names is read into its source key once
 
-**Status:** accepted (2026-10-21, architecture round 21, plan 04). Amended by round 22 plan 08 (2026-10-21): D8, a refusal names the file. Amends [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (D2: outline asks the view; its containment check is gone), [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D4 and [ADR 0104](0104-containment-is-applied-where-the-operation-opens-the-file.md) D4 (outline builds no bound) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (a create's file is read into its source key). Extends [ADR 0177](0177-a-reads-selection-is-checked-by-the-project-view.md) (the view checks what a request names: an entity, a selection, now a spec file).
+**Status:** accepted (2026-10-21, architecture round 21, plan 04). Amended by round 22 plan 08 (2026-10-21): D8, a refusal names the file. Amended by round 23 plan 02 (2026-10-22): D5 also refuses a new file's project-root spelling. Amends [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (D2: outline asks the view; its containment check is gone), [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D4 and [ADR 0104](0104-containment-is-applied-where-the-operation-opens-the-file.md) D4 (outline builds no bound) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (a create's file is read into its source key). Extends [ADR 0177](0177-a-reads-selection-is-checked-by-the-project-view.md) (the view checks what a request names: an entity, a selection, now a spec file).
 
 ## Context
 
@@ -31,7 +31,9 @@ and `nope.spec` included, where an unknown `entity_id` is refused; MCP outline f
   discovery would keep (`SourceRoot::holds`, which is now a predicate of a key: `./x.spec` is false).
 - **D5.** The spec root is the only base. A project-root spelling of an existing source (`spec/hello.spec` when the spec
   root is `spec/`) is refused, naming the spec-root key (`did you mean 'hello.spec'?`), instead of silently planning
-  `spec/spec/hello.spec`.
+  `spec/spec/hello.spec`. *(Round 23.)* So is the project-root spelling of a *new* file whose spec-root spelling repeats
+  the spec root as a directory no source is in (`spec/types/x.spec` for a new `types/x.spec`): `not_a_source`, naming the
+  spec-root key. A directory that already holds a source (a deliberate `spec/spec/`) is a place.
 - **D6.** `suggest_fixes` refuses a `file_path` that is no source, about `file_path` (`FixField { EntityId, FilePath }`),
   as it refuses an unknown `entity_id`. `fix::offers` keeps a plain key filter: the LSP passes its key.
 - **D7.** `ProjectChange`'s `debug_assert` against staging one file twice stays an invariant: no typed edit reaches it now.
@@ -47,6 +49,7 @@ and `nope.spec` included, where an unknown `entity_id` is refused; MCP outline f
 
 - Accepting the project-root spelling as an alias when the spec-root reading is no source (two spellings of one file by
   rule again) and refusing nothing (the silent `spec/spec/...` stays).
+- Normalizing the project-root spelling of a new file (strip the repeated prefix): a second spelling of one file by rule.
 - Answering `{"fixes":[]}` for a file that is no source (an agent cannot tell "no fix" from "wrong file").
 - Normalizing in each adapter; accepting a `..` that stays inside the spec root.
 - A new `EntityField::File` (eleven `ArgumentOf<EntityField>` impls would each grow an arm).
@@ -69,4 +72,4 @@ and `nope.spec` included, where an unknown `entity_id` is refused; MCP outline f
 
 ## What would reopen it
 
-A request argument that names a source-code path through this reader; Windows (keys use the OS separator, unverified).
+A project that needs a first file in a directory named like its spec root (then a flag, not a heuristic); a request argument that names a source-code path through this reader; Windows (keys use the OS separator, unverified).
