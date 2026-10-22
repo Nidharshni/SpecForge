@@ -340,3 +340,39 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
     let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(parsed["nodes"][0]["coverage_status"], "covered");
 }
+
+#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "export_agent_context_format",
+    verify = "context format lifts a headline field as its field text, whatever its written shape"
+)]
+fn context_lifts_a_headline_field_as_its_field_text() {
+    // `contract 2026-10-22`: a date, which a string field takes and format leaves as written.
+    let mut fields = FieldMap::new();
+    fields.push(
+        Sym::new("contract"),
+        FieldValue::Date("2026-10-22".to_string()),
+    );
+    let mut graph = Graph::new();
+    graph.add_node(Node {
+        id: EntityId { raw: Sym::new("b") },
+        kind: EntityKind {
+            raw: Sym::new("behavior"),
+        },
+        title: None,
+        fields,
+        source_span: span(),
+        methods: Vec::new(),
+        obligations: Vec::new(),
+    });
+    let registries = crate::support::headline_build(&["behavior"]);
+    let json = crate::export(
+        &graph,
+        specforge_emitter::EmitFormat::Context,
+        Some(&registries),
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let node = &parsed["nodes"][0];
+    assert_eq!(node["contract"], "2026-10-22", "{node}");
+    assert!(node.get("fields").is_none(), "lifted, not repeated: {node}");
+}

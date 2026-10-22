@@ -323,3 +323,29 @@ fn the_headline_and_the_fields_read_one_entry_of_a_field_written_twice() {
         serde_json::json!("first contract")
     );
 }
+
+#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "inspect_entity_facts",
+    verify = "an entity's headline is its headline field's text, whatever its written shape"
+)]
+fn an_entitys_headline_is_its_field_text_whatever_its_shape() {
+    let p = compile(
+        &["@specforge/software"],
+        &[("a.spec", crate::search::SHAPES)],
+    );
+    let view = ProjectView::of(&p.project);
+    let headline = |id| {
+        inspect(&view, id)
+            .unwrap()
+            .headline
+            .as_ref()
+            .map(ToString::to_string)
+    };
+    assert_eq!(headline("dated").as_deref(), Some("2026-10-22"));
+    assert_eq!(
+        headline("gated").as_deref(),
+        Some("latency < 10ms, errors == 0")
+    );
+    assert_eq!(headline("bare").as_deref(), Some("widget"));
+}
