@@ -69,7 +69,7 @@ fn print_human(review: &Review, terminal: &Terminal) {
             "{}  {}  {}  {}/{} proven",
             row.entity_id,
             row.kind,
-            STATUS.name_of(row.status()),
+            STATUS.name_of(row.status),
             row.verdict.proven,
             row.verdict.obligations
         );

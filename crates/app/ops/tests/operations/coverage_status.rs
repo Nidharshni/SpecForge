@@ -7,6 +7,7 @@ use specforge_ops::read::coverage::{CoverageQuery, coverage};
 use specforge_ops::read::inspect::inspect;
 use specforge_ops::read::query::{QueryRequest, query};
 use specforge_project::coverage::Status;
+use specforge_test::prelude::*;
 
 use crate::view_support::{Assembled, Viewed, answered, registries_with, row};
 
@@ -37,8 +38,10 @@ const WRITTEN: [(&str, &str); 4] = [
     ("signin", "not_testable"),
 ];
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "a row's status is exempt or not_testable for an entity that does not count, and otherwise how its obligations are proven"
+)]
 fn a_coverage_row_says_whether_its_entity_counts() {
     let project = standings();
     let view = project.view();
@@ -49,8 +52,10 @@ fn a_coverage_row_says_whether_its_entity_counts() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "a status filter selects the entities of that status, with or without an entity_id"
+)]
 fn a_status_filter_selects_the_same_rows_with_or_without_an_entity_id() {
     let project = standings();
     let view = project.view();
@@ -85,8 +90,10 @@ fn a_status_filter_selects_the_same_rows_with_or_without_an_entity_id() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "inspect_entity_facts",
+    verify = "an entity's coverage status is its coverage row's: whether it counts, then how it is proven"
+)]
 fn inspect_writes_the_status_its_coverage_row_writes() {
     let project = standings();
     let view = project.view();
@@ -94,15 +101,17 @@ fn inspect_writes_the_status_its_coverage_row_writes() {
         let facts = inspect(&view, id).unwrap();
         let coverage = specforge_ops::read::inspect::coverage(&view, &facts).unwrap();
         assert_eq!(
-            serde_json::to_value(coverage.status()).unwrap(),
+            serde_json::to_value(coverage.status).unwrap(),
             status,
             "{id}"
         );
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "--include-coverage gives an entity that does not count the status that says why"
+)]
 fn a_query_with_coverage_writes_the_status_that_says_whether_it_counts() {
     let project = standings();
     for (id, status) in WRITTEN {

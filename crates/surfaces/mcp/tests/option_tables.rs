@@ -278,7 +278,7 @@ fn coverage_and_find_references_refuse_with_the_table_wording() {
     assert_eq!(error["argument"], "status_filter", "{error}");
     assert_eq!(
         error["message"],
-        "Unknown coverage status: coverd. Expected: covered, partial, uncovered"
+        "Unknown coverage status: coverd. Expected: covered, partial, uncovered, exempt, not_testable"
     );
     assert_eq!(error["data"]["suggestion"], "did you mean 'covered'?");
 

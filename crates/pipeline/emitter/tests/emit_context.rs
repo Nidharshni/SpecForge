@@ -320,14 +320,7 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
         "behavior",
         vec![field("coverage_status", false, true)],
     )]);
-    let verdicts = BTreeMap::from([(
-        "b".to_string(),
-        specforge_coverage::Verdict {
-            obligations: 1,
-            proven: 1,
-            ..Default::default()
-        },
-    )]);
+    let verdicts = BTreeMap::from([("b".to_string(), specforge_coverage::Status::Covered)]);
     let emit = |coverage| {
         specforge_emitter::emit(
             &graph,

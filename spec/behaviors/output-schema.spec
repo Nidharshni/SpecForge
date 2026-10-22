@@ -501,8 +501,8 @@ behavior publish_schema_specification "Publish Schema Specification" {
     exactly by SpecForge's own. An export of a project whose check reports
     no error MUST validate against the published schema of its format.
     Each format's document has its own $id.
-    A node of every format MAY carry coverage_status (covered, partial
-    or uncovered), the status a query with coverage gives each entity;
+    A node of every format MAY carry coverage_status (covered, partial,
+    uncovered, exempt or not_testable), the status a query with coverage gives each entity;
     the published schema of every format admits it.
     The published schema describes the export format --format names
     (graph, context or brief; json is graph). --format applies only with

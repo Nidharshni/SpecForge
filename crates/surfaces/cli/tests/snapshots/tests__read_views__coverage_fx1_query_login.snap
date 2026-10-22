@@ -33,7 +33,7 @@ expression: "normalized(&result, root)"
       ]
     },
     {
-      "coverage_status": "uncovered",
+      "coverage_status": "not_testable",
       "fields": {
         "problem": "Users cannot reach their data",
         "solution": "Let them log in"

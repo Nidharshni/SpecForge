@@ -98,9 +98,9 @@ fn inspected(server: &mut McpServer, id: &str) -> Value {
 
 #[specforge_test(
     behavior = "provide_mcp_inspect_tool",
-    verify = "exempt says the entity does not count toward coverage, as specforge.coverage's row says"
+    verify = "coverage_status says whether the entity counts, as specforge.coverage's row says"
 )]
-fn inspect_exempt_is_the_coverage_rows() {
+fn inspect_coverage_status_is_the_coverage_rows() {
     let mut server = standings_server();
     let mut exempt = Vec::new();
     for id in STANDING_IDS {
@@ -108,18 +108,18 @@ fn inspect_exempt_is_the_coverage_rows() {
         let resp = call_tool(&mut server, "specforge.coverage", json!({"entity_id": id}));
         let rows = tool_json(&resp)["entities"].clone();
         let row = &rows.as_array().unwrap_or_else(|| panic!("{rows}"))[0];
-        assert_eq!(inspect["exempt"], row["exempt"], "{id}");
-        exempt.push((id, inspect["exempt"].as_bool().unwrap()));
+        assert_eq!(inspect["coverage_status"], row["status"], "{id}");
+        exempt.push((id, inspect["coverage_status"].clone()));
     }
     assert_eq!(
         exempt,
         [
-            ("alpha", false),
-            ("beta_feature", false),
-            ("gamma_orphan", false),
-            ("free_one", true),
-            ("Choice", true),
-            ("thing", false),
+            ("alpha", json!("uncovered")),
+            ("beta_feature", json!("not_testable")),
+            ("gamma_orphan", json!("uncovered")),
+            ("free_one", json!("exempt")),
+            ("Choice", json!("exempt")),
+            ("thing", json!("not_testable")),
         ]
     );
 }
@@ -139,8 +139,8 @@ fn inspect_obligated_follows_the_rule_set() {
     // A union of a kind no rule obligates: exempt, and why.
     let choice = inspected(&mut server, "Choice");
     assert_eq!(
-        (&choice["exempt"], &choice["obligated"]),
-        (&json!(true), &json!(false))
+        (&choice["coverage_status"], &choice["obligated"]),
+        (&json!("exempt"), &json!(false))
     );
     assert_eq!(
         inspected(&mut server, "free_one")["obligated"],

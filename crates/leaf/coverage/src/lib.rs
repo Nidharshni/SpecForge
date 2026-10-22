@@ -263,7 +263,7 @@ impl Verdict {
 
     /// How the verdict proves a counted entity's obligations:
     /// [`Counting::status`]'s answer for one that counts.
-    pub fn status(&self) -> Status {
+    pub(crate) fn status(&self) -> Status {
         if self.is_proven() {
             Status::Covered
         } else if self.proven > 0 || self.failing > 0 {

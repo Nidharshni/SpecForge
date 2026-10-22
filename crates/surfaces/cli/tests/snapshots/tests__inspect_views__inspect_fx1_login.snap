@@ -27,7 +27,6 @@ expression: "normalized(result, root)"
     }
   ],
   "entity_id": "login",
-  "exempt": false,
   "fields": {
     "contract": "The system MUST let a known user log in",
     "features": [

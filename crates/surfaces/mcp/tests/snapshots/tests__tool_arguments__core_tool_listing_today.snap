@@ -1925,11 +1925,13 @@ expression: listing
           "type": "string"
         },
         "status_filter": {
-          "description": "Only entities with this coverage status: covered: every obligation proven; partial: some obligations proven; uncovered: none proven",
+          "description": "Only entities with this coverage status: covered: every obligation proven; partial: some obligations proven; uncovered: none proven; exempt: does not count: a testable kind, owing and declaring no obligations; not_testable: does not count: its kind is not testable",
           "enum": [
             "covered",
             "partial",
-            "uncovered"
+            "uncovered",
+            "exempt",
+            "not_testable"
           ],
           "type": "string"
         }
@@ -1950,9 +1952,6 @@ expression: listing
                 "type": "string"
               },
               "evidence_collected": {
-                "type": "boolean"
-              },
-              "exempt": {
                 "type": "boolean"
               },
               "kind": {
@@ -1995,8 +1994,7 @@ expression: listing
               "evidence_collected",
               "obligations",
               "proven",
-              "unproven",
-              "exempt"
+              "unproven"
             ],
             "type": "object"
           },
@@ -2531,9 +2529,6 @@ expression: listing
         "entity_id": {
           "type": "string"
         },
-        "exempt": {
-          "type": "boolean"
-        },
         "fields": {
           "additionalProperties": {
             "$ref": "#/$defs/FieldJson"
@@ -2582,7 +2577,6 @@ expression: listing
         "kind",
         "testable",
         "declared",
-        "exempt",
         "obligated",
         "source_span",
         "fields",

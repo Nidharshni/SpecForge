@@ -63,7 +63,6 @@ expression: "normalized(result, root)"
     }
   ],
   "entity_id": "logout",
-  "exempt": false,
   "fields": {
     "contract": "The system MUST end the session on logout"
   },

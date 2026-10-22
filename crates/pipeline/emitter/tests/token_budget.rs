@@ -347,18 +347,9 @@ fn a_budget_counts_each_nodes_coverage_status() {
     use std::collections::BTreeMap;
 
     let graph = build_hub_graph();
-    let verdicts: BTreeMap<String, specforge_coverage::Verdict> = HUB_DEGREES
+    let verdicts: BTreeMap<String, specforge_coverage::Status> = HUB_DEGREES
         .iter()
-        .map(|(id, _)| {
-            (
-                id.to_string(),
-                specforge_coverage::Verdict {
-                    obligations: 1,
-                    proven: 1,
-                    ..Default::default()
-                },
-            )
-        })
+        .map(|(id, _)| (id.to_string(), specforge_coverage::Status::Covered))
         .collect();
     let plain = specforge_emitter::emit(&graph, &EmitOptions::default()).unwrap();
     let budget = estimate_tokens(&plain);

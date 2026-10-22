@@ -196,9 +196,6 @@ type McpInspectResult "Mcp Inspect Result" {
   testable            boolean
   /// The entity declares at least one verify obligation.
   declared            boolean
-  /// Testable, but it owes no obligations and declares none: it does not
-  /// count toward coverage (specforge.coverage's row says the same).
-  exempt              boolean
   /// Its kind must declare obligations (a no_verify_statements rule targets
   /// it): why an exempt entity is exempt.
   obligated           boolean
@@ -215,6 +212,8 @@ type McpInspectResult "Mcp Inspect Result" {
   refers_to           string[]
   /// Its verify texts; absent when it declares none.
   verify_declarations string[]   @optional
+  /// Whether the entity counts (exempt, not_testable) and, when it does, how
+  /// it is proven, as specforge.coverage's row says.
   coverage_status     CoverageStatus
   /// The diagnostics about the entity, as specforge.validate reports them.
   diagnostics         Diagnostic[]
@@ -541,6 +540,7 @@ type McpCoverageResults "P2 compliance: CoverageStatus is a structural computati
 type McpCoverageResult "Mcp Coverage Result" {
   entity_id          string @readonly
   kind               string @readonly
+  /// Whether the entity counts (exempt, not_testable) and, when it does, how it is proven.
   status             CoverageStatus
   declared           boolean
   linked             boolean
@@ -552,8 +552,6 @@ type McpCoverageResult "Mcp Coverage Result" {
   proven             integer
   /// Verify texts no passing recorded test names, in declaration order.
   unproven           string[]
-  /// A testable-kind entity that owes no obligations and declares none (W004 exempts it).
-  exempt             boolean
   verify unit "McpCoverageResult schema is valid"
 }
 

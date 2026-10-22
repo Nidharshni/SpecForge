@@ -356,7 +356,7 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
   }
   ensures {
     rows_are_what_counts "With no filter, the rows are the entities that count toward coverage"
-    status_by_the_rule   "A row's status is the coverage rule's verdict over the recorded report"
+    status_by_the_rule   "A row's status is the coverage rule's: whether the entity counts, then its verdict over the recorded report"
   }
   contract   """
     The coverage view MUST give each entity a row: its obligation count, its
@@ -365,7 +365,10 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
     analyze coverage applies: an entity is covered only when every
     obligation is proven and no recorded test fails, so it is never covered
     while analyze reports A015 or A014; it is partial when some obligation is
-    proven or a recorded test fails, else uncovered. A failing test proves
+    proven or a recorded test fails, else uncovered; an entity that does not
+    count is exempt (its kind is testable, and it owes and declares no
+    obligations) or not_testable (its kind is not testable), whatever its
+    tests prove. A failing test proves
     nothing, even when it names an obligation. A verify property obligation
     counts as proven only through a passing test, as in analyze coverage
     without --prove. The obligations are the entity's verify statements; a
@@ -376,13 +379,16 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
     declare testable, less the entities W004 exempts that declare no
     obligations (union types, abstract entities, governance kinds), the
     entities stats counts as testable. An entity_id names one entity
-    whether it counts or not; each row says whether the entity is exempt;
-    one the graph lacks is E003 naming the closest entity.
-    kind and status narrow the rows, with an entity_id too; a kind the
-    project does not know matches nothing and is an I020 notice.
+    whether it counts or not; its status says whether it does; one the
+    graph lacks is E003 naming the closest entity.
+    kind narrows the rows, with an entity_id too; status selects the
+    entities of that status, named or not; a kind the project does not
+    know matches nothing and is an I020 notice.
   """
   verify unit "with no filters the rows are the entities that count toward coverage"
-  verify unit "an exempt entity named by entity_id is returned with exempt true"
+  verify unit "an entity that does not count, named by entity_id, is returned with the status that says why"
+  verify unit "a row's status is exempt or not_testable for an entity that does not count, and otherwise how its obligations are proven"
+  verify unit "a status filter selects the entities of that status, with or without an entity_id"
   verify unit "an entity_id the graph lacks is E003 naming the closest entity"
   verify unit "an unknown kind matches nothing and is an I020 notice; kind narrows an entity_id's row as status does"
   verify unit "an entity with an unproven obligation is partial, not covered"
@@ -479,11 +485,12 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
     headline statement, its standing and obligations, its references in both
     directions, and the diagnostics about it: those its data names it in,
     else those inside its block, never one whose message merely quotes it or
-    whose id contains its id. Its coverage is the coverage view's verdict for
-    its row. An entity the graph lacks is E003, entity_not_found, naming the
+    whose id contains its id. Its coverage is the coverage view's verdict and
+    status for its row. An entity the graph lacks is E003, entity_not_found, naming the
     closest entity.
   """
   verify unit "an entity's coverage is its coverage row's verdict, obligation by obligation"
+  verify unit "an entity's coverage status is its coverage row's: whether it counts, then how it is proven"
   verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
   verify unit "an unknown entity is E003, entity_not_found"
   verify unit "an entity's headline and its fields read the one entry of a field written twice"
@@ -1323,7 +1330,8 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
     Kind names are extension-defined; examples use placeholders.
     --format selects an agent format (graph, context, brief) and
     --include-coverage gives each entity its coverage status
-    (coverage_status: covered, partial or uncovered), written by the
+    (coverage_status: covered, partial or uncovered for an entity that
+    counts, exempt or not_testable for one that does not), written by the
     export itself, last in each entity. The output MUST be the export of
     the entity's subgraph under the export schema policy: valid JSON
     conforming to the published Graph Protocol schema of its format, with
@@ -1344,6 +1352,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "an unknown --kind is reported with I020 and the closest kind"
   verify unit "a non-existent entity is E003 naming the closest entity"
   verify unit "--include-coverage gives each entity its coverage status"
+  verify unit "--include-coverage gives an entity that does not count the status that says why"
   verify unit "output conforms to Graph Protocol schema"
   verify unit "a query with --include-coverage validates against the published schema of its format"
   verify unit "output includes schema_version field"

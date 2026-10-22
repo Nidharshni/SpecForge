@@ -376,7 +376,7 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
     that accepts entity_id? (optional, single entity; one the graph lacks is an
     entity_not_found error on entity_id, E003), kind? (optional, filter
     by entity kind; an unknown kind is an I-level diagnostic in the response
-    metadata, as specforge.search reports it), and status_filter? (optional: covered|uncovered|partial).
+    metadata, as specforge.search reports it), and status_filter? (optional: covered|partial|uncovered|exempt|not_testable).
     The tool MUST return the coverage view's rows (compute_the_coverage_view)
     as an object whose entities are the rows.
     A specforge-report.json that exists but cannot be read or parsed MUST be
@@ -384,7 +384,7 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
     it is never read as a project with no recorded tests. A report the
     system refuses to read is permission_denied, on this tool and every tool
     that reads it.
-    A status_filter other than covered, uncovered or partial MUST be an
+    A status_filter other than these MUST be an
     invalid-input error on status_filter naming the closest status.
   """
   verify unit "the result is an object holding the rows as entities"
@@ -460,9 +460,9 @@ behavior provide_mcp_inspect_tool "Provide MCP Inspect Tool" {
     coverage status, and related diagnostics. Its testable field is the
     testability of the entity's kind, the standing the LSP hover shows; a
     separate declared field says whether the entity declares at least one
-    verify obligation, and exempt whether its kind is testable but it owes
-    no obligations and declares none, so it does not count toward
-    coverage (specforge.coverage's row says the same). obligated says
+    verify obligation, and its coverage status whether it counts toward
+    coverage (exempt, not_testable) and, when it does, how it is proven,
+    as specforge.coverage's row says. obligated says
     whether its kind must declare obligations (a no_verify_statements rule
     targets it), the reason an exempt entity is exempt. source_extension
     names the extension that declares its kind, absent when no loaded
@@ -491,7 +491,7 @@ behavior provide_mcp_inspect_tool "Provide MCP Inspect Tool" {
   verify unit "diagnostics are the entity's own, not those of an entity whose ID contains it"
   verify unit "a spanless diagnostic belongs to the entities its data names, never to one its message quotes"
   verify unit "testable is the kind's testability and declared says whether the entity has obligations"
-  verify unit "exempt says the entity does not count toward coverage, as specforge.coverage's row says"
+  verify unit "coverage_status says whether the entity counts, as specforge.coverage's row says"
   verify unit "obligated says whether the entity's kind must declare obligations"
   verify unit "source_extension names the extension that declares the entity's kind"
   verify contract "Provide MCP Inspect Tool: MCP inspect tool holds — graph_available, entity_details_returned, tool_invoked_emitted"

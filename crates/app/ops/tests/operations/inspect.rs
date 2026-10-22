@@ -66,9 +66,8 @@ fn standing_is_the_coverage_views() {
     for id in IDS {
         let standing = standing(&view, id);
         let row = row(&view, id);
-        assert_eq!(standing.testable, row.testable, "{id}");
-        assert_eq!(standing.exempt(), row.exempt, "{id}");
-        assert_eq!(standing.counts(), row.testable && !row.exempt, "{id}");
+        assert_eq!(standing.status(&row.verdict), row.status, "{id}");
+        assert_eq!(standing.counts(), row.status.counts(), "{id}");
     }
     assert_eq!(shape(&view, "ob"), (true, true, false));
     assert_eq!(shape(&view, "fr"), (true, false, true));
@@ -92,7 +91,7 @@ fn coverage_is_the_coverage_rows_verdict() {
     assert_eq!(coverage.verdict, row.verdict);
     assert_eq!(coverage.verdict.obligations, 2);
     assert_eq!(coverage.verdict.proven, 1);
-    assert_eq!(coverage.status(), Status::Partial);
+    assert_eq!(coverage.status, Status::Partial);
     assert!(facts.standing.declares_obligations());
     assert_eq!(facts.standing.declares_obligations(), row.declared());
     assert!(coverage.recorded);
@@ -105,7 +104,7 @@ fn without_a_report_the_coverage_is_unrecorded() {
     let facts = inspect(&view, "done").unwrap();
     let coverage = specforge_ops::read::inspect::coverage(&view, &facts).unwrap();
     assert!(!coverage.recorded);
-    assert_eq!(coverage.status(), Status::Uncovered);
+    assert_eq!(coverage.status, Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
     assert!(facts.standing.declares_obligations());
     assert!(

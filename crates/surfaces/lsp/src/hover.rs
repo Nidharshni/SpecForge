@@ -264,7 +264,7 @@ fn coverage_line(
     let verdict = &coverage.verdict;
     let mut line = format!(
         "`{}` · {}/{} obligations proven",
-        specforge_ops::read::coverage::STATUS.name_of(coverage.status()),
+        specforge_ops::read::coverage::STATUS.name_of(coverage.status),
         verdict.proven,
         verdict.obligations
     );

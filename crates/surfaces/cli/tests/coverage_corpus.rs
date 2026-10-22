@@ -318,7 +318,7 @@ fn assert_mcp_coverage_rows_are_what_stats_counts(served: &mut Served) {
             .as_array()
             .unwrap()
             .iter()
-            .all(|row| row["exempt"] == false)
+            .all(|row| row["status"] != "exempt" && row["status"] != "not_testable")
     );
     let proven = analyze_coverage(served.project())["summary"]["testable_proven"].clone();
     assert_eq!(

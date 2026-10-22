@@ -251,7 +251,7 @@ fn assert_hover_and_inspect_agree(served: &mut Served, file: &str) {
                 inspect["testable"] == false && inspect["declared"] == false,
                 "{id}: a hover without coverage\n{hover}"
             ),
-            Some(line) if inspect["exempt"] == true => {
+            Some(line) if inspect["coverage_status"] == "exempt" => {
                 let reason = if inspect["obligated"] == true {
                     "exempt: it owes none (a union or an exempting field)"
                 } else {

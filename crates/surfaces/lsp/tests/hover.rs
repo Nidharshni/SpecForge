@@ -349,7 +349,7 @@ fn hover_shows_each_coverage_case() {
         (
             "doc",
             Some(
-                "**Coverage** · `uncovered` · 0/1 obligations proven · 0 tests · \
+                "**Coverage** · `not_testable` · 0/1 obligations proven · 0 tests · \
                  its kind is not testable, so it does not count",
             ),
         ),
@@ -366,7 +366,7 @@ fn hover_shows_each_coverage_case() {
             let status = specforge_ops::read::coverage::STATUS.name_of(
                 specforge_ops::read::inspect::coverage(&state.view(), &facts)
                     .unwrap()
-                    .status(),
+                    .status,
             );
             assert!(expected.contains(&format!("`{status}`")), "{id}");
         }

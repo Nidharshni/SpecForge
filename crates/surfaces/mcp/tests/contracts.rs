@@ -850,7 +850,6 @@ fn contract_coverage() {
             "obligations": 1,
             "proven": 0,
             "unproven": ["works"],
-            "exempt": false,
         }])
     );
 
@@ -889,7 +888,7 @@ fn contract_coverage() {
         json!({"entity_id": "beta"}),
     )["entities"]
         .clone();
-    assert_eq!(beta[0]["exempt"], true, "{beta}");
+    assert_eq!(beta[0]["status"], "exempt", "{beta}");
     assert_eq!(beta[0]["obligations"], 0);
     // Once a rule obliges features to declare obligations, beta counts.
     let mut server = contracts_project().serve(&[testable_feature.obligating("feature")]);
@@ -897,7 +896,6 @@ fn contract_coverage() {
     let beta = find(&coverage, "entity_id", "beta");
     assert_eq!(beta["obligations"], 0);
     assert_eq!(beta["status"], "uncovered");
-    assert_eq!(beta["exempt"], false);
 
     assert_tool_invoked(&server, "specforge.coverage");
 }
