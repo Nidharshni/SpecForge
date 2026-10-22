@@ -43,11 +43,7 @@ impl Args {
         QueryRequest {
             entity_id: &self.entity,
             depth: Some(self.depth),
-            kinds: self
-                .kinds
-                .iter()
-                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
-                .collect(),
+            kinds: specforge_ops::view::kinds_of_texts(&self.kinds).collect(),
             format: Some(self.format),
             include_coverage: self.include_coverage,
         }

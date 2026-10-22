@@ -66,11 +66,7 @@ impl Args {
             format: Some(self.format),
             scope: self.scope.as_deref(),
             depth: self.depth,
-            kinds: self
-                .kinds
-                .iter()
-                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
-                .collect(),
+            kinds: specforge_ops::view::kinds_of_texts(&self.kinds).collect(),
             max_tokens: self.max_tokens,
             // context, brief and a budgeted graph export leave the schema
             // out unless asked for it (the policy lives in specforge-ops).

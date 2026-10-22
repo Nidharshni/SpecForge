@@ -37,7 +37,7 @@ use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
 
 pub use connectivity::Connectivity;
 pub use entity::{DEPTH_WITHOUT_ENTITY, EntityField, not_found};
-pub use kinds::{KindFilter, KnownKinds, UNKNOWN_KIND, kinds_of_text};
+pub use kinds::{KindFilter, KnownKinds, UNKNOWN_KIND, kinds_of_text, kinds_of_texts};
 pub use selection::{Entity, Select, Selection};
 pub use source_file::NOT_A_SOURCE;
 

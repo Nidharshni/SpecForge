@@ -62,10 +62,7 @@ impl Args {
             group_by: self.group_by,
             fields: self.fields,
             extension: self.extension.clone(),
-            kinds: self
-                .kinds
-                .iter()
-                .flat_map(|text| specforge_ops::view::kinds_of_text(text))
+            kinds: specforge_ops::view::kinds_of_texts(&self.kinds)
                 .map(str::to_string)
                 .collect(),
             // clap's `requires` refuses a depth without a root first; the reading is the operation's.
