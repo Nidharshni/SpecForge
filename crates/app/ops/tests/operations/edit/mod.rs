@@ -20,6 +20,7 @@ mod replay;
 mod sides;
 mod skeleton;
 mod statements;
+mod unions;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};
