@@ -224,17 +224,15 @@ impl Syntax {
             .is_some_and(|f| self.frames[f as usize].kind == FrameKind::Entity)
     }
 
-    /// The entity kind (its keyword's text) a frame's entity has; a `defaults` header's kind is the name it gives
-    /// (ADR 0149).
+    /// The kind a frame's entity body is read as (`structural::body_kind`, ADR 0224): its keyword, or the kind a
+    /// `defaults` header names.
     pub(crate) fn kind_of_frame<'t>(&self, text: &'t str, frame: u32) -> Option<&'t str> {
         let header = self.headers[self.frames[frame as usize].header? as usize];
-        let kind = self.text(text, header.kind);
-        match header.name {
-            Some(name) if kind == specforge_common::structural::DEFAULTS => {
-                Some(self.text(text, name))
-            }
-            _ => Some(kind),
-        }
+        let name = header.name.map(|name| self.text(text, name));
+        Some(specforge_common::structural::body_kind(
+            self.text(text, header.kind),
+            name,
+        ))
     }
 
     /// The kind a field (its key lexeme) belongs to, when the field is in
