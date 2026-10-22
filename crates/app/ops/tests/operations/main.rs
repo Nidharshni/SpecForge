@@ -45,6 +45,7 @@ mod infer_sources;
 mod init_enclosing;
 mod init_specifiers;
 mod init_starter;
+mod init_values;
 mod init_writes;
 mod inspect;
 mod kinds;

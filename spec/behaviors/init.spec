@@ -137,6 +137,8 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
   verify unit "the starter spec's version is the project's"
   verify integration "a freshly initialised project passes format --check and check"
   verify unit "init writes the starter's values in the forms of the fields the extensions it enables declare"
+  verify unit "init writes the project's version into its starter as one string the starter reads back, whatever the version holds"
+  verify unit "init refuses a starter that does not parse, naming the extension whose template it is, before anything is written"
   verify contract "Scaffold Starter Spec File: starter spec file scaffolding holds — config_created, filesystem_available, starter_file_created, structural_syntax_only, zero_diagnostic_pass"
 }
 
