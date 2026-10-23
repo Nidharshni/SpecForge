@@ -27,9 +27,30 @@ pub fn repo_root() -> &'static Path {
                 here.display()
             )
         });
-        root.canonicalize()
-            .unwrap_or_else(|e| panic!("{}: {e}", root.display()))
+        let root = root
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("{}: {e}", root.display()));
+        if let Some(running) = std::env::var_os("CARGO_MANIFEST_DIR") {
+            assert!(
+                !runs_in_another_checkout(&root, Path::new(&running)),
+                "specforge-repo-root was built under {} but runs for {}: the shared target \
+                 directory is stale, touch crates/leaf/repo-root/src/lib.rs and rebuild",
+                root.display(),
+                running.to_string_lossy(),
+            );
+        }
+        root
     })
+}
+
+/// Whether `running` (the manifest directory cargo sets for the process that runs now) sits in
+/// a workspace other than `baked`, the root this crate was compiled under.
+fn runs_in_another_checkout(baked: &Path, running: &Path) -> bool {
+    running
+        .ancestors()
+        .find(|dir| declares_workspace(&dir.join("Cargo.toml")))
+        .and_then(|dir| dir.canonicalize().ok())
+        .is_some_and(|actual| actual != baked)
 }
 
 /// The nearest ancestor of `dir`, `dir` excluded, whose `Cargo.toml` has a `[workspace]` table.
@@ -61,6 +82,21 @@ mod tests {
         assert!(root.join("crates").is_dir(), "{}", root.display());
         assert!(root.is_absolute());
         assert_eq!(root, root.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn a_target_built_under_another_checkout_is_stale() {
+        let here = repo_root();
+        let other = tempfile::TempDir::new().unwrap();
+        std::fs::write(other.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+        let member = other.path().join("crates/x");
+        std::fs::create_dir_all(&member).unwrap();
+        assert!(runs_in_another_checkout(here, &member));
+        assert!(!runs_in_another_checkout(
+            here,
+            &here.join("crates/leaf/repo-root")
+        ));
+        assert!(!runs_in_another_checkout(here, here));
     }
 
     #[test]
