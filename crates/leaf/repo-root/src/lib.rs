@@ -43,14 +43,14 @@ pub fn repo_root() -> &'static Path {
     })
 }
 
-/// Whether `running` (the manifest directory cargo sets for the process that runs now) sits in
-/// a workspace other than `baked`, the root this crate was compiled under.
+/// Whether `running` (the manifest directory cargo sets for the process that runs now) lies
+/// outside `baked`, the root this crate was compiled under. A nested workspace such as
+/// `integrations/rust` is inside it.
 fn runs_in_another_checkout(baked: &Path, running: &Path) -> bool {
-    running
-        .ancestors()
-        .find(|dir| declares_workspace(&dir.join("Cargo.toml")))
-        .and_then(|dir| dir.canonicalize().ok())
-        .is_some_and(|actual| actual != baked)
+    let running = running
+        .canonicalize()
+        .unwrap_or_else(|_| running.to_path_buf());
+    !running.starts_with(baked)
 }
 
 /// The nearest ancestor of `dir`, `dir` excluded, whose `Cargo.toml` has a `[workspace]` table.
