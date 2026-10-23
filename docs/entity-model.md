@@ -289,7 +289,7 @@ become typed graph edges), `required` (E006 enforcement), and
 prose (a behavior's `contract`, an invariant's `guarantee`, a decision's
 `decision`): `specforge export --format context` keeps normative fields and
 drops the rest, without core knowing any field by name. `headline=true`
-lifts the field to the context node's top level (a behavior's `contract`, a
+lifts the field, as its field text, to the context node's top level (a behavior's `contract`, a
 feature's `status`), and `exempts_obligations=true` makes an entity that sets
 it owe no `verify` obligations (formal's `abstract true`; W004, coverage and
 stats leave it out). An entity kind may declare `contract_target` (references

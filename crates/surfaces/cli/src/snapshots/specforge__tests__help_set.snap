@@ -21,7 +21,7 @@ Options:
           Change the header title instead of a field
 
       --annotation <NAME[=VALUE]>
-          An annotation to write after the value (`readonly`, `since=1.2`); replaces the field's
+          An annotation to write after the value: `NAME` (`readonly`), or `NAME=VALUE`, written `@NAME "VALUE"`; replaces the field's
 
       --dry-run
           Print the diff and write nothing

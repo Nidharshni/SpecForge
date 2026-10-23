@@ -1,7 +1,8 @@
-//! How a value is spelled in `.spec` text (ADR 0147, ADR 0153): the one escape table, the one rule for when a
-//! value may stand bare, and each declared type's one-line spelling. `FieldForms::rewrite` (format's rewrite and
-//! W159), the typed-edit writer, migrate's `titles` step and W159's message read it; nothing else quotes a value. It also says where a
-//! quoted value writes the id it reads ([`id_span`]).
+//! How a value is spelled in `.spec` text (ADR 0147, ADR 0153): the one escape table ([`escaped`], [`quoted`]), the
+//! one rule for when a value may stand bare, and each declared type's one-line spelling. `FieldForms::rewrite`
+//! (format's rewrite and W159), the typed-edit writer and create, migrate's `titles` step, W159's message and init's
+//! starter read it; nothing else quotes a value. It also says where a quoted value writes the id it reads
+//! ([`id_span`]).
 
 use specforge_common::SourceSpan;
 use specforge_parser::Written;
@@ -10,11 +11,10 @@ use specforge_protocol_types::FieldType;
 
 use super::{FieldForm, is_word};
 
-/// `text` as a one-line `"…"`: `\`, `"`, line feed, tab and carriage return escaped, every other character as
-/// it is. The parser's string reading gives `text` back.
-pub fn quoted(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
+/// `text` as the inside of a one-line `"…"`: `\`, `"`, line feed, tab and carriage return escaped, every other
+/// character as it is. What a template writes between quotes; [`quoted`] is this between two `"`.
+pub fn escaped(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
             '\\' => out.push_str("\\\\"),
@@ -25,8 +25,12 @@ pub fn quoted(text: &str) -> String {
             c => out.push(c),
         }
     }
-    out.push('"');
     out
+}
+
+/// `text` as a one-line `"…"`: [`escaped`] between quotes. The parser's string reading gives `text` back.
+pub fn quoted(text: &str) -> String {
+    format!("\"{}\"", escaped(text))
 }
 
 /// Where a value written `written` at `span` writes the id `id` it reads (ADR 0218): one byte inside each quote of a

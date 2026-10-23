@@ -1,6 +1,6 @@
 # A declaration's name is where the parse read it
 
-**Status:** accepted (2026-10-21, architecture round 20, plan 04). Amends [ADR 0016](0016-navigation-is-one-module.md) D3 (a declaration's `Precision::Entity` is never a matter of layout), [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) D1 (the cases in which a declaration answers `Entity` are listed) and [ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md) (scope: a declaration's name is read from the same parses, by navigation). Amended by round 21 plan 03 (2026-10-21): D4 (the title too), D5 (reversed), Rejected (spans on verify statements).
+**Status:** accepted (2026-10-21, architecture round 20, plan 04). Amends [ADR 0016](0016-navigation-is-one-module.md) D3 (a declaration's `Precision::Entity` is never a matter of layout), [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) D1 (the cases in which a declaration answers `Entity` are listed) and [ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md) (scope: a declaration's name is read from the same parses, by navigation). Amended by round 21 plan 03 (2026-10-21): D4 (the title too), D5 (reversed), Rejected (spans on verify statements). Its titles-step amendment extended by [ADR 0225](0225-untitled-is-one-answer.md): a blank title is written over where the parse read it.
 
 ## Context
 

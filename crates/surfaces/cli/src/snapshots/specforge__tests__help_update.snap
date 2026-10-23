@@ -26,7 +26,7 @@ Options:
           Allow new major versions (otherwise each extension stays within its locked version's caret range); an update never moves an extension to a lower version
 
       --allow-unsigned
-          Accept unsigned packages (publisher verification skipped)
+          Accept a package with no publisher signature, when no key is pinned or locked for its name
 
       --yes
           Accept key changes non-interactively (for CI)

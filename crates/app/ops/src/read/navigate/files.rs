@@ -4,7 +4,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::Node;
+use specforge_graph::{MethodJson, Node};
 
 use super::Navigator;
 use crate::OpError;
@@ -104,30 +104,15 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Result<Vec<OutlineEntry>, OpE
             let mut children: Vec<OutlineMethod> = node
                 .methods
                 .iter()
-                .map(|method| {
-                    let params: Vec<String> = method
-                        .params
-                        .iter()
-                        .map(|p| {
-                            let optional = if p.optional { "?" } else { "" };
-                            format!("{}{optional}: {}", p.name, p.ty)
-                        })
-                        .collect();
-                    let returns = method
-                        .returns
-                        .as_ref()
-                        .map(|r| format!(" -> {r}"))
-                        .unwrap_or_default();
-                    OutlineMethod {
-                        name: method.name.clone(),
-                        signature: format!("{}({}){returns}", method.name, params.join(", ")),
-                        block: method.span.clone(),
-                        name_span: method
-                            .name_span
-                            .clone()
-                            .filter(|s| nav.spelled(s, &method.name))
-                            .unwrap_or_else(|| method.span.clone()),
-                    }
+                .map(|method| OutlineMethod {
+                    name: method.name.clone(),
+                    signature: MethodJson::of(method).signature(),
+                    block: method.span.clone(),
+                    name_span: method
+                        .name_span
+                        .clone()
+                        .filter(|s| nav.spelled(s, &method.name))
+                        .unwrap_or_else(|| method.span.clone()),
                 })
                 .collect();
             children.sort_by_key(|m| (m.block.start_line, m.block.start_col));

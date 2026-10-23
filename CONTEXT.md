@@ -69,11 +69,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`with_format_version`), so a rewritten header stands where the parser reads it. It is
   distinct from the Graph Protocol's schema version; it is never a block's doc comment.
 - **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
-  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
-  `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
-  migrate` lifts a block's doc comment into a missing title. Where it is written is the parse's
+  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise; a blank one (only
+  whitespace) is none. A `spec` block's name is its title; a `define` block has none. A `//` comment is never a title.
+  `specforge migrate` lifts a block's doc comment into a missing or blank title (a spec block's never). Where it is written is the parse's
   (`Entity::title_span`): a typed retitle replaces it there, and the titles step writes a missing one after the name
   (ADR 0187, amended).
+- **Untitled**: a block that becomes a node whose title is absent or only whitespace (`graph::title::owes_title`, ADR
+  0225): E076 reports it, the titles step writes its title, and a typed create or retitle refuses to make one.
 - **Doc comment**: the whole-line `//` comments directly above a block's first line, no blank line between; a
   comment ending the line of the item above trails it, and the format header is never one. Where it is written is
   the parse's (`specforge_parser::Entity::doc_span`): a typed delete removes it with its block, `specforge migrate`'s
@@ -258,7 +260,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   released one or a file on disk whose text is already the one it was built from) runs no check, unless a check input changed with it or an earlier update skipped them. One batch of changes is one update: an environment change reloads and covers the rest (ADR 0159).
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
-  kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
+  kind, title, methods and outgoing edges differ; a changed annotation, a block field's entry's included, is a changed field), added and removed edges, and the affected files; source
   positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
@@ -330,7 +332,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
-  entry from its file under the name it declares. Which extension each entry names is decided once
+  entry from its file under the package name it declares (E072 when it declares none, ADR 0223). Which extension each entry names is decided once
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision: a named entry names an
   extension by its text (`ExtensionEntry::names`), a `.wasm` file entry only by what its component declares, once
@@ -341,6 +343,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   enables what it names (`Installed::unloaded`); each entry records where the load takes it from, its **origin** (`Origin`: `builtin`, the lock entry's source, `file:<path>`, `unknown`; `Resolution::origin`, a repeated entry the one it repeats'), and whether it loaded, with or without a runtime; what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Builtin's name**: the name a builtin this specforge embeds declares. Only that builtin loads under it: a `.wasm` file entry whose component declares it is refused by the load's admit (E028), and add, update, init, publish, extension validate and extension init refuse a candidate declaring it (`extension_conflict`). One predicate, `Builtins::contains` (ADR 0028 D7, ADR 0214).
+- **Load key**: the key the runtime holds an entry's component under while its declaration is read: a builtin's or a locked entry's name, a `.wasm` file entry's `file:<entry>`, a candidate's `__candidate`. Every name the load admits is a package name and no temporary key is one, so a load never replaces another entry's extension (`load_key`, ADR 0223).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
   origin (the origin the load recorded on the entry that loaded it, else on the first entry the load tried, `EnabledExtension::loader`; else its lock entry's source; else `builtin` for a builtin's name; else `unknown`), its status (loaded, not loaded, not
@@ -492,7 +495,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   and the migrate defaults step ask the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
   whether a field restates it, through one module of its own (**Own field**), so it never writes what W161 would
   flag (ADR 0154, ADR 0175). `FileDefaults::held` answers what a block holds for a field: own, inherited or absent
-  (ADR 0182).
+  (ADR 0182). A value a defaults block writes in the other form is one W159, at the default (ADR 0224).
+- **Body kind**: the kind a block's body is read as: its keyword, or for a `defaults <kind>` header the kind it
+  names (`specforge_common::structural::body_kind`, ADR 0224). The formatter writes a body's values in that kind's
+  forms; the editor completes, hovers and colours them as that kind; the graph's defaults module applies them to it.
 - **Own field**: a field a block writes, as opposed to one it inherits from its file's default (ADR 0149). A typed
   edit changes a field through one module (`edit::defaults::change`, ADR 0175): an inherited list or block field is
   copied into an own field first, the verb changes it, an own field that then holds what the default holds, as stored, is removed, and a
@@ -520,8 +526,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   The pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
   input's entities (`specforge_coverage::Entity::from`), on the host as in every extension pass.
   Never read a graph node to answer what an entity says or owes.
-- **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
-  (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
+- **Field text**: the one string a field value is to a rule, a custom validator, a compiler pass
+  and every read view that asks what a field says (search, the headline; ADR 0019, ADR 0228): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
   block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
 - **Field type**: how the host reads a field's value, one of nine names an extension declares:
@@ -539,7 +545,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
   W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
   table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
-  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153).
+  `format`, W159, migrate's `titles` step, the typed-edit writer and init's starter spell through it (ADR 0153,
+  ADR 0226); `spell::escaped` is the inside of a quote. A `defaults` body's values are written in the forms of its
+  body kind (ADR 0224).
 - **Stored value**: a field value as the graph build stores it: coerced by its field form (`FieldForms::stored`,
   ADR 0182), so a list written as one value is a one-item list and `"100"` on an integer field is `100`. Every reader
   of references, derived names and inherited values reads it; what a file *writes* (W159, W161, the formatter) reads
@@ -563,6 +571,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
+- **Members**: what an entity holds besides its id, kind, title and obligations, as every output writes it
+  (`specforge_graph::Members`, ADR 0222): its fields' values (`FieldJson`), the annotations written after them, by the
+  field's name (an entry of a block field's by `outer.key`), and its methods (`MethodJson`: name, parameters with their
+  type, `?` and annotations, return type; `MethodJson::signature` is the line `specforge format` writes). No position.
+  The graph, context and markdown exports, inspect, the context prompt, the hover and the outline read it; the graph
+  delta diffs it.
 - **Reference target**: the kind a reference field's ids must name, from its declaration
   (`FieldForm::target_kind`), and whether a loaded extension declares it (`FieldForms::target` gives a
   `specforge_graph::Target`: `Loaded` or `Absent`; an absent kind's owner is `GraphInputs::target_owners`). The linker
@@ -617,19 +631,24 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   **trust decision**), and only then is the binary downloaded and held to the served SHA-256, so the signature covers it
   (`ConfiguredRegistry::published` and `fetch`; ADR 0010, 0012, 0044, 0059, 0213). The fetch decides and
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
-  fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
-  re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
+  fetched it commits. Accepting an unsigned package (`--allow-unsigned`, the CLI only) is reported as W155 at
+  fetch, a re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch, signed or not
+  (R-TRUST-006). The
   check writes nothing to the terminal: a key change is put to the policy's **Asking**.
 - **Trust decision**: how a registry package's publisher is accepted, decided once from what the registry describes, before any
-  download, for a dry run as for an install: unsigned (R-TRUST-001 unless allowed), a denied key (R-TRUST-005, whatever the
-  consent), the expected key (the user's **key pin**, else the **locked pin**'s key, else first use), a key change (accepted for
+  download, for a dry run as for an install: the **expected key** first, for every package; unsigned with an expected key
+  (R-TRUST-007), unsigned with none (R-TRUST-001 unless allowed), a denied key (R-TRUST-005, whatever the consent), the
+  expected key matched or first use, a key change (accepted for
   a `trusted_keys` key, else put to **Asking**, R-TRUST-003). `specforge_ops::registry::TrustPolicy::decide`; the adapter
-  verifies the signature (R-TRUST-002) and reads the user's store (R-TRUST-006) (ADR 0213).
+  verifies the signature (R-TRUST-002) and reads the user's store whatever the signer (R-TRUST-006) (ADR 0213, 0221).
 - **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
   (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
   a committed lock plan, through `Registry::pin`, after the binaries and the lock
   (`specforge_ops::registry::KeyPin`, ADR 0059).
+- **Expected key**: the publisher key a package name is held to when it is fetched: the user's **key pin**, else the
+  **locked pin**'s key, else none (first use). A package signed by another key is a key change (R-TRUST-003); one
+  arriving unsigned is refused (R-TRUST-007), whatever `--allow-unsigned` or consent (ADR 0221).
 - **Locked pin**: what a project's `specforge.lock` entry records for a registry install, which every fetch of the name
   is held to: its publisher key at any version (the **key pin** when the user has none) and its SHA-256 at its own
   version. A registry serving that version as other bytes is refused (R014) before the download, any key question or any
@@ -675,7 +694,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   these) or `name` alone (a local module); each part `a-z 0-9 . _ -`, starting with a letter or
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
   (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
-  `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
+  `add` installs, `publish` uploads and `extension validate` reads it, and where the extension load admits a `.wasm` file entry; a `specforge.json` entry and a lock entry are read as one.
 - **Package scope**: the namespace a scoped package name starts with, `@` and one name part (`@acme`)
   (`specforge_package::Scope`, ADR 0200). A `registries` entry's `scope_filter`, a registry token's filter and
   `scope assign` name one; text that is not one is refused where it is written, naming the scope to write. A scope
@@ -754,6 +773,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   and the reported diagnostics about it (`specforge_ops::read::inspect::EntityFacts`); its coverage is asked
   for apart (`specforge_ops::read::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
   renders both as JSON and the LSP hover as markdown, so the two cannot disagree.
+- **Headline**: the field an entity's extension declares headline and normative, and its field text
+  (`specforge_emitter::context::Headline`), whatever the value's written shape: the context export lifts
+  it, MCP inspect reports it as `contract`, the context prompt as `contract_text`, the hover quotes it as
+  its summary (ADR 0228).
 - **Known kind**: a kind a loaded extension declares, or that an entity is written with (an
   undeclared one is E024's). A kind filter (over entities, or the model's `kinds`) knows both and
   reports any other kind as I020; an argument that needs a kind's declaration (a schema entry, an
@@ -879,7 +902,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   milestone due before its dependency (I064), a shipped deliverable tracking an incomplete milestone
   (I065). Its declarative rules check one entity at a time (ADR 0039).
 - **Missing link**: an expected edge, from the registries, that a traced entity lacks
-  (`MissingLink`). The only gap a trace reports.
+  (`MissingLink`). The only gap a trace reports. Written, like a plan gap, as an
+  `McpTraceGap` row (`specforge_ops::read::trace::Gap`).
 - **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
   (`specforge_ops::read::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
   Its entry order is its dependency order; the graph's edges are the dependencies, and entities on one cycle come
@@ -949,7 +973,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Preview**: a mutation asked only to report (`--dry-run`/`dry_run`; format's `--check` or `--diff`). It writes
   nothing; its operation's outcome answers `Wrote::Previewed` (`specforge_ops::Wrote`), its document says
   `dry_run: true`, and neither surface lists `files_written`. A run that found nothing to change is no preview:
-  `Wrote::Ran` with no file, `files_written: []` (ADR 0162).
+  `Wrote::Ran` with no file, `files_written: []` (ADR 0162). A call refused before it runs
+  (no project served, a `path` naming none) is still a preview when its arguments read and ask for one: nothing
+  listed, nothing recorded (ADR 0229).
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`, `ExtensionsDocument`, `ProvidersDocument`, `SchemaDocument`; an outcome whose every field reaches its
@@ -1247,6 +1273,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   an extension pass named). Consumers that act on a diagnostic (the LSP's quick fixes, MCP's
   suggest_fixes, and navigation's attribution of a diagnostic to the entities it is about) read it;
   none parses the message, which is presentation.
+- **Diagnostic placement**: where a diagnostic about entities with no span of its own sits: the block
+  of the first entity its data names that the project holds (`Diagnostic::placed_at_subject`, applied once in
+  `CompiledProject::reported` and to a pass's findings); every surface shows it there, the LSP adds related
+  information at each other's name (ADR 0227).
 - **Reference**: an id a field's declared type reads as a reference (a `reference` field's value, a
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge; where it is written is a written token the graph's finder reads). The references *to* an entity are incoming; what an entity
@@ -1289,8 +1319,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
 - **Starter**: the spec file init writes (`spec/hello.spec`): the first template the extensions it enables declare,
   in `specforge.json` order, else the structural one, its `{project}` the project's spec ID and `{version}` its
-  version. It is checked and laid out by the registry build of those extensions, made before the project exists
-  (ADR 0189), so its first `check` and `format --check` accept it.
+  version, each filled with the inside of a `.spec` string (`spell::escaped`). It is checked and laid out by the
+  registry build of those extensions, made before the project exists (ADR 0189), and parsed before it is written:
+  one that does not parse is refused, `starter_unparsed` (ADR 0226), so its first `check` and `format --check`
+  accept it.
 - **Entity ID rule**: what `check` refuses of an entity ID: outside 2–60 characters (E014) or a reserved word (E013)
   (`specforge_registry::refused_id`). A token ID is also the grammar's identifier (`authoring::entity_id::validate_id`);
   a spec block's ID, its header's string, is not.

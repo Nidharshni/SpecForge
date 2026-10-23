@@ -5,7 +5,8 @@
 //! show coverage ask [`coverage`] for it.
 
 use specforge_common::Diagnostic;
-use specforge_graph::Node;
+use specforge_emitter::context::Headline;
+use specforge_graph::{Members, Node};
 use specforge_project::coverage::{Status, Verdict};
 use specforge_registry::{KindRegistryEntry, ObligationRecord, Standing};
 
@@ -23,14 +24,17 @@ pub struct EntityFacts<'v> {
     /// declaration order (a struct member named `verify` and the verify
     /// statements are two entries).
     pub node: &'v Node,
+    /// What it holds, as every output writes it: its fields' values, their annotations and its
+    /// methods (ADR 0222). The hover, MCP inspect and the context prompt read this, not the node.
+    pub members: Members,
     /// Its kind's registry entry: the declaring extension, the kind's
     /// description, `supports_verify`, `singleton`. `None` for a kind no
     /// loaded extension declares.
     pub kind: Option<&'v KindRegistryEntry>,
     /// The statement its extension declares headline and normative (a
-    /// behavior's `contract`), borrowed from the node's field; `None` when
-    /// its kind declares none.
-    pub headline: Option<&'v str>,
+    /// behavior's `contract`): the field and its field text, whatever its
+    /// written shape (ADR 0228); `None` when its kind declares none.
+    pub headline: Option<Headline>,
     /// How the coverage rule counts it: its standing in the view's entity
     /// snapshot (ADR 0019), `testable`, `obligated()`, `exempt()`.
     /// Independent of the recorded report.
@@ -93,6 +97,7 @@ pub fn inspect<'v>(
     } = view.entity(entity_id, EntityField::EntityId)?;
     Ok(EntityFacts {
         node,
+        members: Members::of(node),
         kind: view.registries().kinds().get(node.kind.raw.as_str()),
         headline: specforge_emitter::context::headline_statement(node, view.registries().fields()),
         standing,

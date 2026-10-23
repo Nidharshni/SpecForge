@@ -92,3 +92,37 @@ fn a_planned_text_that_also_changes_a_field_refuses_the_titles() {
     assert!(verdict.refusal().is_some(), "{verdict:?}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 }
+
+#[specforge_test(
+    behavior = "add_missing_titles",
+    verify = "a migration leaves no E076 it names migrate for"
+)]
+fn a_migration_leaves_no_e076_it_names_migrate_for() {
+    let dir = project();
+    let file = dir.path().join("old.spec");
+    std::fs::write(
+        &file,
+        "// Alpha does a thing.\nbehavior alpha \"\" {\n}\n\nbehavior beta \"  \" {\n}\n\nbehavior gamma {\n}\n",
+    )
+    .unwrap();
+
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        None,
+    );
+
+    assert!(outcome.ok() && outcome.migrated(), "{outcome:?}");
+    assert!(outcome.structural_differences().is_empty());
+    assert!(
+        outcome
+            .verdict
+            .post_errors()
+            .all(|d| !d.is(specforge_common::codes::E076)),
+        "{:?}",
+        outcome.verdict
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "behavior alpha \"Alpha does a thing.\" {\n}\n\nbehavior beta \"Beta\" {\n}\n\nbehavior gamma \"Gamma\" {\n}\n"
+    );
+}

@@ -2,9 +2,7 @@
 //! holds the first entry of each key; the finder still reads the later entry's names.
 
 use crate::defaults::{build, forms};
-use specforge_graph::{
-    FileChange, GraphBuild, GraphConfig, GraphInputs, field_form, written_tokens,
-};
+use specforge_graph::{FileChange, GraphBuild, GraphConfig, GraphInputs, written_tokens};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -48,7 +46,7 @@ fn a_field_written_twice_is_e081_and_the_node_holds_the_first() {
     );
     let node = graph.node("beh").unwrap();
     assert_eq!(node.fields.entries().len(), 3);
-    let written = field_form::write_fields(&node.fields);
+    let written = specforge_graph::Members::new(&node.fields, &[]).fields;
     assert_eq!(
         serde_json::to_string(&written).unwrap(),
         r#"{"meta":{"x":"1"},"owner":"a","ports":["P1"]}"#

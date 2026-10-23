@@ -450,12 +450,15 @@ behavior check_field_value_types "Check Field Value Types" {
     snapshot, never a graph node.
 
     A value written in the other form than its field's declared type gives
-    it MUST produce a W159 warning at the value, one per value, naming the
+    it MUST produce a W159 warning at the value, one per written value (a value
+    a `defaults <kind>` block writes is one value, reported once at the default and
+    naming the defaults block, however many blocks take it), naming the
     field and the form (ADR 0147): bare for an enum, identifier or reference
     value and each item of a reference list, quoted for text and each item of
     a string list. The check runs right after E061, only on a value E061
     admits, and agrees with `specforge format`: a value is W159 exactly when
-    format rewrites it (both ask FieldForms::rewrite). A bare word on a kind
+    format rewrites it (both ask FieldForms::rewrite), except a default no block
+    takes, which is W161. A bare word on a kind
     that takes members is not W159: it may be a member's type; nor is a
     quoted value that is not a word, or true or false, on a bare field.
   """
@@ -473,5 +476,6 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a quoted word on a word field and a bare word on a text field are W159"
   verify unit "a bare word on a kind that takes members is not W159"
   verify unit "a value E061 refuses is not W159"
+  verify unit "a value a defaults block writes in the other form is W159 once, at the default"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, off_form_warned, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

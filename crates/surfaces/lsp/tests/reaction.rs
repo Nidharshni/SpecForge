@@ -335,14 +335,14 @@ fn validator_warnings_are_published() {
     );
 }
 
-/// A reference cycle has no one place: the LSP publishes it at the first entity its data names,
-/// on that entity's name, pointing at the others as related information (ADR 0016, D8), not on
+/// A reference cycle has no one place: the project locates it at the first entity its data names,
+/// on that entity's block, and the LSP points at the others as related information (ADR 0016, D8), not on
 /// line 1 of the document last edited.
 #[spec(
     behavior = "emit_live_diagnostics",
-    verify = "a spanless diagnostic about entities is published at the first one's name"
+    verify = "a diagnostic about entities is published at the first one's block, with related information at each other's name"
 )]
-fn a_spanless_diagnostic_about_entities_is_published_at_its_name() {
+fn a_diagnostic_about_entities_is_published_at_its_block() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -367,7 +367,7 @@ fn a_spanless_diagnostic_about_entities_is_published_at_its_name() {
     let range = |r: &tower_lsp::lsp_types::Range| {
         (r.start.line, r.start.character, r.end.line, r.end.character)
     };
-    assert_eq!(range(&w061.range), (0, 9, 0, 14), "alpha's name: {w061:?}");
+    assert_eq!(range(&w061.range), (0, 0, 2, 1), "alpha's block: {w061:?}");
     let related = w061.related_information.as_ref().expect("the others");
     assert_eq!(related.len(), 1, "{w061:?}");
     assert_eq!(related[0].location.uri, cycle);
@@ -383,7 +383,7 @@ fn a_spanless_diagnostic_about_entities_is_published_at_its_name() {
 /// diagnostics delta, so it publishes every file each time.
 #[spec(
     behavior = "emit_live_diagnostics",
-    verify = "a spanless diagnostic is published at its entity's new name when only the entity moved"
+    verify = "a diagnostic about entities follows its entity's block when only the entity moved"
 )]
 fn a_spanless_diagnostic_follows_its_entity() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -411,8 +411,8 @@ fn a_spanless_diagnostic_follows_its_entity() {
     };
     assert_eq!(
         range(&w061.range),
-        (2, 9, 2, 14),
-        "alpha's new name: {w061:?}"
+        (2, 0, 4, 1),
+        "alpha's new block: {w061:?}"
     );
     let related = w061.related_information.as_ref().expect("the others");
     assert_eq!(

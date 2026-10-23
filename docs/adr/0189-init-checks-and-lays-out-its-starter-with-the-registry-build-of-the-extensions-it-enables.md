@@ -1,6 +1,6 @@
 # Init checks and lays out its starter with the registry build of the extensions it enables
 
-**Status:** accepted (2026-10-21, architecture round 20, plan 06). Amends [ADR 0134](0134-add-and-init-ask-their-lock-plan-through-the-names-module.md) D1 (a local file's answer carries its declaration, not just its starter template) and [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D6 (init lays its starter out with the forms of the registry build of the extensions it enables, read before the project exists).
+**Status:** accepted (2026-10-21, architecture round 20, plan 06). Extended by [ADR 0226](0226-init-writes-its-starters-values-through-the-value-writer.md) (D4: the starter's values are filled by the value writer and the laid-out starter is held to a parse before it is written). Amends [ADR 0134](0134-add-and-init-ask-their-lock-plan-through-the-names-module.md) D1 (a local file's answer carries its declaration, not just its starter template) and [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D6 (init lays its starter out with the forms of the registry build of the extensions it enables, read before the project exists).
 
 `init` wrote a starter its own first `specforge check` could refuse. It checked the starter's spec ID by length only,
 before it knew which kinds it enables, so a directory called `release` with `@specforge/product` got `spec "release"`

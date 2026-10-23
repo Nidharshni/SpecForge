@@ -34,7 +34,8 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     set from the smallest id and back; it depends only on the references,
     never on the order they are written in. A declared single reference and a derived
     edge are in none (ADR 0093 D7, ADR 0204). W061 has no span: it is about its entities
-    (ADR 0016 D7).
+    (ADR 0016 D7), and the compiled project locates it at the first one's
+    block (ADR 0227).
     A block that writes a key twice, at any depth, MUST be E081 at each later
     entry, and its node MUST hold the first entry of each key; a later entry's
     names stay tokens and link nothing (ADR 0215).
@@ -77,7 +78,9 @@ behavior apply_file_defaults "Apply File Defaults" {
     kind MUST be E077 and MUST NOT be applied. A title, a verify or method member, a
     field given twice, a second block for the kind, or a block after the file's
     first entity block MUST be E078. A block field equal to its default, and a
-    default no block takes, MUST be W161. A defaults block is never a node. A
+    default no block takes, MUST be W161. A defaults block is never a node. A W159 about a value a defaults block
+    writes is reported once, at the default; every other diagnostic about an inherited
+    value names each block that takes it. A
     token in a defaults block names its entity whether or not a block takes the
     default: a rename edits it, the editor's find-references shows it, and a
     delete refuses it. A default's token, a type name a derived field reads in it

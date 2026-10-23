@@ -57,8 +57,9 @@ pub enum PublishAction {
 ///    a loadable extension, read through `runtime`), `extension_conflict` (a declaration
 ///    naming a builtin, as install refuses it);
 /// 2. its declaration's errors, as the registry build of it alone reports
-///    them (E030, a refused tool schema, ...), naming every error;
-/// 3. its name and version: E072 unless a scoped package name and a full
+///    them (E030, a refused tool schema, ...), naming every error, a
+///    declared name that is no package name among them (E072);
+/// 3. its scope and version: E072 unless a scoped name and a full
 ///    SemVer version (ADR 0036);
 /// 4. the registry: [`Registry::publish`]'s refusals.
 pub fn publish(
@@ -190,18 +191,19 @@ pub fn declare(
         declaration,
         warnings,
     } = super::candidate::read_declaration(runtime, wasm)?;
-    let diagnostics = diagnostics_of(&declaration, warnings);
+    // E072 after the load warnings, before the registry build's (ADR 0223 D4).
+    let name = specforge_package::PackageName::declared_by(&declaration)
+        .err()
+        .map(|why| specforge_common::package::invalid(&why));
+    let diagnostics = diagnostics_of(&declaration, warnings.into_iter().chain(name).collect());
     Ok((declaration, diagnostics))
 }
 
-/// `warnings`, then what the registry build of `declaration` alone reports,
+/// `before` (the load warnings, the name's E072), then what the registry build of `declaration` alone reports,
 /// in its order, without missing peers (E027).
-fn diagnostics_of(
-    declaration: &ExtensionDeclaration,
-    warnings: Vec<Diagnostic>,
-) -> Vec<Diagnostic> {
+fn diagnostics_of(declaration: &ExtensionDeclaration, before: Vec<Diagnostic>) -> Vec<Diagnostic> {
     let build = specforge_registry::build_registries(vec![declaration.clone()]);
-    warnings
+    before
         .into_iter()
         .chain(build.diagnostics().filter(|d| !d.is(codes::E027)).cloned())
         .collect()

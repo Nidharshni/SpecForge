@@ -112,7 +112,8 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
     diagnostic, under --format json; it reads and declares the binary as
     publish does. No built component is an error (E040), and
     a binary that is not an extension is E028, and one declaring a builtin's
-    name is extension_conflict, as publish refuses it.
+    name is extension_conflict, as publish refuses it. A declared name that is no
+    package name is E072 among its diagnostics, as add and the extension load refuse it.
   """
   produces   [extension_fixtures_validated]
   verify unit "validation loads local .wasm binary"
@@ -120,6 +121,7 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
   verify unit "validation uses production sandbox policy"
   verify unit "validation failure reported as ExtensionError"
   verify unit "specforge extension validate reports the declaration's registry build diagnostics"
+  verify unit "specforge extension validate reports a declared name that is no package name (E072), as add and the extension load refuse it"
   verify unit "specforge extension validate errors when no built component is found"
   verify unit "specforge extension validate writes its diagnostics as check does"
   verify contract "Validate Wasm Extension Locally: local Wasm extension validation holds — wasm_binary_available, wasm_runtime_available, fixtures_available, production_sandbox_used, export_failures_diagnosed, extension_fixtures_validated_emitted"

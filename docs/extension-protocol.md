@@ -73,7 +73,7 @@ Peer dependencies are SemVer ranges read as Cargo reads them; one rule judges th
 
 `protocol_version`, `name`, `version`, `peer_dependencies` and `sandbox_policy` are required on the wire (`sandbox_policy` may be `null`: the extension then runs under the host's ceiling; see Sandbox). The others are optional and omitted when absent:
 
-- `starter_template`: the text of the starter `.spec` file `specforge init` writes for a project that enables the extension, `{project}` standing for the project's entity id and `{version}` for its version. When several enabled extensions declare one, `init` uses the first listed in `specforge.json`. SDK: `ContributionsBuilder::starter_template`.
+- `starter_template`: the text of the starter `.spec` file `specforge init` writes for a project that enables the extension, `{project}` standing for the project's entity id and `{version}` for its version, each filled in escaped as the inside of a `.spec` string (write them between quotes). When several enabled extensions declare one, `init` uses the first listed in `specforge.json`. SDK: `ContributionsBuilder::starter_template`.
 - `migration_hook`: the export `specforge migrate` calls before it writes the migrated files, with their names. SDK: `ContributionsBuilder::migration_hook`.
 - `theme_color`: the hex colour (`#rgb`, `#rrggbb` or `#rrggbbaa`) the `model` and `outline` diagrams draw the extension in; grey otherwise. SDK: `ContributionsBuilder::theme_color`.
 - `ext_short`: the short name that routes the extension's commands, `specforge <ext_short> <command>` on the CLI and `specforge.<ext_short>.<id>` over MCP. Lowercase kebab case (`[a-z][a-z0-9-]*`); a malformed one is E030. Absent, it is the name's last segment (`@specforge/product` is `product`). SDK: `#[extension(short = "...")]`, checked at compile time.
@@ -174,7 +174,7 @@ Optional flags, `false` and omitted from the wire unless set (ADR 0007): on
 a kind, `contract_target` (a reference field that targets the kind is a
 contract obligation, A010) and `declares_types` (its entity ids are the type
 names custom validators receive as `declared_types`); on a field, `normative`
-(the context export keeps it), `headline` (the context export lifts it to the
+(the context export keeps it), `headline` (the context export lifts it, as its field text, to the
 node's top level; with `normative`, it is the statement MCP `inspect` reports
 as `contract`) and `exempts_obligations` (an entity that sets it owes no
 `verify` obligations).

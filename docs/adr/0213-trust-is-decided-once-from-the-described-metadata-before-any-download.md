@@ -5,6 +5,7 @@ D3 (a dry run decides the publisher as the add does). Amends [ADR 0059](0059-tru
 (the decision is `TrustPolicy::decide`), [ADR 0044](0044-the-package-registry-contract-is-one-crate.md) D3 (the policy in ops is
 narrowed), [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) D3 (the preview's R014 is the
 adapter's) and [ADR 0010](0010-operations-reach-the-registry-through-a-port.md) (`published` takes the policy).
+**D2 amended by [ADR 0221](0221-an-unsigned-package-is-held-to-its-names-expected-publisher.md) (round 25):** the adapter reads the user's store for an unsigned package too, and the expected key holds it.
 
 ## Context
 

@@ -47,7 +47,7 @@ pub enum Resolved<'a> {
     /// (`NotInstalled`, E028) or a lock that can't be read (`LockUnreadable`, E028).
     Unloadable { name: &'a str, problem: LoadProblem },
     /// A `.wasm` file entry: it loads from its file under the name the component declares, after
-    /// every named entry.
+    /// every named entry (under the key `file:<entry>` until that name is admitted).
     File(FileEntry<'a>),
     /// An entry naming what the entry at `first` enables (the same name, or the same `.wasm` file
     /// entry text): loaded once, by `first`.
@@ -57,8 +57,8 @@ pub enum Resolved<'a> {
 /// A `.wasm` file entry of `specforge.json`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileEntry<'a> {
-    /// The entry as written, trimmed: what its diagnostics name, and the key its component loads
-    /// under until the name it declares is admitted.
+    /// The entry as written, trimmed: what its diagnostics name. Its component loads under `file:`
+    /// and this text until the name it declares is admitted (`load_key`).
     pub key: &'a str,
     /// The path as written.
     pub path: &'a str,
@@ -69,17 +69,24 @@ pub struct FileEntry<'a> {
 }
 
 impl FileEntry<'_> {
-    /// Whether a component declaring `declared` is what this entry enables. It must declare the name
-    /// written before `=` when there is one (`NotTheNameWritten`), never a builtin's name
+    /// Whether a component declaring `declared` is what this entry enables, in this order (ADR 0223
+    /// D2). It must declare a package name (`NotAPackageName`, E072, ADR 0036: the rule every other
+    /// entry point holds a declared name to), the name written before `=` when there is one
+    /// (`NotTheNameWritten`), never a builtin's name
     /// (`BuiltinsName`: only the builtin loads under it, ADR 0214), and an extension an entry tried
     /// before it must not already be loaded under that name (`AlreadyLoaded`; `loaded` says which
-    /// names are).
+    /// names are), whatever this entry's own text.
     pub(crate) fn admit(
         &self,
         declared: &str,
         builtins: &Builtins,
         loaded: impl Fn(&str) -> bool,
     ) -> Result<(), LoadProblem> {
+        if let Err(why) = PackageName::parse(declared) {
+            return Err(LoadProblem::NotAPackageName {
+                reason: why.to_string(),
+            });
+        }
         if let Some(written) = self.written.filter(|written| *written != declared) {
             return Err(LoadProblem::NotTheNameWritten {
                 declared: declared.to_string(),
@@ -91,7 +98,7 @@ impl FileEntry<'_> {
                 declared: declared.to_string(),
             });
         }
-        if declared != self.key && loaded(declared) {
+        if loaded(declared) {
             return Err(LoadProblem::AlreadyLoaded {
                 declared: declared.to_string(),
             });
@@ -241,7 +248,8 @@ impl Resolved<'_> {
     /// Whether a component declaring `declared` is what this entry enables: the one place the
     /// admit rules live. A builtin admits any name; a locked entry must declare what it records
     /// ([`LockFileEntry::declares`]: its name, version and peers, E070); a `.wasm` file entry follows [`FileEntry::admit`]: the name written,
-    /// never a builtin's, not one already loaded. `Unloadable` and
+    /// never a builtin's, not one already loaded. Every name the walk admits is a package
+    /// name: a builtin's, a lock entry's, or a file entry's (this check). `Unloadable` and
     /// `Again` never reach a component, so they admit nothing to refuse.
     pub(crate) fn admit(
         &self,
@@ -640,10 +648,24 @@ mod tests {
                 declared: "@acme/g".to_string()
             })
         );
-        // The entry's own key is not "another entry".
+        // A declared name is a package name, checked before the name written.
+        let plain = file(None);
+        assert!(matches!(
+            plain.admit("@acme/G", &Builtins::none(), |_| false),
+            Err(LoadProblem::NotAPackageName { .. })
+        ));
+        for written in ["@acme/G", "@acme/x"] {
+            assert!(matches!(
+                file(Some(written)).admit("@acme/G", &Builtins::none(), |_| false),
+                Err(LoadProblem::NotAPackageName { .. })
+            ));
+        }
+        // The entry's own text is no exception: a name admitted before is taken.
         assert_eq!(
             file(None).admit("g.wasm", &Builtins::none(), |_| true),
-            Ok(())
+            Err(LoadProblem::AlreadyLoaded {
+                declared: "g.wasm".to_string()
+            })
         );
     }
 

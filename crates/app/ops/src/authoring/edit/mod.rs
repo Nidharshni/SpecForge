@@ -44,7 +44,8 @@ pub enum Edit {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         verify: Vec<Obligation>,
     },
-    /// `field` (or `field.entry` inside a block field) holds `value`; `annotations` (`readonly`, `since=1.2`)
+    /// `field` (or `field.entry` inside a block field) holds `value`; `annotations` (`readonly`, or
+    /// `name=value`, written `@name "value"`)
     /// replace the field's when given.
     Set {
         entity_id: String,
@@ -56,7 +57,7 @@ pub enum Edit {
     /// `field` (or `field.entry`) holds none afterwards: removed, or, over a file default, written `[]` (a list) or
     /// `{}` (a block field); refused for a field of one value with a default. A second unset changes nothing.
     Unset { entity_id: String, field: String },
-    /// The header's title becomes `title`.
+    /// The header's title becomes `title`; a blank one is refused (`invalid_title`).
     Retitle { entity_id: String, title: String },
     /// `target` is added to the list `field`. No change when it is already there (own or inherited).
     Link {
@@ -314,6 +315,7 @@ impl<'v> Planner<'v> {
                 self.on_members(entity_id, |site, text| block::unset(site, text, field))
             }
             Edit::Retitle { entity_id, title } => {
+                create::require_title(title)?;
                 self.on(entity_id, |site, text| block::retitle(site, text, title))
             }
             Edit::Link {

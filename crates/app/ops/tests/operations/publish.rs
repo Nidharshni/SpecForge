@@ -405,6 +405,31 @@ fn validate_reads_and_declares_the_binary_publish_reads() {
 }
 
 #[specforge_test(
+    behavior = "validate_wasm_extension_locally",
+    verify = "specforge extension validate reports a declared name that is no package name (E072), as add and the extension load refuse it"
+)]
+fn validate_reports_a_declared_name_that_is_no_package_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let wasm = bytes("Greet 0.1.0");
+    let runtime = InProcessRuntime::new().binary(&wasm, declaring("Greet", "0.1.0", &[]));
+    let path = binary(dir.path(), &wasm);
+
+    let validated = validate(&path, &runtime).unwrap();
+
+    assert!(!validated.valid(), "{:?}", validated.diagnostics);
+    let errors: Vec<_> = validated
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == specforge_common::Severity::Error)
+        .collect();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].code, "E072");
+    assert!(errors[0].message.contains("'Greet' is not a package name"));
+    let published = report(&path, &MemoryRegistry::new(), &runtime);
+    assert_eq!(refused(&published).code, "E072");
+}
+
+#[specforge_test(
     behavior = "publish_to_registry",
     verify = "publish refuses in one order, each refusal before anything after it is read or asked"
 )]

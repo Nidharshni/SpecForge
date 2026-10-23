@@ -199,7 +199,8 @@ impl CompiledProject {
     /// Exactly what `specforge check` reports, in its order: the
     /// environment's (its own, then the registry build's), the imports',
     /// the graph build's, then the checks'. The one place this order is
-    /// written.
+    /// written. A diagnostic about entities with no span of its own is
+    /// located at the first one's block (ADR 0227).
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.reported().to_vec()
     }
@@ -210,12 +211,14 @@ impl CompiledProject {
     /// a new one), so the memo resets where the other parts change.
     pub(crate) fn reported(&self) -> Arc<[Diagnostic]> {
         Arc::clone(self.reported.get_or_init(|| {
+            let graph = self.graph();
             self.env
                 .diagnostics()
                 .chain(&self.import_diagnostics)
                 .chain(self.graph.diagnostics())
                 .chain(&self.check_diagnostics)
                 .cloned()
+                .map(|d| d.placed_at_subject(|id| graph.node(id).map(|n| n.source_span.clone())))
                 .collect()
         }))
     }

@@ -30,6 +30,7 @@ mod fixture;
 mod link_identity;
 mod one_side;
 mod one_update;
+mod placement;
 mod policy;
 mod product_rules;
 mod providers;

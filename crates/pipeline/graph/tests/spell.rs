@@ -47,6 +47,29 @@ fn a_quoted_text_reads_back() {
 }
 
 #[test]
+fn an_escaped_text_is_its_quoted_form_inside_the_quotes() {
+    for text in [
+        "",
+        "a\"b",
+        "back\\slash",
+        "two\nlines",
+        "tab\there",
+        "cr\rhere",
+        "é→ unicode",
+        "1.0\" oops {\\x\n",
+    ] {
+        let escaped = spell::escaped(text);
+        assert_eq!(spell::quoted(text), format!("\"{escaped}\""), "{text:?}");
+        let file = field_of(&format!("probe p \"T\" {{\n  k \"{escaped}\"\n}}\n"));
+        assert_eq!(
+            file.entities[0].fields.get("k"),
+            Some(&FieldValue::String(text.to_string())),
+            "{text:?}"
+        );
+    }
+}
+
+#[test]
 fn each_declared_type_spells_its_value() {
     for (field_type, text, expected) in [
         (FieldType::String, "hi", r#""hi""#),

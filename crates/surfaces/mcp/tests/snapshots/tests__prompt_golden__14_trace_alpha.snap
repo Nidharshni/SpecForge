@@ -13,13 +13,13 @@ expression: "shape(&reply, dir.path())"
     ],
     "coverage_gaps": [
       {
-        "gap_context": "behavior 'alpha' has no 'consumes' link to a event",
+        "gap_context": "behavior 'alpha' has no 'consumes' link to an event",
         "missing_link_type": "missing_link",
         "source_entity": "alpha",
         "target_entity": "event"
       },
       {
-        "gap_context": "behavior 'alpha' has no 'invariants' link to a invariant",
+        "gap_context": "behavior 'alpha' has no 'invariants' link to an invariant",
         "missing_link_type": "missing_link",
         "source_entity": "alpha",
         "target_entity": "invariant"
@@ -31,7 +31,7 @@ expression: "shape(&reply, dir.path())"
         "target_entity": "port"
       },
       {
-        "gap_context": "behavior 'alpha' has no 'produces' link to a event",
+        "gap_context": "behavior 'alpha' has no 'produces' link to an event",
         "missing_link_type": "missing_link",
         "source_entity": "alpha",
         "target_entity": "event"

@@ -26,7 +26,7 @@ pub struct AddRequest<'a> {
     /// What a relative local path is read from: the project's root when `None`. The CLI passes
     /// its working directory.
     pub base: Option<&'a std::path::Path>,
-    /// Accept a registry package with no publisher signature.
+    /// Accept a registry package with no publisher signature, when no key is pinned or locked for its name.
     pub allow_unsigned: bool,
     /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
     /// would give; write, pin and download nothing. A registry package is judged by the

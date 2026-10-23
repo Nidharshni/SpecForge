@@ -99,3 +99,38 @@ fn a_triple_quoted_word_is_written_bare_as_a_quoted_one_is() {
         "behavior b \"B\" {\n  category cart\n}\n"
     );
 }
+
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "a defaults block's values are written in the forms of the kind it names"
+)]
+fn a_defaults_blocks_values_are_written_in_the_forms_of_the_kind_it_names() {
+    assert_eq!(
+        fmt_forms(
+            "defaults behavior {\n  category \"cart\"\n  types    [\"a\", b]\n  tags     [x]\n}\n"
+        ),
+        "defaults behavior {\n  category cart\n  types    [a, b]\n  tags     [\"x\"]\n}\n"
+    );
+    let once = fmt_forms("defaults behavior {\n  category \"cart\"\n}\n");
+    assert_eq!(fmt_forms(&once), once);
+}
+
+/// D5 through the named kind: `type` takes members, so a bare word stays.
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "a defaults block's values are written in the forms of the kind it names"
+)]
+fn a_defaults_block_of_a_kind_that_takes_members_keeps_a_bare_word() {
+    let text = "defaults type {\n  description string\n}\n";
+    assert_eq!(fmt_forms(text), text);
+}
+
+/// A kind with no forms (E077 in the graph) rewrites nothing.
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "a defaults block's values are written in the forms of the kind it names"
+)]
+fn a_defaults_block_naming_an_undeclared_kind_rewrites_nothing() {
+    let text = "defaults widget {\n  category \"cart\"\n}\n";
+    assert_eq!(fmt_forms(text), text);
+}

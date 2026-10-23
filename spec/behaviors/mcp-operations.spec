@@ -345,9 +345,10 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     @scope/name[@version], builtin names or .wasm paths, added as one change
     exactly as specforge add adds several: all or nothing, judged on the
     whole set, a refusal naming the specifier refused, a repeated one
-    reported as a duplicate), dry_run? (optional boolean, default false) and allow_unsigned?
-    (optional boolean, default false: accept a registry package with no
-    publisher signature). When dry_run is true, the tool MUST
+    reported as a duplicate) and dry_run? (optional boolean, default false).
+    It takes no allow_unsigned: an unsigned registry package is refused with
+    R-TRUST-001, whose suggestion names `specforge add --allow-unsigned` in a
+    terminal (ADR 0221). When dry_run is true, the tool MUST
     answer what specforge add --dry-run answers: the add judged and not
     committed, its refusal included, without modifying any file, pinning
     any key or downloading any Wasm module (a registry package is judged
@@ -392,6 +393,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify unit "after add_extension the server serves the extension it installed"
   verify unit "a local extension path in specifiers that resolves outside the project is refused as invalid_input on specifiers"
   verify unit "a crate directory in specifiers whose built component resolves outside the project is refused as invalid_input on specifiers"
+  verify integration "add_extension takes no allow_unsigned: an unsigned package is refused with R-TRUST-001 naming the terminal command"
 }
 
 behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
@@ -441,6 +443,7 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
   verify unit "the entities whose kind only that extension declares are listed as stranded"
   verify unit "non-installed extension returns extension_not_found error"
   verify unit "dry_run returns preview without modifying files"
+  verify integration "remove_extension with force removes an extension another requires, which it refuses with E027 without it"
   verify contract "Provide MCP Remove Extension Tool: MCP remove extension tool holds — filesystem_available, extension_removed, stranded_entities_listed, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
 }
 

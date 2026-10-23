@@ -541,17 +541,13 @@ fn test_format_parses_to_identical_entity_graph() {
                 orig.id.raw
             );
 
-            // Compare field values as every output writes them (no
-            // positions: formatting moves values).
-            let orig_json =
-                serde_json::to_string(&specforge_graph::field_form::write_fields(&orig.fields))
-                    .unwrap();
-            let fmt_json =
-                serde_json::to_string(&specforge_graph::field_form::write_fields(&fmt_ent.fields))
-                    .unwrap();
+            // Compare what the entity holds as every output writes it (no
+            // positions: formatting moves values): fields, annotations, methods.
+            let orig_members = specforge_graph::Members::new(&orig.fields, &orig.methods);
+            let fmt_members = specforge_graph::Members::new(&fmt_ent.fields, &fmt_ent.methods);
             assert_eq!(
-                orig_json, fmt_json,
-                "input #{i}: field values should be preserved for entity '{}':\norig: {orig_json}\nfmt:  {fmt_json}",
+                orig_members, fmt_members,
+                "input #{i}: members should be preserved for entity '{}'",
                 orig.id.raw
             );
         }

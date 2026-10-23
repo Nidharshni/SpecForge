@@ -397,6 +397,7 @@ fn hover_quotes_the_headline_and_fields_skip_it() {
     let source = "\
 behavior one \"One\" {\n  contract \"The system MUST do one thing\"\n  verify unit \"it does\"\n}\n\
 behavior three \"Three\" {\n  contract \"\"\"\n    The system MUST do a\n      and then b\n    and c\n  \"\"\"\n  verify unit \"it does\"\n}\n\
+behavior dated \"Dated\" {\n  contract 2026-10-22\n  verify unit \"it does\"\n}\n\
 note doc \"Doc\" {\n  verify unit \"read\"\n}\n";
     let project = coverage_project(source);
 
@@ -416,6 +417,12 @@ note doc \"Doc\" {\n  verify unit \"read\"\n}\n";
         "a multi-line headline is quoted whole, dedented:\n{header}"
     );
     assert!(!three.contains("`contract` ="), "{three}");
+
+    // A date is a headline too: the summary, not a field.
+    let dated = project.hover_on("main.spec", "dated").unwrap();
+    let header = dated.split("\n\n---\n\n").next().unwrap();
+    assert!(header.ends_with("\n\n> 2026-10-22"), "{header}");
+    assert!(!dated.contains("`contract` ="), "{dated}");
 
     // A kind with no headline has no summary.
     let doc = project.hover_on("main.spec", "doc").unwrap();

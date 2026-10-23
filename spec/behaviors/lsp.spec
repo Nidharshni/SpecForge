@@ -529,10 +529,10 @@ behavior emit_live_diagnostics "Live Diagnostics" {
     The LSP MUST provide real-time diagnostics as the user types.
     After each file change, the LSP MUST incrementally recompile and
     push updated diagnostics to the editor. Error squiggles MUST appear
-    within 100ms of the user stopping typing. A diagnostic without a span
-    that is about entities (its data names them, as a reference cycle's
-    does) MUST be published at the first one's name, with related
-    information at each other's. Each publish sends every file that has
+    within 100ms of the user stopping typing. A diagnostic about entities
+    (its data names them, as a reference cycle's does) is published where
+    the project locates it (the first one's block, ADR 0227), with related
+    information at each other's name. Each publish sends every file that has
     diagnostics, and an empty list to each file that had some and has none
     now. Each file's list carries the version of the buffer the project was
     compiled from, none for a file compiled from disk, so a client drops a
@@ -555,8 +555,8 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "a publish is labelled with the version of the buffer the project was compiled from"
   verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
-  verify unit "a spanless diagnostic about entities is published at the first one's name"
-  verify unit "a spanless diagnostic is published at its entity's new name when only the entity moved"
+  verify unit "a diagnostic about entities is published at the first one's block, with related information at each other's name"
+  verify unit "a diagnostic about entities follows its entity's block when only the entity moved"
   verify unit "a diagnostic is published on the file its span names"
   verify unit "a diagnostic about no entity is published on the edited document"
   verify unit "a define block's W143 is published as unnecessary code"
@@ -654,6 +654,7 @@ behavior outline_view "Outline View" {
   """
   verify unit "outline lists all entities in file"
   verify unit "outline shows entity kind, ID, and title"
+  verify unit "an outline method's signature is the method as written, its parameters' annotations included"
   verify integration "the outline nests an entity's methods as the MCP outline does"
   verify unit "outline uses extension-defined SymbolKind from KindRegistry lsp_icon"
   verify contract "Outline View: outline view holds — graph_available, kind_registry_available, all_entities_listed, symbol_kind_delegated"

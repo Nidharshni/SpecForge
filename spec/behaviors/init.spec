@@ -120,7 +120,12 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
     The starter spec's spec block MUST state the project's version, the
     one specforge.json records: an extension's template writes it as
     {version} (as {project} stands for the project id), which init fills
-    in. Init MUST write the starter as the
+    in with the version escaped as the inside of a .spec string (backslash,
+    quote, line breaks, tab), so a template writes it between quotes and the
+    spec block reads back the version specforge.json records, whatever it
+    holds. Init MUST parse the laid-out starter before it writes anything
+    and refuse one that does not parse (starter_unparsed), naming the
+    extension whose template it is. Init MUST write the starter as the
     formatter writes it, with the configuration of its directory and the
     field forms of the extensions it enables, whatever they contribute, so
     a freshly initialised project passes specforge format --check.
@@ -137,6 +142,8 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
   verify unit "the starter spec's version is the project's"
   verify integration "a freshly initialised project passes format --check and check"
   verify unit "init writes the starter's values in the forms of the fields the extensions it enables declare"
+  verify unit "init writes the project's version into its starter as one string the starter reads back, whatever the version holds"
+  verify unit "init refuses a starter that does not parse, naming the extension whose template it is, before anything is written"
   verify contract "Scaffold Starter Spec File: starter spec file scaffolding holds — config_created, filesystem_available, starter_file_created, structural_syntax_only, zero_diagnostic_pass"
 }
 
@@ -259,6 +266,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
   verify unit "init refuses a structural keyword as the starter's spec ID, whatever it enables"
   verify integration "a directory named after a kind init enables is refused as the project name, writing nothing"
+  verify integration "an init whose version holds a quote or a backslash writes a starter that passes format --check and check"
   verify integration "non-interactive output matches interactive output for same inputs"
   verify unit "non-interactive init with --format=json prints the init document specforge.init answers"
   verify unit "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"

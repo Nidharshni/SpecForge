@@ -82,6 +82,7 @@ pub fn diagnostics(shown: &[&Diagnostic]) -> Option<String> {
 /// - **Referenced by**: the references to it, grouped by the referencing
 ///   kind and field;
 /// - **Fields**: its field values but the headline;
+/// - **Methods**: its methods' signatures, one per line (ADR 0222);
 /// - **Obligations**: its `verify` statements, one per line (ADR 0094);
 /// - **Diagnostics**: the diagnostics about it that are not among those
 ///   `shown` for the cursor, each code linked to its catalogue entry.
@@ -118,8 +119,8 @@ pub fn entity(
         }
         header_section.push_str(&format!("\n{}", ext_line));
     }
-    if let Some(headline) = facts.headline {
-        header_section.push_str(&format!("\n\n{}", quote(headline)));
+    if let Some(headline) = &facts.headline {
+        header_section.push_str(&format!("\n\n{}", quote(&headline.text)));
     }
 
     let mut sections: Vec<String> = vec![header_section];
@@ -172,11 +173,27 @@ pub fn entity(
         .fields
         .entries()
         .iter()
-        .filter(|entry| !is_headline(&entry.value, facts.headline))
-        .map(|entry| format!("- `{}` = {}", entry.key, format_field_value(&entry.value)))
+        .filter(|entry| facts.headline.as_ref().is_none_or(|h| h.field != entry.key))
+        .map(|entry| {
+            let key = entry.key.as_str();
+            let annotations = facts.members.annotations.get(key).into_iter().flatten();
+            let noted: String = annotations.map(|a| format!(" {}", a.spelled())).collect();
+            format!("- `{key}` = {}{noted}", format_field_value(&entry.value))
+        })
         .collect();
     if !fields.is_empty() {
         sections.push(format!("**Fields**\n{}", fields.join("\n")));
+    }
+
+    // Section 5a: its methods, one signature per line
+    if !facts.members.methods.is_empty() {
+        let lines: Vec<String> = facts
+            .members
+            .methods
+            .iter()
+            .map(|m| format!("- `{}`", m.signature()))
+            .collect();
+        sections.push(format!("**Methods**\n{}", lines.join("\n")));
     }
 
     // Section 5b: its obligations, apart from its fields
@@ -222,15 +239,6 @@ fn obligations_section(node: &Node) -> Option<String> {
         })
         .collect();
     Some(format!("**Obligations**\n{}", lines.join("\n")))
-}
-
-/// Whether `value` is the headline statement: the very string the read
-/// view borrowed from the node, not merely an equal one.
-fn is_headline(value: &FieldValue, headline: Option<&str>) -> bool {
-    match (value, headline) {
-        (FieldValue::String(s), Some(headline)) => std::ptr::eq(s.as_str(), headline),
-        _ => false,
-    }
 }
 
 /// The Coverage line after `**Coverage** · `: the status `specforge.inspect`

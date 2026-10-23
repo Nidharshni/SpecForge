@@ -1,6 +1,6 @@
 # Every document MCP sends is one typed definition its spec type states
 
-**Status:** accepted (2026-10-12, architecture round 7, plan 07). Extends ADR 0048 D8 (the reflection test)
+**Status:** accepted (2026-10-12, architecture round 7, plan 07). Extended by [ADR 0222](0222-what-an-entity-holds-is-written-once.md): inspect and the context prompt carry `annotations` and `methods`. Extends ADR 0048 D8 (the reflection test)
 from tool replies to every document MCP sends; applies ADR 0049 D1 to prompts; amends ADR 0024 D6 (what
 the deltas carry) and the `initialize` result ADR 0004 left; extends ADR 0052 D5 to watch's lines. D3's diagnostics delta compares each diagnostic whole and D7 extends to it (ADR 0074).
 

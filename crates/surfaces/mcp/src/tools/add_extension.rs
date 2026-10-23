@@ -22,8 +22,6 @@ pub struct Args {
     specifiers: NonEmpty,
     /// Preview the install without changing any file
     dry_run: bool,
-    /// Accept a registry package with no publisher signature (publisher verification skipped)
-    allow_unsigned: bool,
 }
 
 impl MutationArgs for Args {
@@ -98,7 +96,8 @@ impl CoreTool for Tool {
             // A relative local path is read from the project's root: the server has no working
             // directory of its own to mean it.
             base: None,
-            allow_unsigned: args.allow_unsigned,
+            // An unsigned package is accepted by a person, in a terminal (ADR 0221), as a key change is.
+            allow_unsigned: false,
             dry_run: args.dry_run,
             // A local file installs only from inside the project it installs into.
             caller: project.caller(),

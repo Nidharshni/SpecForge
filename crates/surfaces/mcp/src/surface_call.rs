@@ -116,9 +116,11 @@ pub(crate) trait Surface {
         invocation: &Invocation,
     ) -> Self::Outcome;
     /// What a refusal of the call's target is; a refused mutation still
-    /// records into `events`.
+    /// records into `events`, unless
+    /// its arguments ask for a preview (ADR 0229).
     fn refused(
         found: &Found<Self::Core, Self::Extension>,
+        invocation: &Invocation,
         error: McpError,
         events: &mut dyn EventSink,
     ) -> Self::Outcome;
@@ -184,7 +186,12 @@ pub(crate) fn serve<S: Surface>(
             }
             outcome
         }
-        Err(refused) => S::refused(&found, McpError::from(refused), &mut *state.events),
+        Err(refused) => S::refused(
+            &found,
+            &invocation,
+            McpError::from(refused),
+            &mut *state.events,
+        ),
     };
     if let Some(event) = S::completed(&found, &invocation, &outcome) {
         state.events.record(event);

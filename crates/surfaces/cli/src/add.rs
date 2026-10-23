@@ -19,7 +19,7 @@ pub(crate) struct Args {
     #[command(flatten)]
     output: OutputArg,
 
-    /// Accept unsigned packages (publisher verification skipped)
+    /// Accept a package with no publisher signature, when no key is pinned or locked for its name
     #[arg(long, default_value_t = false)]
     allow_unsigned: bool,
 

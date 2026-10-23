@@ -43,7 +43,7 @@ fn a_file_entry_whose_describe_fails_says_its_declaration_cannot_be_read() {
     file(dir.path(), "m.wasm", b"\0asm m");
     let runtime = describe_fails(
         InProcessRuntime::new().binary(b"\0asm m", extension("@acme/m")),
-        &["m.wasm", "@acme/m"],
+        &["file:m.wasm", "@acme/m"],
     );
 
     let loaded = load_with(dir.path(), &entries(&["m.wasm"]), &runtime);

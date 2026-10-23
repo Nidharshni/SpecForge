@@ -436,6 +436,26 @@ fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
 
 #[specforge_test(
     behavior = "locate_project_root",
+    verify = "a command given a path that does not exist refuses it as file_not_found"
+)]
+fn an_extension_command_given_a_missing_path_writes_one_error_object() {
+    let dir = TestProject::new().without_config();
+    let out = Cli::on(&dir).bare(&["product", "features", "--path", "nope", "--format", "json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.is_empty(),
+        "an extension command's error goes to stderr (ADR 0011): {}",
+        out.stdout
+    );
+    let error: serde_json::Value = serde_json::from_str(out.stderr.trim()).unwrap();
+    assert_eq!(
+        error,
+        serde_json::json!({"code": "file_not_found", "message": "path not found: nope"})
+    );
+}
+
+#[specforge_test(
+    behavior = "locate_project_root",
     verify = "a file path is in the project of its directory"
 )]
 fn a_file_path_names_the_project_it_is_in() {

@@ -54,8 +54,11 @@ behavior serialize_json_graph "Serialize JSON Graph" {
     their display form, one per line, an integer or boolean as a JSON
     scalar, a list as an array, a block as an object of its entries; an entity's
     verify statements as {kind, description} objects under the node's own
-    `verify`, beside its fields. No position and no parse tree
-    is ever written.
+    `verify`, beside its fields; its methods as {name, params, returns}
+    under its own `methods` (a parameter as {name, type, optional?,
+    annotations?}); the annotations written after its fields under its own
+    `annotations`, by the field's name (a block field's entry's by
+    `outer.key`). No position and no parse tree is ever written.
   """
   verify unit "JSON output contains all nodes"
   verify unit "JSON output contains all edges"
@@ -65,6 +68,7 @@ behavior serialize_json_graph "Serialize JSON Graph" {
   verify unit "schema is included even for empty graph"
   verify integration "structural-only graph (zero extensions) produces valid Graph Protocol JSON with raw keywords in kind field"
   verify unit "an expression group is written as its conjuncts, one per line, never as a parse tree"
+  verify unit "what an entity holds is written once: its fields, their annotations at any depth and its methods, with no position"
   verify contract "Serialize JSON Graph: JSON graph serialization holds — validation_complete_fired, all_nodes_serialized, all_edges_serialized, schema_version_present, valid_json_produced, render_complete_emitted"
 }
 
@@ -418,11 +422,12 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   }
   contract   """
     Search MUST find the entities whose id or title matches the text, or
-    whose string field text contains it, ranked exact, prefix, substring,
-    field text, then Jaro-Winkler similarity of at least 0.8 over id and
-    title. An empty text matches every entity. Every filter is ANDed: kinds,
-    a field's text (by the one field-text rule: a list by its items, an
-    expression by its written form, a block by its keys), and references
+    whose field text (by the one field-text rule: a list by its items, an
+    expression by its written form, a block by its keys) contains it,
+    ranked exact, prefix, substring, field text, then Jaro-Winkler
+    similarity of at least 0.8 over id and title. An empty text matches
+    every entity. Every filter is ANDed: kinds, a field's text (by the same
+    rule), and references
     (the entities that reference the named one; an entity the graph lacks is
     E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
@@ -434,6 +439,7 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "empty query returns all entities up to limit"
   verify unit "the references filter combines with the other filters"
   verify unit "a references entity the graph lacks is E003 naming the closest entity"
+  verify unit "the text search reads every field by the field-text rule, as the field filter does"
   verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "a search returns at most limit hits, twenty when no limit is given"
   verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
@@ -486,7 +492,8 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   }
   contract   """
     Inspect MUST answer one entity's facts: its node and kind entry, its
-    headline statement, its standing and obligations, its references in both
+    headline statement (the field text of the field its extension declares
+    headline and normative, whatever its written shape), its standing and obligations, its references in both
     directions, and the diagnostics about it: those its data names it in,
     else those inside its block, never one whose message merely quotes it or
     whose id contains its id. Its coverage is the coverage view's verdict and
@@ -496,8 +503,10 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   verify unit "an entity's coverage is its coverage row's verdict, obligation by obligation"
   verify unit "an entity's coverage status is its coverage row's: whether it counts, then how it is proven"
   verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
+  verify unit "an entity's headline is its headline field's text, whatever its written shape"
   verify unit "an unknown entity is E003, entity_not_found"
   verify unit "an entity's headline and its fields read the one entry of a field written twice"
+  verify unit "an entity's facts carry its methods and its fields' annotations as the graph export writes them"
 }
 
 // The exploration and the review: the explore and review prompts'
@@ -1102,7 +1111,9 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
     entries with code, severity, message and suggestion (null when there
     is none), the span nested under span (file, start_line, start_col,
     end_line, end_col; null without a location), and the span's start
-    flat as file, line and column (null without a location). The shape
+    flat as file, line and column (null without a location; a diagnostic
+    about entities without a span of its own is located at the first one's
+    block, ADR 0227). The shape
     is a superset of the nested and the flat shapes these surfaces used
     before, so no reader of either breaks. A diagnostic that carries a
     typed payload (DiagnosticData, e.g. the target of an unresolved
@@ -1115,6 +1126,8 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
   verify unit "the presented JSON is valid and parseable"
   verify unit "the span is nested beside the flat location, with its end positions"
   verify unit "a typed payload is presented under data, and its absence adds no key"
+  verify unit "a diagnostic about entities without a span of its own is located at the first one's block"
+  verify unit "a diagnostic without a span takes the span of the first entity its data names that is known; one with a span keeps it"
   verify integration "check and MCP validate present the same diagnostics identically"
   verify contract "Present Diagnostics as JSON: JSON diagnostic presentation holds — diagnostics_collected, one_shape_everywhere, location_both_ways, data_only_when_typed"
 }
@@ -1152,7 +1165,7 @@ behavior export_agent_context_format "Export Agent Context Format" {
     a decision's decision text), so every kind keeps the text that states
     what it promises; core reads the flag and knows no field by name. The
     fields an extension declares headline (a behavior's contract, a status)
-    sit at the entity's top level instead; a field no extension declares
+    sit at the entity's top level instead, each as its field text; a field no extension declares
     headline is never lifted, whatever its name. The output MUST omit
     verbose fields (full descriptions, prose) to minimize token consumption.
     The format MUST be valid JSON conforming to the Graph Protocol schema.
@@ -1162,11 +1175,15 @@ behavior export_agent_context_format "Export Agent Context Format" {
     non-existent entity ID, the system MUST emit an E003 diagnostic
     and exit with code 1. When coverage metadata is available from
     compute_project_statistics, the context export MUST include
-    coverage_pct and testable_entity_count in the graph metadata.
+    coverage_pct and testable_entity_count in the graph metadata. An entity
+    also carries its methods under `methods`, and the annotations of the
+    fields it keeps under `annotations`, as the graph format writes them.
   """
   verify unit "context format includes entity IDs and contracts"
   verify unit "context format omits verbose prose fields"
   verify unit "context format keeps each entity's normative fields"
+  verify unit "context format keeps an entity's methods and the annotations of the fields it keeps"
+  verify unit "context format lifts a headline field as its field text, whatever its written shape"
   verify integration "export --format context keeps an invariant's guarantee"
   verify unit "scoped export returns only reachable subgraph"
   verify unit "non-existent scope entity produces E003 and exit code 1"
@@ -1249,10 +1266,14 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph
-    Protocol version.
+    Protocol version. An entity's methods are written under its own
+    `methods` and the annotations written after its fields under its own
+    `annotations`, by the field's name (a block field's entry's by
+    `outer.key`), beside its fields.
   """
   verify unit "graph format includes all nodes and edges"
   verify unit "graph format includes all fields and metadata"
+  verify unit "graph format writes each entity's methods and its fields' annotations"
   verify unit "scoped export returns only reachable subgraph"
   verify unit "non-existent scope entity produces E003 and exit code 1"
   verify unit "depth without a scope is invalid input on every surface"
@@ -1287,7 +1308,8 @@ behavior export_review_document "Export a Review Document" {
     the selection too. The document MUST be deterministic: the scoped
     entity first, then by kind and id, with no timestamp. Prose renders as
     written, with raw HTML, entity references and backslashes escaped
-    outside code spans.
+    outside code spans. A field's annotations follow its written value, and
+    a Methods block lists the signature of each method in written order.
   """
   verify unit "a section is headed by its kind, id and title"
   verify unit "a normative field is quoted whole"
@@ -1296,6 +1318,7 @@ behavior export_review_document "Export a Review Document" {
   verify unit "the entities that reference it are listed"
   verify unit "obligations are numbered in declaration order"
   verify unit "prose renders as written, raw HTML escaped outside code spans"
+  verify unit "a section lists its methods, and each field's annotations follow its value"
   verify unit "sections are ordered scope first, then by kind and id"
   verify integration "export --format markdown writes the review document of examples/todo-app and examples/shop"
   verify integration "specforge.export answers the same document as specforge export"

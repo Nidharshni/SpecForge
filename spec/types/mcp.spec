@@ -186,12 +186,12 @@ type McpPromptArgument "Mcp Prompt Argument" {
 // McpInferGapsResult and McpTraceChainResult.
 
 type McpInspectResult "Mcp Inspect Result" {
-  entity_id           string     @readonly
-  kind                string     @readonly
+  entity_id           string       @readonly
+  kind                string       @readonly
   /// Absent when the entity declares no title.
-  title               string     @optional
+  title               string       @optional
   /// The extension that declares the entity's kind; absent when none does.
-  source_extension    string     @optional
+  source_extension    string       @optional
   /// The entity's kind is testable, the standing the LSP hover shows.
   testable            boolean
   /// The entity declares at least one verify obligation.
@@ -199,19 +199,23 @@ type McpInspectResult "Mcp Inspect Result" {
   /// Its kind must declare obligations (a no_verify_statements rule targets
   /// it): why an exempt entity is exempt.
   obligated           boolean
-  source_span         SourceSpan @readonly
-  /// The field the entity's extension declares headline and normative (a
-  /// behavior's contract); absent when its kind declares none.
-  contract            string     @optional
+  source_span         SourceSpan   @readonly
+  /// The field text of the field the entity's extension declares headline and
+  /// normative (a behavior's contract); absent when its kind declares none.
+  contract            string       @optional
   /// Every field the entity declares, by name (its verify statements are
   /// `verify_declarations`).
   fields              object
+  /// Each annotated field's annotations, by its name (a block field's entry's by outer.key); absent when none.
+  annotations         object       @optional
+  /// Its methods, as the graph export writes them; absent when none.
+  methods             MethodJson[] @optional
   /// The entities that reference this one (incoming), distinct, sorted.
   referenced_by       string[]
   /// The entities this one references (outgoing), distinct, sorted.
   refers_to           string[]
   /// Its verify texts; absent when it declares none.
-  verify_declarations string[]   @optional
+  verify_declarations string[]     @optional
   /// Whether the entity counts (exempt, not_testable) and, when it does, how
   /// it is proven, as specforge.coverage's row says.
   coverage_status     CoverageStatus
@@ -517,10 +521,10 @@ type McpSearchResult "Mcp Search Result" {
   /// The rank band: 1.0 exact, 0.9 prefix, 0.8 substring, 0.7 field text,
   /// 0.6 × similarity for a fuzzy match.
   score         float
-  /// What matched: "id", "title" or a string field's name; absent for an
+  /// What matched: "id", "title" or a field's name; absent for an
   /// empty query.
   match_field   string  @optional
-  /// For a field-text match, the field's text around the match.
+  /// For a field-text match, the matching text around the match (a list's matching item).
   match_snippet string  @optional
   verify unit "McpSearchResult schema is valid"
 }
@@ -1006,14 +1010,18 @@ type McpSpecForSourceEntity "Mcp Spec For Source Entity" {
 // generated code or instructions ("SpecForge provides context, agents
 // produce output").
 type McpContextPromptResult "Context Prompt Result" {
-  entity_id                      string @readonly
-  kind                           string @readonly
-  /// The field the extension declares headline and normative (a behavior's
-  /// contract); empty when the entity's kind declares none.
+  entity_id                      string       @readonly
+  kind                           string       @readonly
+  /// The field text of the field the extension declares headline and normative
+  /// (a behavior's contract); empty when the entity's kind declares none.
   contract_text                  string
   /// Every field the entity declares, by name (an open value: an
   /// extension's fields).
   fields                         object
+  /// Each annotated field's annotations, by its name (a block field's entry's by outer.key); absent when none.
+  annotations                    object       @optional
+  /// Its methods, as the graph export writes them; absent when none.
+  methods                        MethodJson[] @optional
   upstream_entities              string[]
   downstream_entities            string[]
   verify_expectations            string[]
@@ -1025,11 +1033,15 @@ type McpContextPromptResult "Context Prompt Result" {
 }
 
 type McpContextConstraint "An entity a context request names as a structural constraint" {
-  entity_id string @readonly
-  kind      string @readonly
-  title     string
+  entity_id   string       @readonly
+  kind        string       @readonly
+  title       string
   /// Every field it declares, by name (an open value).
-  fields    object
+  fields      object
+  /// Each annotated field's annotations, by its name (a block field's entry's by outer.key); absent when none.
+  annotations object       @optional
+  /// Its methods, as the graph export writes them; absent when none.
+  methods     MethodJson[] @optional
   verify unit "McpContextConstraint schema is valid"
 }
 

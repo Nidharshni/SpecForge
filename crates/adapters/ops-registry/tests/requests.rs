@@ -255,3 +255,64 @@ fn an_unsigned_package_is_refused_before_its_download() {
     assert!(error.is(specforge_common::codes::R_TRUST_001), "{error:?}");
     assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
 }
+
+/// The user's known-keys store, as `User::at(dir.home(), _)` reads it.
+fn store(dir: &TestProject, text: &str) {
+    std::fs::create_dir_all(dir.home()).unwrap();
+    std::fs::write(dir.home().join("known-keys.json"), text).unwrap();
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "an unsigned package for a pinned name is refused before its download"
+)]
+fn an_unsigned_package_for_a_pinned_name_is_refused_before_its_download() {
+    let served = serving(&["1.0.0"]); // unsigned
+    let dir = project_with(&default_registry(served.root().as_str()));
+    store(
+        &dir,
+        r#"{"pins":{"@acme/tool":"k1"},"trusted_keys":[],"denied_keys":[]}"#,
+    );
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .as_user(User::at(dir.home(), None));
+
+    let error = registry
+        .fetch(
+            &name("@acme/tool"),
+            &Version::new(1, 0, 0),
+            TrustPolicy::new(true, Asking::Yes),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.code, "R-TRUST-007", "{error:?}");
+    assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a known-keys store that can't be read refuses an unsigned install too"
+)]
+fn an_unreadable_known_keys_store_refuses_an_unsigned_package_before_its_download() {
+    let served = serving(&["1.0.0"]); // unsigned
+    let dir = project_with(&default_registry(served.root().as_str()));
+    let broken = r#"{"pins":{},}"#;
+    store(&dir, broken);
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .as_user(User::at(dir.home(), None));
+
+    let error = registry
+        .fetch(
+            &name("@acme/tool"),
+            &Version::new(1, 0, 0),
+            TrustPolicy::new(true, Asking::Nobody),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.code, "R-TRUST-006", "{error:?}");
+    assert_eq!(
+        std::fs::read_to_string(dir.home().join("known-keys.json")).unwrap(),
+        broken,
+        "the store is left as it was"
+    );
+    assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
+}

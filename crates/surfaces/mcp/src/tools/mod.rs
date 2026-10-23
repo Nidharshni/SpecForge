@@ -160,12 +160,13 @@ impl Surface for Tools {
 
     fn refused(
         found: &Found<&'static dyn ToolSpec, ToolEntry>,
+        invocation: &Invocation,
         error: McpError,
         events: &mut dyn EventSink,
     ) -> ToolOutcome {
         match found {
             // A refused mutation is a failed one: it wrote nothing, and says so.
-            Found::Core(tool) => tool.refused(error, events),
+            Found::Core(tool) => tool.refused(error, &invocation.arguments, events),
             Found::Extension(_) => error.into(),
         }
     }

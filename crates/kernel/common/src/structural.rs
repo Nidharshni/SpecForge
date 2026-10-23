@@ -27,6 +27,16 @@ pub fn is_structural(keyword: &str) -> bool {
     KEYWORDS.contains(&keyword)
 }
 
+/// The kind a block's body is read as (ADR 0224): the kind a `defaults <kind>` header names (ADR 0149 D1), else the
+/// block's own keyword. The formatter (each value's form) and the editor (completion, hover, tokens) ask it; the
+/// graph's defaults module reads a defaults block by its name, the same answer.
+pub fn body_kind<'a>(keyword: &'a str, name: Option<&'a str>) -> &'a str {
+    match name {
+        Some(name) if keyword == DEFAULTS => name,
+        _ => keyword,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,5 +46,12 @@ mod tests {
         assert_eq!(KEYWORDS, ["spec", "ref", "use", "define", "defaults"]);
         assert!(KEYWORDS.iter().all(|k| is_structural(k)));
         assert!(!is_structural("behavior"));
+    }
+
+    #[test]
+    fn a_defaults_body_is_read_as_the_kind_it_names() {
+        assert_eq!(body_kind(DEFAULTS, Some("behavior")), "behavior");
+        assert_eq!(body_kind("behavior", Some("b_one")), "behavior");
+        assert_eq!(body_kind(DEFAULTS, None), DEFAULTS);
     }
 }

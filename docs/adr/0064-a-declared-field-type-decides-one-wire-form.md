@@ -1,6 +1,6 @@
 # A declared field type decides one wire form
 
-**Status:** accepted (2026-10-13, architecture round 8, plan 01). Amends ADR 0034, ADR 0051 (D1, Rejected),
+**Status:** accepted (2026-10-13, architecture round 8, plan 01). Extended by [ADR 0222](0222-what-an-entity-holds-is-written-once.md): annotations beside `FieldJson`, which is unchanged. Amends ADR 0034, ADR 0051 (D1, Rejected),
 ADR 0040, ADR 0007 ("Where things live") and ADR 0031 (the value shape's home). Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (D5 restored) and extended by [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) (D1 reaches what a value references).
 
 A field's declared type was read four ways. E061 refused only scalars on integer, bool and enum fields and lists

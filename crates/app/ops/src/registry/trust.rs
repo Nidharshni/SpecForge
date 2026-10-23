@@ -35,14 +35,15 @@ pub struct UserKeys<'a> {
 impl TrustPolicy<'_> {
     /// The publisher of `name` signed by `signer`, decided once (ADR 0059, 0213); writes nothing.
     ///
-    /// In order: an unsigned package is R-TRUST-001 unless `allow_unsigned`; a denied key is R-TRUST-005
-    /// whatever the consent; the expected key is the user's pin, else the key the lock records, else none
-    /// (first use). A different key is accepted when it is on `trusted_keys`, else put to `asking`, and
-    /// refused as R-TRUST-003 when nobody consents.
+    /// In order: the expected key, for every package, is the user's pin, else the key the lock records,
+    /// else none (first use). An unsigned package is R-TRUST-007 when a key is expected, whatever
+    /// `allow_unsigned`, `trusted_keys` or the consent (ADR 0221), else R-TRUST-001 unless
+    /// `allow_unsigned`. A denied key is R-TRUST-005 whatever the consent. A key other than the expected
+    /// one is accepted when it is on `trusted_keys`, else put to `asking`, and refused as R-TRUST-003 when
+    /// nobody consents. So [`Publisher::Unsigned`] is answered only for a name with no expected key.
     ///
     /// Call it once the reply names `name@version` and after [`TrustPolicy::admits`] (R014 precedes any
-    /// question, ADR 0201); pass [`UserKeys::default`] for an unsigned package (R-TRUST-006 is only for a
-    /// signed one). It asks at most once and pins nothing: [`Publisher::pin`] names what `Registry::pin`
+    /// question, ADR 0201); pass what the user's store says about the name, whatever the signer. It asks at most once and pins nothing: [`Publisher::pin`] names what `Registry::pin`
     /// saves when the plan commits.
     pub fn decide(
         &self,
@@ -50,16 +51,26 @@ impl TrustPolicy<'_> {
         signer: Signer<'_>,
         keys: UserKeys<'_>,
     ) -> Result<Publisher, OpError> {
-        let key_id = match signer {
-            Signer::Unsigned if self.allow_unsigned => return Ok(Publisher::Unsigned),
-            Signer::Unsigned => {
+        let expected = match (keys.pin, self.locked_key()) {
+            (Some(pinned), _) => Some((pinned, ExpectedFrom::UserPin)),
+            (None, Some(locked)) => Some((locked, ExpectedFrom::Lock)),
+            (None, None) => None,
+        };
+        let key_id = match (signer, expected) {
+            (Signer::Unsigned, Some((expected, from))) => {
+                return Err(unsigned_for_an_expected_key(name, expected, from));
+            }
+            (Signer::Unsigned, None) if self.allow_unsigned => return Ok(Publisher::Unsigned),
+            (Signer::Unsigned, None) => {
                 return Err(refused(
                     codes::R_TRUST_001,
                     format!("package '{name}' is not signed"),
-                    "allow unsigned packages for this install to accept the risk".to_string(),
+                    "if you trust its source, install it with `specforge add --allow-unsigned` (or \
+                     `specforge update --allow-unsigned`) in a terminal"
+                        .to_string(),
                 ));
             }
-            Signer::Key(key_id) => key_id,
+            (Signer::Key(key_id), _) => key_id,
         };
         if keys.denied {
             return Err(refused(
@@ -74,10 +85,8 @@ impl TrustPolicy<'_> {
             key_id: key_id.to_string(),
             first_use,
         };
-        let (expected, from) = match (keys.pin, self.locked_key()) {
-            (Some(pinned), _) => (pinned, ExpectedFrom::UserPin),
-            (None, Some(locked)) => (locked, ExpectedFrom::Lock),
-            (None, None) => return Ok(signed(true)),
+        let Some((expected, from)) = expected else {
+            return Ok(signed(true));
         };
         if expected == key_id {
             return Ok(signed(from == ExpectedFrom::Lock));
@@ -103,6 +112,29 @@ impl TrustPolicy<'_> {
             previous: expected.to_string(),
         })
     }
+}
+
+/// R-TRUST-007: `name` arrives unsigned, but `expected` is the key it is held to.
+fn unsigned_for_an_expected_key(name: &PackageName, expected: &str, from: ExpectedFrom) -> OpError {
+    let message = match from {
+        ExpectedFrom::UserPin => {
+            format!(
+                "package '{name}' is not signed, but its publisher key is pinned to '{expected}'"
+            )
+        }
+        ExpectedFrom::Lock => format!(
+            "package '{name}' is not signed, but specforge.lock records its publisher key '{expected}'"
+        ),
+    };
+    refused(
+        codes::R_TRUST_007,
+        message,
+        format!(
+            "a package its publisher signs does not arrive unsigned: check the registry that serves \
+             '{name}'; if its publisher stopped signing it, remove the extension (`specforge remove \
+             {name}`) and its pin in ~/.specforge/known-keys.json, then add it again"
+        ),
+    )
 }
 
 /// R-TRUST-003: `offered` is not the key expected for `name`.

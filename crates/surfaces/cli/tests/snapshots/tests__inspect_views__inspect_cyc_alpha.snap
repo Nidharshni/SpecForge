@@ -8,7 +8,7 @@ expression: "normalized(&result, root)"
   "diagnostics": [
     {
       "code": "W061",
-      "column": null,
+      "column": 1,
       "data": {
         "kind": "reference_cycle",
         "path": [
@@ -17,11 +17,17 @@ expression: "normalized(&result, root)"
           "alpha"
         ]
       },
-      "file": null,
-      "line": null,
+      "file": "a.spec",
+      "line": 1,
       "message": "reference cycle detected: alpha -> beta -> alpha",
       "severity": "Warning",
-      "span": null,
+      "span": {
+        "end_col": 2,
+        "end_line": 3,
+        "file": "a.spec",
+        "start_col": 1,
+        "start_line": 1
+      },
       "suggestion": "break the cycle by removing or inverting one reference",
       "title": "Reference cycle detected"
     },

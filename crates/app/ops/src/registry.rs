@@ -161,7 +161,8 @@ pub const LOCKED_BYTES_CHANGED: Code = codes::R014;
 /// adapters ask it; it writes nothing, and what it decided is the package's [`Publisher`].
 #[derive(Debug, Clone, Copy)]
 pub struct TrustPolicy<'a> {
-    /// Accept a package with no publisher signature (reported as W155).
+    /// Accept a package with no publisher signature when no key is expected for its name (reported as
+    /// W155); an unsigned package for a pinned or locked name is refused whatever it says (R-TRUST-007).
     pub allow_unsigned: bool,
     /// Who can be asked about a key change (ADR 0110).
     pub asking: Asking<'a>,
@@ -211,7 +212,8 @@ impl<'a> TrustPolicy<'a> {
 /// pinned only when the lock plan that fetched it commits ([`Registry::pin`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Publisher {
-    /// Not signed; accepted because the caller allowed it (W155 was reported).
+    /// Not signed; accepted because the caller allowed it and no key is expected for its name (W155 was
+    /// reported).
     Unsigned,
     /// Signed by `key_id`. `first_use: false`: the user's pin. `first_use: true`: the user has no pin,
     /// and the key is pinned when the install is written (trust on first use, or the key the lock

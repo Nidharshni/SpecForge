@@ -18,7 +18,8 @@ behavior create_entity "Create an Entity" {
     its kind in the file, or at the end of the file; a file that does not exist
     is created, unless the later edits of the list leave it empty: a file that does not
     exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
-    reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
+    reserved word (E013), and MUST NOT be taken, the kind MUST be declared, the title MUST NOT be blank (only whitespace; refused
+    invalid_title before the project is read; ADR 0225), and the file MUST be a project source.
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
@@ -32,6 +33,7 @@ behavior create_entity "Create an Entity" {
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
+  verify unit "new refuses a blank title"
   verify unit "new refuses a file that is not a project source"
   verify unit "new reads every spelling of a file under the spec root as that file"
   verify unit "two spellings of one new file in one list are one file"
@@ -82,7 +84,8 @@ behavior edit_entity_field "Edit an Entity Field" {
     holds what the default holds, as the graph stores both, is removed; a set of an entry of a block field the block writes as none, or not at all,
     writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
     included; a block field left with no entry over a default is written `{}`. An unset of an
-    entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
+    entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle to a blank title (only whitespace) is refused
+    invalid_title before anything is planned, as a create's is. A retitle edit
     replaces the header title where the parse read it, or writes one after
     the name when the header has none; a union's string variant is never its
     title; a spec block's title is its name, and a retitle of it is
@@ -114,6 +117,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "retitle of an untitled union writes the title after its name, never over a variant"
   verify unit "every member edit of a union is refused as one not_editable, before its field is read"
   verify unit "retitle and delete take a union"
+  verify unit "retitle refuses a blank title before anything is planned, as create does"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {

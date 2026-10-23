@@ -187,7 +187,8 @@ pub fn configured(
 /// 3. the lock's bytes: the version `specforge.lock` pins is served as the bytes it pins (R014);
 /// 4. the publisher signature verifies over the digests the reply describes, and the publisher is decided
 ///    by [`TrustPolicy::decide`]: the key matches the one expected for the name (the user's pin, else the
-///    key the project's lock records, else any: trust on first use) (R-TRUST-001..006). The decision is
+///    key the project's lock records, else any: trust on first use) (R-TRUST-001..006), for a signed and an
+///    unsigned package alike: the store is read whatever the signer (R-TRUST-006). The decision is
 ///    the package's publisher; [`Registry::pin`] writes it once the install is;
 /// 5. the binary hashes to the reply's SHA-256 (R-OPS-002), so the signature covers it.
 ///
@@ -306,8 +307,9 @@ impl ConfiguredRegistry {
 impl ConfiguredRegistry {
     /// The fetch policy up to the binary (1-4), which writes nothing and downloads nothing: the reply
     /// and its manifest (1, 3, [`Self::described`]), the lock's bytes (R014, before any question), the
-    /// publisher signature over the digests the reply describes (R-TRUST-002), the user's store
-    /// (R-TRUST-006) and the publisher, decided by [`TrustPolicy::decide`] (R-TRUST-001, -003, -005).
+    /// publisher signature over the digests the reply describes (R-TRUST-002), the user's store, whatever
+    /// the signer (R-TRUST-006), and the publisher, decided by [`TrustPolicy::decide`] (R-TRUST-001, -003,
+    /// -005).
     /// A dry run asks this; a fetch asks it and then downloads (ADR 0213).
     fn decided(
         &self,
@@ -317,24 +319,24 @@ impl ConfiguredRegistry {
     ) -> Result<(Described<'_>, Publisher), OpError> {
         let described = self.described(name, version)?; // 1, 3: checked before the signature, so a refused package pins no key
         policy.admits(name, version, &described.metadata.sha256)?; // R014: the lock's bytes, before any question
-        let publisher = match verify_package_signature(&described.metadata)
-            .map_err(refused_by_trust)?
-        {
-            TrustCheck::Unsigned => policy.decide(name, Signer::Unsigned, UserKeys::default()),
-            TrustCheck::Verified { key_id } => {
-                let known = specforge_registry_client::trust_flow::keys(&self.user.known_keys())
-                    .map_err(refused_by_trust)?;
-                policy.decide(
-                    name,
-                    Signer::Key(&key_id),
-                    UserKeys {
-                        pin: known.pin_for(name.as_str()),
-                        trusted: known.is_trusted(&key_id),
-                        denied: known.is_denied(&key_id),
-                    },
-                )
-            }
-        }?;
+        let key_id =
+            match verify_package_signature(&described.metadata).map_err(refused_by_trust)? {
+                TrustCheck::Unsigned => None,
+                TrustCheck::Verified { key_id } => Some(key_id),
+            };
+        // The store is read whatever the signer: an unsigned package is held to the name's pin too (ADR 0221).
+        let known = specforge_registry_client::trust_flow::keys(&self.user.known_keys())
+            .map_err(refused_by_trust)?;
+        let key_id = key_id.as_deref();
+        let publisher = policy.decide(
+            name,
+            key_id.map_or(Signer::Unsigned, Signer::Key),
+            UserKeys {
+                pin: known.pin_for(name.as_str()),
+                trusted: key_id.is_some_and(|key| known.is_trusted(key)),
+                denied: key_id.is_some_and(|key| known.is_denied(key)),
+            },
+        )?;
         Ok((described, publisher))
     }
 }

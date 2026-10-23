@@ -711,12 +711,13 @@ pub fn write(value: &FieldValue) -> FieldJson {
     })
 }
 
-/// Every field of `fields` written by [`write`], keyed by name (a node holds a
-/// name once, ADR 0215).
-pub fn write_fields(fields: &FieldMap) -> BTreeMap<String, FieldJson> {
-    fields
-        .entries()
-        .iter()
-        .map(|entry| (entry.key.to_string(), write(&entry.value)))
-        .collect()
+/// Every field of `fields` written by [`write`], keyed by name: a key written twice is its first
+/// entry, the parse rule (ADR 0215 D5).
+pub(crate) fn write_fields(fields: &FieldMap) -> BTreeMap<String, FieldJson> {
+    let mut out = BTreeMap::new();
+    for entry in fields.entries() {
+        out.entry(entry.key.to_string())
+            .or_insert_with(|| write(&entry.value));
+    }
+    out
 }

@@ -4,7 +4,8 @@
 //! All comparisons are lowercase. A match falls in the first tier it
 //! reaches: the text is the id or title ([`Tier::Exact`]), starts it
 //! ([`Tier::Prefix`]) or is inside it ([`Tier::Substring`]); for a search
-//! over text too, inside a string field ([`Tier::FieldText`]); else the
+//! over text too, inside a field's text ([`Tier::FieldText`], by the
+//! field-text rule); else the
 //! id or title is within the fuzzy threshold ([`Tier::Fuzzy`]: Jaro-Winkler
 //! similarity of at least [`FUZZY_THRESHOLD`]). Within a tier the more
 //! similar comes first, then the id. Filters (kinds, a field's value, what
@@ -30,8 +31,9 @@ pub enum MatchScope {
     /// The id and the title: completion and workspace symbols, as an
     /// editor filters by name.
     Names,
-    /// The id, the title, then the string fields (a contract, a
-    /// guarantee): MCP search, as an agent searches what entities say.
+    /// The id, the title, then every field's text (a contract, a
+    /// guarantee, a list's items): MCP search, as an agent searches what
+    /// entities say.
     NamesAndText,
 }
 
@@ -82,7 +84,7 @@ pub enum Tier {
 pub enum MatchedOn {
     Id,
     Title,
-    /// A string field (its name).
+    /// A field (its name).
     Field(Sym),
     /// The text is empty: every entity matches.
     Everything,
@@ -194,7 +196,9 @@ fn rank<'g>(node: &'g Node, text: &str, scope: MatchScope) -> Option<EntityMatch
     }
     if scope == MatchScope::NamesAndText
         && let Some(field) = node.fields.entries().iter().find(|e| {
-            matches!(&e.value, FieldValue::String(value) if value.to_lowercase().contains(text))
+            texts(&e.value)
+                .iter()
+                .any(|t| t.to_lowercase().contains(text))
         })
     {
         return found(Tier::FieldText, MatchedOn::Field(field.key), similarity);
@@ -217,27 +221,33 @@ fn rank<'g>(node: &'g Node, text: &str, scope: MatchScope) -> Option<EntityMatch
 /// text.
 fn field_holds(node: &Node, field: &str, value: &str) -> bool {
     let value = value.to_lowercase();
-    node.fields.get(field).is_some_and(|v| {
-        field_items(v)
-            .unwrap_or_else(|| vec![field_text(v)])
-            .iter()
-            .any(|text| text.to_lowercase().contains(&value))
-    })
+    node.fields
+        .get(field)
+        .is_some_and(|v| texts(v).iter().any(|t| t.to_lowercase().contains(&value)))
 }
 
-/// The text of `node`'s string field `field` around the first place it
-/// holds `text` (ignoring case): at most `width` characters on each side,
+/// The texts a field is matched by, by the one field-text rule (ADR 0019, ADR 0228): a list-shaped
+/// value's items (a reference list's ids, each expression's display form, a block's keys), else its
+/// one text.
+fn texts(value: &FieldValue) -> Vec<String> {
+    field_items(value).unwrap_or_else(|| vec![field_text(value)])
+}
+
+/// The text of `node`'s field `field` that holds `text` (a list's matching item),
+/// around the first place it holds it (ignoring case): at most `width` characters on each side,
 /// elided with `…`. What MCP search shows for a field-text match.
 pub fn snippet(node: &Node, field: Sym, text: &str, width: usize) -> Option<String> {
-    let value = node.fields.entries().iter().find_map(|e| match &e.value {
-        FieldValue::String(value) if e.key == field => Some(value),
-        _ => None,
+    let wanted = text.to_lowercase();
+    let value = node.fields.get(field.as_str()).and_then(|v| {
+        texts(v)
+            .into_iter()
+            .find(|t| t.to_lowercase().contains(&wanted))
     })?;
     let lower = value.to_lowercase();
-    let at = lower.find(&text.to_lowercase())?;
+    let at = lower.find(&wanted)?;
     // Lowercasing can change byte lengths; fall back to the whole value.
     if lower.len() != value.len() {
-        return Some(value.clone());
+        return Some(value);
     }
     let chars: Vec<(usize, char)> = value.char_indices().collect();
     let start_char = chars.iter().position(|(i, _)| *i >= at).unwrap_or(0);

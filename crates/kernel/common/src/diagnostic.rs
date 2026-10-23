@@ -246,6 +246,20 @@ impl Diagnostic {
         self
     }
 
+    /// Where a diagnostic about entities sits when it has no span: at the span `span_of` gives
+    /// the first entity its data names ([`DiagnosticData::entities`]) that `span_of` knows
+    /// (ADR 0227). One with a span, without data, or whose data names no entity `span_of`
+    /// knows is unchanged (a project-level diagnostic).
+    pub fn placed_at_subject(mut self, span_of: impl Fn(&str) -> Option<SourceSpan>) -> Self {
+        if self.span.is_none() {
+            self.span = self
+                .data
+                .as_deref()
+                .and_then(|data| data.entities().into_iter().find_map(&span_of));
+        }
+        self
+    }
+
     /// Returns true if this diagnostic is an error.
     pub fn is_error(&self) -> bool {
         self.severity == Severity::Error

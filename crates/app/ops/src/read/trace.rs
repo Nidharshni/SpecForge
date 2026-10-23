@@ -322,55 +322,55 @@ fn traced(graph: &Graph, root: &Node, expectations: &TraceExpectations) -> Trace
     }
 }
 
-/// What falls short, in one vocabulary (CONTEXT.md): a missing link, an
-/// expected edge a traced entity lacks; or a plan gap, how an agent plan
-/// falls short of the graph. An edge to an entity that does not exist is
-/// neither: it is E003, `check`'s business.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Gap {
-    MissingLink(MissingLink),
-    Plan(PlanGap),
+/// What falls short, in one vocabulary (CONTEXT.md), as the `McpTraceGap` row
+/// the trace prompt lists: a missing link, an expected edge a traced entity
+/// lacks (`source_entity` the entity, `target_entity` the kind it would point
+/// at, `missing_link_type` "missing_link"); or a plan gap, how an agent plan
+/// falls short of the graph (its own fields). An edge to an entity that does
+/// not exist is neither: it is E003, `check`'s business.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct Gap {
+    source_entity: String,
+    target_entity: String,
+    missing_link_type: String,
+    gap_context: String,
 }
 
-impl Gap {
-    /// The entity that falls short (`plan` for the plan itself).
-    pub fn source(&self) -> &str {
-        match self {
-            Gap::MissingLink(link) => &link.from,
-            Gap::Plan(gap) => &gap.source,
-        }
-    }
-
-    /// What it falls short of: the kind a missing link would point at, or
-    /// the entity a plan gap names.
-    pub fn target(&self) -> &str {
-        match self {
-            Gap::MissingLink(link) => &link.expected_kind,
-            Gap::Plan(gap) => &gap.target,
-        }
-    }
-
-    /// `missing_link`, or the plan gap's kind (`unresolved_entity`,
-    /// `missing_plan_entry`, `ordering`).
-    pub fn kind(&self) -> &'static str {
-        match self {
-            Gap::MissingLink(_) => "missing_link",
-            Gap::Plan(gap) => gap.kind.as_str(),
-        }
-    }
-
-    /// The gap in a sentence.
-    pub fn context(&self) -> String {
-        match self {
-            Gap::MissingLink(link) => format!(
-                "{} '{}' has no '{}' link to a {}{}",
+impl From<&MissingLink> for Gap {
+    fn from(link: &MissingLink) -> Self {
+        let required = if link.required { " (required)" } else { "" };
+        Gap {
+            source_entity: link.from.clone(),
+            target_entity: link.expected_kind.clone(),
+            missing_link_type: "missing_link".to_string(),
+            gap_context: format!(
+                "{} '{}' has no '{}' link to {} {}{required}",
                 link.from_kind,
                 link.from,
                 link.edge_label,
-                link.expected_kind,
-                if link.required { " (required)" } else { "" }
+                article(&link.expected_kind),
+                link.expected_kind
             ),
-            Gap::Plan(gap) => gap.context.clone(),
+        }
+    }
+}
+
+/// "an" before a kind name that starts with a vowel, else "a".
+fn article(kind: &str) -> &'static str {
+    if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        "an"
+    } else {
+        "a"
+    }
+}
+
+impl From<&PlanGap> for Gap {
+    fn from(gap: &PlanGap) -> Self {
+        Gap {
+            source_entity: gap.source.clone(),
+            target_entity: gap.target.clone(),
+            missing_link_type: gap.kind.as_str().to_string(),
+            gap_context: gap.context.clone(),
         }
     }
 }
@@ -425,4 +425,16 @@ fn links(graph: &Graph, entity_id: &str, direction: Direction) -> Vec<TraceLink>
         .collect();
     links.sort_by(|a, b| a.depth.cmp(&b.depth).then(a.entity_id.cmp(&b.entity_id)));
     links
+}
+
+#[cfg(test)]
+mod tests {
+    use super::article;
+
+    #[test]
+    fn the_missing_link_sentence_writes_an_before_a_vowel() {
+        assert_eq!(article("event"), "an");
+        assert_eq!(article("invariant"), "an");
+        assert_eq!(article("port"), "a");
+    }
 }

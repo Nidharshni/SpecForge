@@ -205,7 +205,8 @@ type RegistryManifest "What a registry says it publishes as one version, without
 }
 
 // How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
-// the caller's choices and the pin the project's lock records for the name (its
+// the caller's choices (`allow_unsigned` accepts an unsigned package only for a
+// name with no expected key) and the pin the project's lock records for the name (its
 // key is the pin when the user has none of their own). `asking` is who can be
 // asked about a key change (specforge_ops::asking::Asking).
 type TrustPolicy "Trust Policy" {

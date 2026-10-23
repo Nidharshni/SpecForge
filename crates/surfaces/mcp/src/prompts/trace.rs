@@ -4,13 +4,13 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::read::plan::AgentPlan;
-use specforge_ops::read::trace::{self, Ask, Target, TraceField};
+use specforge_ops::read::trace::{self, Ask, Gap, Target, TraceField};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::McpError;
-use crate::tools::trace::{Gap, every_is_not_offered};
+use crate::tools::trace::every_is_not_offered;
 use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
@@ -73,11 +73,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         {
             Ask::Plan(plan) => {
                 let outcome = specforge_ops::read::plan::check(&view, plan);
-                let gaps = outcome
-                    .gaps
-                    .iter()
-                    .map(|gap| Gap::of(&specforge_ops::read::trace::Gap::Plan(gap.clone())))
-                    .collect();
+                let gaps = outcome.gaps.iter().map(Gap::from).collect();
                 (outcome.resolved_entries, gaps, "the plan".to_string())
             }
             Ask::Trace(Target::Entity(entity_id)) => {
@@ -86,14 +82,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                 let (document, _unreported) = trace::chain(&view, entity_id)
                     .map_err(|refusal: Refusal<EntityField>| Prompt::refused(refusal))?
                     .into_value_and_notices();
-                let gaps = document
-                    .chain
-                    .missing
-                    .iter()
-                    .cloned()
-                    .map(trace::Gap::MissingLink)
-                    .map(|gap| Gap::of(&gap))
-                    .collect();
+                let gaps = document.chain.missing.iter().map(Gap::from).collect();
                 (
                     vec![entity_id.to_string()],
                     gaps,

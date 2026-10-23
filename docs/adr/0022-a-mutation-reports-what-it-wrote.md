@@ -3,6 +3,7 @@
 **Status:** accepted (2026-10-06); amended 2026-10-11 (architecture round 6, plan 09, last section).
 D7's paths amended 2026-10-15 by ADR 0102 (canonical outside the root, `/` separators).
 Amended by [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) (round 16, plan 05): D6's CLI `files_written` follows D7's rule, and a run's outcome carries the preview the arguments decide (M2 kept).
+Extended by [ADR 0229](0229-an-mcp-call-previews-by-its-arguments-whatever-refuses-it.md) (round 25, plan 09): M2 holds for a call refused before its handler runs: a preview its arguments ask for records nothing and lists no files_written.
 
 What an MCP mutation did crossed the dispatcher seam as JSON. Each operation returned a typed
 outcome; the handler built a `json!` reply from it; a per-tool `effect` closure in the tool table

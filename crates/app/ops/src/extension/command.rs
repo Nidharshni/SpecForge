@@ -386,7 +386,8 @@ pub enum RunError {
     /// arg. The export was not called.
     Args(ArgError),
     /// The view has no project on disk to run the command over
-    /// (`no_project`, [`ProjectView::project_root`]).
+    /// (`no_project`, [`ProjectView::project_root`]), or the path naming it
+    /// does not exist (`file_not_found`).
     NoProject(OpError),
     /// The export did not answer a `CommandOutput`: it trapped, the guest
     /// does not route it, its answer is not one, or its extension is not

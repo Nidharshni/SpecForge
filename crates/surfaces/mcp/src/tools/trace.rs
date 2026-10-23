@@ -32,26 +32,6 @@ pub enum Reply {
     Plan(PlanOutcome),
 }
 
-/// A gap as MCP spells it (`McpTraceGap`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Gap {
-    source_entity: String,
-    target_entity: String,
-    missing_link_type: String,
-    gap_context: String,
-}
-
-impl Gap {
-    pub(crate) fn of(gap: &specforge_ops::read::trace::Gap) -> Self {
-        Gap {
-            source_entity: gap.source().to_string(),
-            target_entity: gap.target().to_string(),
-            missing_link_type: gap.kind().to_string(),
-            gap_context: gap.context().to_string(),
-        }
-    }
-}
-
 /// `specforge.trace`: the trace operation over the served project. An
 /// entity's result is the document `specforge trace <entity> --format
 /// json` writes; a plan's is an `McpTracePlanResult`.

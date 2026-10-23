@@ -897,12 +897,13 @@ holds) or `name` alone (a local module); each part is lowercase letters, digits,
 inside `.specforge/extensions`. It is checked where a name does not come from
 the `add` argument (that is E054): the name a local module declares when
 `specforge add` installs it, a peer a declaration names, a `specforge.json`
-`extensions` entry (the entry is not loaded), the name `specforge remove` is
-given when no `specforge.json` entry or lock entry has it, and the name and
-version of the declaration `specforge publish` uploads (which must also be
-scoped and a full version). Nothing is written or deleted. Fix the extension's
-declared name or version (its SDK `name`/`version`) and rebuild, or fix the
-`specforge.json` entry.
+`extensions` entry (the entry is not loaded), the name a `.wasm` file entry's
+component declares (the entry is not loaded), the name `specforge extension
+validate` reads, the name `specforge remove` is given when no `specforge.json`
+entry or lock entry has it, and the name and version of the declaration
+`specforge publish` uploads (which must also be scoped and a full version).
+Nothing is written or deleted. Fix the extension's declared name or version (its
+SDK `name`/`version`) and rebuild, or fix the `specforge.json` entry.
 
 Owner: core
 Level: error
@@ -952,9 +953,10 @@ A block that becomes a graph node has no title, or a blank one: write it after
 the block's id (`type Task "A unit of work" { … }`, `type Status "Task status"
 = open | done`). The title is the one label every surface shows for the node; a
 `//` comment above the block never reaches the graph. `specforge migrate` writes
-the missing titles of a project: the comment directly above each block when
-there is one, else its id in words. `spec` takes its name as its title, `ref`
-requires one, and `define` blocks are never nodes.
+a project's missing and blank titles: the comment directly above each block when
+there is one, else its id in words. A `spec` block's title is its name, which
+migrate never writes; `ref` requires one; `define` and `defaults` blocks are
+never nodes.
 
 Owner: core
 Level: error
@@ -1885,7 +1887,7 @@ R-TRUST-001: Unsigned package
 
 The registry package carries no publisher signature, so where it came from can't
 be verified. Install it anyway only if you trust the source, with
-`--allow-unsigned`.
+`--allow-unsigned`; the MCP server never accepts an unsigned package.
 
 Owner: core
 Level: error
@@ -1957,6 +1959,25 @@ is installed either way: a store read as empty would trust any key and lose your
 `denied_keys`, and an install whose pin can't be saved is put back. Fix the
 file's JSON, or move it aside (every package is then trusted on first use
 again), and check the permissions on the file and its directory.
+
+Owner: core
+Level: error
+```
+
+## R-TRUST-007
+
+```
+R-TRUST-007: Unsigned package for a pinned publisher
+
+The registry package carries no publisher signature, but a publisher key is
+expected for its name: the key you pinned when you first installed it, or, when
+you have no pin for it, the key the project's `specforge.lock` records. A
+package its publisher signs does not arrive unsigned, so this can be a mirror or
+a compromised registry serving other bytes. Nothing is downloaded, and neither
+`--allow-unsigned`, `--yes`, an interactive yes nor `trusted_keys` accepts it.
+Check the registry that serves the name. If its publisher really stopped signing
+it, remove the extension (`specforge remove <name>`) and its pin in
+`~/.specforge/known-keys.json`, then add it again.
 
 Owner: core
 Level: error
@@ -3292,7 +3313,9 @@ enum, identifier or reference value and each item of a reference list; quoted
 for text and each item of a string list. This value is written the other way. It
 reads the same, so the graph is unchanged; run specforge format (or format the
 document in the editor) to rewrite every value in its form. A bare word on a
-kind that takes members (type, port) is left alone: it may be a member's type.
+kind that takes members (type, port) is left alone: it may be a member's type. A
+value a `defaults <kind>` block writes is reported once, at the default, however
+many blocks take it.
 
 Owner: core
 Level: warning

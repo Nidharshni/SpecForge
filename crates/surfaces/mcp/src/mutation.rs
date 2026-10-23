@@ -349,16 +349,21 @@ pub(crate) fn complete<R: MutationReply>(
     )
 }
 
-/// A mutation refused before its handler ran (arguments that do not parse, a
-/// call target with no project): a failed mutation that wrote nothing
-/// (`data.files_written: []`, `mcp_mutation_completed` with `success:
-/// false`, recorded into `events`). Arguments that do not parse cannot say
-/// they asked for a preview.
+/// A mutation refused before its handler ran (arguments that do not read, a
+/// call target that refused). A preview its arguments ask for is sent as it
+/// is and records nothing, as [`complete`] sends one (ADR 0022 M2, ADR 0229);
+/// any other is a failed mutation that wrote nothing (`data.files_written:
+/// []`, `mcp_mutation_completed` with `success: false`, recorded into
+/// `events`). Arguments that do not read cannot say they asked for a preview.
 pub(crate) fn refused(
     tool: &str,
+    preview: bool,
     error: impl Into<Box<McpError>>,
     events: &mut dyn EventSink,
 ) -> ToolOutcome {
+    if preview {
+        return ToolOutcome::Refused(error.into());
+    }
     failure(tool, None, Failed::from(error.into()), events)
 }
 

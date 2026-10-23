@@ -71,3 +71,56 @@ fn a_bare_word_on_a_members_kind_is_not_w159() {
 fn a_value_e061_refuses_is_not_w159() {
     assert!(w159("ticket t1 \"T\" {\n  label \"a/b\"\n  priority \"urgent\"\n}\n").is_empty());
 }
+
+#[spec(
+    behavior = "check_field_value_types",
+    verify = "a value a defaults block writes in the other form is W159 once, at the default"
+)]
+fn a_defaults_value_in_the_other_form_is_w159_once_at_the_default() {
+    let found = w159(
+        "defaults ticket {\n  priority \"low\"\n  labels   [one]\n}\n\n\
+         ticket t1 \"T\" {\n}\n\nticket t2 \"T\" {\n}\n\nticket t3 \"T\" {\n  priority \"high\"\n}\n",
+    );
+    assert_eq!(
+        found,
+        [
+            (
+                "field 'priority' of defaults ticket is a word: write it bare, as priority low"
+                    .to_string(),
+                2,
+                12
+            ),
+            (
+                "field 'labels' of defaults ticket is text: quote it, as labels \"one\""
+                    .to_string(),
+                3,
+                13
+            ),
+            (
+                "field 'priority' of ticket 't3' is a word: write it bare, as priority high"
+                    .to_string(),
+                13,
+                12
+            ),
+        ]
+    );
+}
+
+#[spec(
+    behavior = "check_field_value_types",
+    verify = "a value a defaults block writes in the other form is W159 once, at the default"
+)]
+fn a_defaults_block_below_a_block_is_still_reported_once_at_the_default() {
+    let found = w159(
+        "ticket t1 \"T\" {\n}\n\nticket t2 \"T\" {\n}\n\ndefaults ticket {\n  priority \"low\"\n}\n",
+    );
+    assert_eq!(
+        found,
+        [(
+            "field 'priority' of defaults ticket is a word: write it bare, as priority low"
+                .to_string(),
+            8,
+            12
+        )]
+    );
+}

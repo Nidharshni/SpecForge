@@ -69,7 +69,7 @@ Every `type` block has a title, written after its id. A union takes one in the s
 type TaskStatus "Task Status" = open | in_progress | done | archived
 ```
 
-A block without a title is E076. `specforge migrate` writes the missing ones: the `//` comment directly above the
+A block without a title, or with a blank one, is E076. `specforge migrate` writes them: the `//` comment directly above the
 block when there is one, else the id in words.
 
 ## Fields

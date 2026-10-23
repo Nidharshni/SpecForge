@@ -135,3 +135,34 @@ fn the_references_filter_is_anded_with_the_others() {
     assert_eq!(referencing(field("alw")), ["held"], "a field narrows them");
     assert!(referencing(field("never")).is_empty());
 }
+
+/// Contracts in every shape a string field takes: a date, an expression group and a bare word (W159), and
+/// `bare`'s reference list.
+pub(crate) const SHAPES: &str = "behavior dated \"Dated\" {\n  contract 2026-10-22\n}\n\
+    behavior gated \"Gated\" {\n  contract expr { latency < 10ms, errors == 0 }\n}\n\
+    behavior bare \"Bare\" {\n  contract widget\n  produces [logged_in]\n}\n\
+    event logged_in \"Logged in\" {\n}\n";
+
+#[specforge_test(
+    behavior = "select_entities_over_the_view",
+    verify = "the text search reads every field by the field-text rule, as the field filter does"
+)]
+fn the_text_search_reads_every_field_by_the_field_text_rule() {
+    let p = crate::navigate::compile(&["@specforge/software"], &[("a.spec", SHAPES)]);
+    let view = specforge_ops::view::ProjectView::of(&p.project);
+    let hits = |t| answered(search(&view, &text(t)));
+    let ids = |t| {
+        hits(t)
+            .iter()
+            .map(|h| h.found.node.id.raw.to_string())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids("2026-10"), ["dated"]);
+    assert_eq!(ids("widget"), ["bare"]);
+    let latency = hits("latency");
+    assert_eq!(latency.len(), 1);
+    assert_eq!(latency[0].found.on.field_name(), Some("contract"));
+    assert_eq!(latency[0].snippet.as_deref(), Some("latency < 10ms"));
+    // A list is read by its items: `bare` produces logged_in.
+    assert_eq!(ids("logged"), ["logged_in", "bare"]);
+}

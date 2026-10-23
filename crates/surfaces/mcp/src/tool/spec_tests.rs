@@ -164,13 +164,37 @@ fn a_refused_mutation_reports_a_failed_mutation() {
     assert_eq!(tool.category(), Category::Mutation);
 
     let mut log = EventLog::new();
-    let outcome = tool.refused(McpError::new(ErrorCode::InvalidInput, "no"), &mut log);
+    let outcome = tool.refused(
+        McpError::new(ErrorCode::InvalidInput, "no"),
+        &json!({}),
+        &mut log,
+    );
     let ToolOutcome::Refused(error) = outcome else {
         panic!("a refused call is a failure");
     };
     assert_eq!(error.data, Some(json!({"files_written": []})));
     assert_eq!(log.names(), vec!["mcp_mutation_completed"]);
     assert_eq!(log.named("mcp_mutation_completed")[0]["success"], false);
+
+    // A refusal of a call whose arguments read and ask for a preview is one: nothing listed, nothing recorded.
+    for (arguments, previews) in [
+        (json!({"dry_run": true}), true),
+        (json!({"dry_run": "nope"}), false),
+        (json!({"dry_run": true, "bogus": 1}), false),
+    ] {
+        let mut log = EventLog::new();
+        let refusal = McpError::new(ErrorCode::PreconditionFailed, "no project is served");
+        let ToolOutcome::Refused(error) = tool.refused(refusal, &arguments, &mut log) else {
+            panic!("a refused call is a failure");
+        };
+        assert_eq!(
+            error.data.is_none(),
+            previews,
+            "{arguments}: {:?}",
+            error.data
+        );
+        assert_eq!(log.is_empty(), previews, "{arguments}");
+    }
 
     // A preview reaches `complete` as one: no event, no `files_written`.
     let log = EventLog::new();

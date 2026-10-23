@@ -68,7 +68,7 @@ impl Found {
 
 /// `specforge.search`: the search read view (`specforge_ops::read::query::search`),
 /// the entities the query finds, ranked as the LSP's workspace symbols and
-/// completion rank them, over names and string fields. Every filter is
+/// completion rank them, over names and field text. Every filter is
 /// ANDed: kinds, a field's text (`field` with `value`: one without the other
 /// is refused), and `references` (the entities that reference that one; one the
 /// graph lacks is `entity_not_found` on `references`).
@@ -84,7 +84,7 @@ impl ArgumentOf<SearchField> for Tool {
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.search";
-    const DESCRIPTION: &'static str = "Find entities by id, title or string field text, ranked as the LSP ranks them (exact, prefix, substring, field text, then fuzzy)";
+    const DESCRIPTION: &'static str = "Find entities by id, title or field text, ranked as the LSP ranks them (exact, prefix, substring, field text, then fuzzy)";
     const EFFECT: Effect = Effect::Reads {
         group: ToolGroup::Core,
     };

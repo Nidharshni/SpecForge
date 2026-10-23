@@ -20,7 +20,7 @@ expression: "normalized(&Value::Array(calls), dir.path())"
           "text": [
             {
               "code": "W061",
-              "column": null,
+              "column": 1,
               "data": {
                 "kind": "reference_cycle",
                 "path": [
@@ -29,11 +29,17 @@ expression: "normalized(&Value::Array(calls), dir.path())"
                   "core_mod"
                 ]
               },
-              "file": null,
-              "line": null,
+              "file": "main.spec",
+              "line": 1,
               "message": "reference cycle detected: core_mod -> edge_mod -> core_mod",
               "severity": "Warning",
-              "span": null,
+              "span": {
+                "end_col": 2,
+                "end_line": 4,
+                "file": "main.spec",
+                "start_col": 1,
+                "start_line": 1
+              },
               "suggestion": "break the cycle by removing or inverting one reference",
               "title": "Reference cycle detected"
             },
@@ -135,7 +141,7 @@ expression: "normalized(&Value::Array(calls), dir.path())"
           "text": [
             {
               "code": "W061",
-              "column": null,
+              "column": 1,
               "data": {
                 "kind": "reference_cycle",
                 "path": [
@@ -144,11 +150,17 @@ expression: "normalized(&Value::Array(calls), dir.path())"
                   "core_mod"
                 ]
               },
-              "file": null,
-              "line": null,
+              "file": "main.spec",
+              "line": 1,
               "message": "reference cycle detected: core_mod -> edge_mod -> core_mod",
               "severity": "Error",
-              "span": null,
+              "span": {
+                "end_col": 2,
+                "end_line": 4,
+                "file": "main.spec",
+                "start_col": 1,
+                "start_line": 1
+              },
               "suggestion": "break the cycle by removing or inverting one reference",
               "title": "Reference cycle detected"
             },
@@ -310,7 +322,7 @@ expression: "normalized(&Value::Array(calls), dir.path())"
           "text": [
             {
               "code": "W061",
-              "column": null,
+              "column": 1,
               "data": {
                 "kind": "reference_cycle",
                 "path": [
@@ -319,11 +331,17 @@ expression: "normalized(&Value::Array(calls), dir.path())"
                   "core_mod"
                 ]
               },
-              "file": null,
-              "line": null,
+              "file": "main.spec",
+              "line": 1,
               "message": "reference cycle detected: core_mod -> edge_mod -> core_mod",
               "severity": "Warning",
-              "span": null,
+              "span": {
+                "end_col": 2,
+                "end_line": 4,
+                "file": "main.spec",
+                "start_col": 1,
+                "start_line": 1
+              },
               "suggestion": "break the cycle by removing or inverting one reference",
               "title": "Reference cycle detected"
             }
@@ -414,7 +432,7 @@ expression: "normalized(&Value::Array(calls), dir.path())"
           "text": [
             {
               "code": "W061",
-              "column": null,
+              "column": 1,
               "data": {
                 "kind": "reference_cycle",
                 "path": [
@@ -423,11 +441,17 @@ expression: "normalized(&Value::Array(calls), dir.path())"
                   "core_mod"
                 ]
               },
-              "file": null,
-              "line": null,
+              "file": "main.spec",
+              "line": 1,
               "message": "reference cycle detected: core_mod -> edge_mod -> core_mod",
               "severity": "Error",
-              "span": null,
+              "span": {
+                "end_col": 2,
+                "end_line": 4,
+                "file": "main.spec",
+                "start_col": 1,
+                "start_line": 1
+              },
               "suggestion": "break the cycle by removing or inverting one reference",
               "title": "Reference cycle detected"
             },

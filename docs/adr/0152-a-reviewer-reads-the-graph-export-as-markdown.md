@@ -1,6 +1,6 @@
 # A reviewer reads the graph export as Markdown
 
-**Status:** accepted (2026-10-18, syntax round, plan 06). Amends [ADR 0007](0007-emitter-is-export-formats.md) (the emitter's formats) and [ADR 0027](0027-an-enumerated-argument-is-one-option-table.md) (the export tool's table).
+**Status:** accepted (2026-10-18, syntax round, plan 06). Amended by [ADR 0222](0222-what-an-entity-holds-is-written-once.md): the document lists methods and each field's annotations; the reopening case "methods in every export format" is answered for graph, context and markdown. Amends [ADR 0007](0007-emitter-is-export-formats.md) (the emitter's formats) and [ADR 0027](0027-an-enumerated-argument-is-one-option-table.md) (the export tool's table).
 
 Every graph export was JSON or Graphviz. A person who signs a specification needed a tool to read it, and a
 hand conversion drops a reference that does not resolve (no export carries it).

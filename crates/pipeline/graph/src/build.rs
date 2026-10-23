@@ -1,6 +1,6 @@
 use crate::defaults::{FileDefaults, is_defaults_block};
 use crate::delta::{self, GraphDelta, NodeChange};
-use crate::{Graph, Node};
+use crate::{Graph, Node, title};
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldValue, REF_SCHEME_FIELD, SpecFile};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -363,8 +363,8 @@ fn declarations<'a>(
                 continue;
             }
             // Placed all the same: the LSP keeps the block navigable and every check after the build sees it.
-            if needs_title(entity) && entity.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-                diagnostics.push(untitled_block_error(entity));
+            if title::owes_title(entity) {
+                diagnostics.push(title::untitled_block_error(entity));
             }
             diagnostics.extend(repeated_field_errors(entity));
             let key = (entity.kind.raw, entity.id.raw);
@@ -468,25 +468,6 @@ fn node_from_entity(entity: &Entity, defaults: Option<&FileDefaults<'_>>) -> Nod
 /// become graph nodes.
 pub(crate) fn is_define_block(entity: &Entity) -> bool {
     entity.kind.raw == structural::DEFINE
-}
-
-/// Whether a block that becomes a node must carry a title (E076): every one that is placed. The one place to skip a
-/// header that is not a node.
-fn needs_title(entity: &Entity) -> bool {
-    !is_define_block(entity) && !is_defaults_block(entity)
-}
-
-/// E076: a block with no title, or a blank one.
-fn untitled_block_error(entity: &Entity) -> Diagnostic {
-    Diagnostic::new(
-        codes::E076,
-        format!("{} '{}' has no title", entity.kind.raw, entity.id.raw),
-    )
-    .with_span(entity.span.clone())
-    .with_suggestion(format!(
-        "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block",
-        entity.kind.raw, entity.id.raw
-    ))
 }
 
 /// E081: each later entry of a key `entity` writes twice, at any depth (ADR 0215); its node keeps the first.

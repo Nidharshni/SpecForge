@@ -71,3 +71,53 @@ fn format_quotes_text_written_bare() {
         "{written}"
     );
 }
+
+const DEFAULTS: &str = "defaults behavior {\n  category \"cart\"\n}\n\n\
+                        behavior add_item \"Add\" {\n  contract \"x\"\n}\n\n\
+                        behavior remove_item \"Remove\" {\n  contract \"y\"\n}\n";
+
+#[specforge_test_macros::test(
+    behavior = "apply_format_rules",
+    verify = "a defaults block's values are written in the forms of the kind it names"
+)]
+fn format_writes_a_defaults_blocks_values_in_the_forms_of_the_kind_it_names() {
+    let dir = project("spec/cart.spec", DEFAULTS);
+    let cli = Cli::on(&dir);
+    let before = cli.run(&["export", "--format", "json"]).exits(0).stdout;
+
+    cli.run(&["format", "--check"]).exits(1);
+    cli.run(&["format"]).exits(0);
+
+    let written = std::fs::read_to_string(dir.root().join("spec/cart.spec")).unwrap();
+    assert!(
+        written.starts_with("defaults behavior {\n  category cart\n}\n"),
+        "{written}"
+    );
+    let after = cli.run(&["export", "--format", "json"]).exits(0).stdout;
+    assert_eq!(
+        before, after,
+        "formatting a default's quotes keeps the graph"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "check_field_value_types",
+    verify = "a value a defaults block writes in the other form is W159 once, at the default"
+)]
+fn check_reports_a_defaults_value_in_the_other_form_once_at_the_default() {
+    let dir = project("spec/cart.spec", DEFAULTS);
+    let diagnostics = Cli::on(&dir).document(&["check"]).json;
+    let w159: Vec<_> = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["code"] == "W159")
+        .collect();
+    assert_eq!(w159.len(), 1, "{diagnostics}");
+    assert_eq!(w159[0]["span"]["start_line"], 2, "{diagnostics}");
+    let message = w159[0]["message"].as_str().unwrap();
+    assert!(
+        message.contains("of defaults behavior") && !message.contains("add_item"),
+        "{message}"
+    );
+}

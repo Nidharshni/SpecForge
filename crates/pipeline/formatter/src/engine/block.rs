@@ -1,5 +1,6 @@
 use super::{as_written, comment_text, holds_comment, lines_keeping_strings, node_text, one_line};
 use crate::config::FormatConfig;
+use specforge_common::structural;
 use specforge_graph::FieldForms;
 use specforge_graph::field_form::spell;
 use specforge_parser::Written;
@@ -8,7 +9,7 @@ use tree_sitter_specforge::{field, kind};
 
 /// The declared kind a block's fields are looked up under, with the forms
 /// that say how each field's value is written (ADR 0147): only the depth-1
-/// body of an entity block has one.
+/// body of an entity block has one; a `defaults` block's body is read as the kind it names (ADR 0224).
 type Forms<'a> = Option<(&'a str, &'a FieldForms)>;
 
 /// Format one top-level block.
@@ -51,8 +52,13 @@ pub(super) fn format_block(
         _ => return lines_keeping_strings(node, source),
     };
     let mut lines = vec![format!("{header} {{")];
-    let kind_text = text(field::KIND);
-    let declared = (node.kind() == kind::ENTITY_BLOCK).then_some((kind_text.as_str(), forms));
+    let keyword = text(field::KIND);
+    let name = node
+        .child_by_field_name(field::NAME)
+        .map(|n| node_text(n, source));
+    // A `defaults <kind>` body is read as the kind it names (ADR 0224), as the graph and the editor read it.
+    let declared = (node.kind() == kind::ENTITY_BLOCK)
+        .then_some((structural::body_kind(&keyword, name), forms));
     format_body(node, source, config, 1, declared, &mut lines);
     lines.push("}".to_string());
     lines

@@ -160,8 +160,11 @@ invariant publisher_trust "Publisher Trust" {
   guarantee """
     A registry package is installed only when its publisher signature
     verifies over the digests the registry describes (which the downloaded
-    bytes must match) and the served manifest, or when it
-    is unsigned and the user passed --allow-unsigned; a broken signature is
+    bytes must match) and the served manifest, or when it is unsigned, no
+    key is expected for its name (no pin of the user's and none in
+    specforge.lock) and the user passed --allow-unsigned; an unsigned
+    package for a name whose key is pinned or locked is never installed;
+    a broken signature is
     never installed. The first verified key for a package is pinned, and a
     package signed by another key is refused unless the user consents. A
     key is pinned only for an install that is written, and a store of pins
@@ -172,6 +175,7 @@ invariant publisher_trust "Publisher Trust" {
   verify integration "specforge add pins the publisher key and records it in specforge.lock"
   verify integration "specforge add refuses a package signed by another key than the pinned one"
   verify integration "specforge add --dry-run refuses an unsigned package and a denied publisher key as specforge add does, downloading nothing"
+  verify integration "an unsigned package is refused for a name whose publisher key is pinned, by add, its dry run and MCP add_extension, downloading nothing"
 }
 
 invariant registry_reply_binding "Registry Reply Binding" {

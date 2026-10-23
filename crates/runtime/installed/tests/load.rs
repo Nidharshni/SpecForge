@@ -350,6 +350,10 @@ fn a_file_entry_loads_under_the_name_it_declares() {
         runtime.call_export("tool.wasm", "__handshake", b"{}"),
         WasmCallResult::Trap(_)
     ));
+    assert!(matches!(
+        runtime.call_export("file:tool.wasm", "__handshake", b"{}"),
+        WasmCallResult::Trap(_)
+    ));
 }
 
 #[specforge_test_macros::test(
@@ -412,8 +416,8 @@ fn a_file_entry_that_cannot_load_is_e028_naming_it() {
     }
     // What was refused is not loaded, and the named entry is.
     assert_eq!(loaded.declarations.len(), 1);
-    assert!(!runtime.unload("tool.wasm"));
-    assert!(!runtime.unload("again.wasm"));
+    assert!(!runtime.unload("file:tool.wasm"));
+    assert!(!runtime.unload("file:again.wasm"));
 }
 
 #[specforge_test_macros::test(

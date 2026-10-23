@@ -3,9 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{Graph, Node};
+use crate::{Graph, Members, Node};
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::Sym;
 use specforge_common::shape::Shape;
 
@@ -351,13 +350,15 @@ fn changes(
     new: &Node,
     new_out: &BTreeSet<(Sym, Sym)>,
 ) -> (Vec<String>, Vec<NodeAspect>) {
-    let (old_fields, new_fields) = (field_contents(old), field_contents(new));
-    let fields: BTreeSet<String> = old_fields
-        .keys()
-        .chain(new_fields.keys())
-        .filter(|key| old_fields.get(*key) != new_fields.get(*key))
-        .cloned()
+    let (old_members, new_members) = (Members::of(old), Members::of(new));
+    let mut fields: BTreeSet<String> = differing(&old_members.fields, &new_members.fields)
+        .map(str::to_string)
         .collect();
+    // An annotation is its field's: one changed inside a block field changes the block field.
+    fields.extend(
+        differing(&old_members.annotations, &new_members.annotations)
+            .map(|path| Members::field_of(path).to_string()),
+    );
     let mut aspects = BTreeSet::new();
     if old.kind.raw != new.kind.raw {
         aspects.insert(NodeAspect::Kind);
@@ -365,7 +366,7 @@ fn changes(
     if old.title != new.title {
         aspects.insert(NodeAspect::Title);
     }
-    if methods(old) != methods(new) {
+    if old_members.methods != new_members.methods {
         aspects.insert(NodeAspect::Methods);
     }
     if old.obligations != new.obligations {
@@ -377,28 +378,13 @@ fn changes(
     (fields.into_iter().collect(), aspects.into_iter().collect())
 }
 
-/// Each field's value as every output writes it: the written form has no positions.
-fn field_contents(node: &Node) -> BTreeMap<String, Value> {
-    let mut fields: BTreeMap<String, Value> = BTreeMap::new();
-    for entry in node.fields.entries() {
-        let value = serde_json::json!({
-            "value": Value::from(crate::field_form::write(&entry.value)),
-            "annotations": serde_json::to_value(&entry.annotations).unwrap_or_default(),
-        });
-        fields.entry(entry.key.to_string()).or_insert(value);
-    }
-    fields
-}
-
-fn methods(node: &Node) -> Vec<Value> {
-    node.methods
-        .iter()
-        .map(|m| {
-            serde_json::json!({
-                "name": m.name,
-                "params": serde_json::to_value(&m.params).unwrap_or_default(),
-                "returns": m.returns,
-            })
-        })
-        .collect()
+/// The keys of two maps whose values differ, either side's.
+fn differing<'m, V: PartialEq>(
+    a: &'m BTreeMap<String, V>,
+    b: &'m BTreeMap<String, V>,
+) -> impl Iterator<Item = &'m str> {
+    a.keys()
+        .chain(b.keys())
+        .filter(|key| a.get(*key) != b.get(*key))
+        .map(String::as_str)
 }

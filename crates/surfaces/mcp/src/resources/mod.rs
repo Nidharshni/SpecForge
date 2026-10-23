@@ -72,6 +72,7 @@ impl Surface for Resources {
 
     fn refused(
         _: &Found<&'static dyn ResourceSpec, ResourceEntry>,
+        _: &Invocation,
         error: McpError,
         _: &mut dyn EventSink,
     ) -> ReadOutcome {

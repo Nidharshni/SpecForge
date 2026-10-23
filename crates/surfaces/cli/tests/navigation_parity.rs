@@ -1,25 +1,21 @@
 //! Navigation parity harness (architecture plan 05, T1).
 //!
-//! The LSP and MCP answer the same navigation questions about the same
-//! project: where an entity is declared, what references it, which
-//! entities match a text, which diagnostics are about an entity, and how a
-//! diagnostic is fixed. This harness asks each question of both surfaces,
-//! in process (the LSP `Backend` over memory streams, `McpServer` through
-//! the pairing harness), over the projects under `tests/fixtures/navigation/`.
+//! The LSP and MCP answer the same navigation questions about the same project: where an entity is
+//! declared, what references it, which entities match a text, which diagnostics are about an
+//! entity, and how a diagnostic is fixed. This harness asks each question of both surfaces, in
+//! process (the LSP `Backend` over memory streams, `McpServer` through the pairing harness), over
+//! the projects under `tests/fixtures/navigation/`.
 //!
 //! Answers are normalized to keys: a location is `"file L:C-L:C"`, 1-based
-//! lines and columns, end exclusive (the parser's `SourceSpan`); the LSP's
-//! 0-based UTF-16 positions convert to that (the fixtures are ASCII). Each
-//! case names the answer both surfaces should give ([`Case::target`]).
-//! Where a surface answers otherwise today, the disagreement is a row of
-//! [`EXPECTED_DIVERGENCES`] holding what it answers ([`Divergence::today`]).
-//! A case passes only when every surface answers exactly its row's `today`,
-//! or, without a row, the target: a ticket that closes a divergence fails
-//! this test until it deletes the row, so a step can only turn green on
-//! purpose.
+//! lines and columns, end exclusive (the parser's `SourceSpan`); the LSP's 0-based UTF-16 positions
+//! convert to that (the fixtures are ASCII). Each case names the answer both surfaces should give
+//! ([`Case::target`]). Where a surface answers otherwise today, the disagreement is a row of
+//! [`EXPECTED_DIVERGENCES`] holding what it answers ([`Divergence::today`]). A case passes only
+//! when every surface answers exactly its row's `today`, or, without a row, the target: a ticket
+//! that closes a divergence fails this test until it deletes the row, so a step can only turn green
+//! on purpose.
 //!
-//! The per-case tests characterize and are not linked. The plain tests at
-//! the end pin behaviour the plan keeps.
+//! The per-case tests characterize and are not linked. The plain tests at the end pin kept behaviour.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -234,6 +230,7 @@ fn search_ids(result: &Value) -> Vec<String> {
         .as_array()
         .unwrap_or_else(|| panic!("search returned no list: {result}"))
         .iter()
+        .filter(|r| matches!(r["match_field"].as_str(), None | Some("id" | "title")))
         .map(|r| r["entity_id"].as_str().unwrap().to_string())
         .collect()
 }
@@ -569,7 +566,10 @@ const CASES: &[Case] = &[
         fixture: "nav",
         target: &[
             (Surface::Lsp, &["session_limit"]),
-            (Surface::Mcp, &["session_limit id 0.525"]),
+            (
+                Surface::Mcp,
+                &["logout invariants 0.700", "session_limit id 0.525"],
+            ),
         ],
     },
     Case {
@@ -958,8 +958,8 @@ fn find_references_answers_what_the_lsp_answers() {
 }
 
 /// MCP search ranks as the LSP's workspace symbols and completion rank:
-/// for each query, search's ids (over names; the fixture's string fields
-/// hold none of these texts) are the workspace symbols in the same order,
+/// for each query, search's ids found by name (a field-text hit follows
+/// them, ADR 0228) are the workspace symbols in the same order,
 /// and in a reference list completion offers what search finds of the
 /// field's target kind.
 #[specforge_test(

@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-22, architecture round 24, plan 02). Extends [ADR 0028](0028-installed-extensions-are-one-module.md) D7 to the extension load; reads with [ADR 0160](0160-what-an-extension-entry-enables-is-the-loads-decision.md) D1 and [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) D1.
 
+**Amended by [ADR 0223](0223-a-file-entrys-declared-name-is-a-package-name.md) (round 25):** D2: a package name is checked first, and "already loaded" has no exception for the entry's own text; Rejected's "every .wasm file-entry refusal is E028": one that declares no package name is E072.
+
 ## Context
 
 - `add`, `update`, `init`, `publish`, `extension validate` and `extension init` refuse a binary that declares a builtin's name

@@ -81,10 +81,15 @@ pub trait Handled: Sized {
     fn output_schema() -> Option<&'static Value>;
     /// A call refused before its handler ran (an undeclared name, arguments
     /// that do not read, a call target that refused): the refusal as it is
-    /// for a read; for a mutation a failed mutation that wrote nothing
-    /// ([`crate::mutation::refused`], recorded into `events`).
-    fn refused(error: Box<McpError>, tool: &'static str, events: &mut dyn EventSink)
-    -> ToolOutcome;
+    /// for a read; for a mutation, a preview its arguments ask for
+    /// (sent as it is, nothing recorded) or else a failed mutation that wrote
+    /// nothing ([`crate::mutation::refused`], recorded into `events`).
+    fn refused(
+        error: Box<McpError>,
+        tool: &'static str,
+        preview: bool,
+        events: &mut dyn EventSink,
+    ) -> ToolOutcome;
     /// The rest of a call whose handler ran: a read's reply checked against
     /// its schema; a mutation completed ([`crate::mutation::complete`]: the
     /// target brought up to date, the reply sent once and checked, its events
@@ -101,7 +106,12 @@ impl Handled for Answered<Text> {
         None
     }
 
-    fn refused(error: Box<McpError>, _: &'static str, _: &mut dyn EventSink) -> ToolOutcome {
+    fn refused(
+        error: Box<McpError>,
+        _: &'static str,
+        _: bool,
+        _: &mut dyn EventSink,
+    ) -> ToolOutcome {
         ToolOutcome::Refused(error)
     }
 
@@ -118,7 +128,12 @@ impl<R: Object + Serialize + 'static> Handled for Answered<R> {
         Some(crate::reply::output_schema::<R>())
     }
 
-    fn refused(error: Box<McpError>, _: &'static str, _: &mut dyn EventSink) -> ToolOutcome {
+    fn refused(
+        error: Box<McpError>,
+        _: &'static str,
+        _: bool,
+        _: &mut dyn EventSink,
+    ) -> ToolOutcome {
         ToolOutcome::Refused(error)
     }
 
@@ -140,9 +155,10 @@ impl<R: MutationReply> Handled for Mutation<R> {
     fn refused(
         error: Box<McpError>,
         tool: &'static str,
+        preview: bool,
         events: &mut dyn EventSink,
     ) -> ToolOutcome {
-        crate::mutation::refused(tool, error, events)
+        crate::mutation::refused(tool, preview, error, events)
     }
 
     fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> ToolOutcome {
@@ -179,8 +195,14 @@ pub trait ToolSpec: Sync {
     /// build a `Call`.
     fn run(&self, call: &mut Call<'_>, arguments: &Value) -> ToolOutcome;
     /// The outcome of a call refused before it ran; a refused mutation
-    /// records into `events`.
-    fn refused(&self, error: McpError, events: &mut dyn EventSink) -> ToolOutcome;
+    /// records into `events`, unless the call's `arguments` read and ask for a
+    /// preview (ADR 0229).
+    fn refused(
+        &self,
+        error: McpError,
+        arguments: &Value,
+        events: &mut dyn EventSink,
+    ) -> ToolOutcome;
 
     /// `Mutation` for a mutation, else its effect's group.
     fn category(&self) -> Category {
@@ -307,13 +329,18 @@ impl<T: CoreTool> ToolSpec for T {
         // A name the tool and its target do not declare is refused before
         // anything is read (a refused mutation is a failed one).
         if let Some(error) = self.undeclared(arguments) {
-            return self.refused(error, call.events());
+            return <T::Returns as Handled>::refused(
+                Box::new(error),
+                T::NAME,
+                false,
+                call.events(),
+            );
         }
         let args = match crate::args::read::<T::Args>(arguments) {
             Ok(args) => args,
             // Arguments that do not read cannot say they asked for a preview.
             Err(refused) => {
-                return <T::Returns as Handled>::refused(refused, T::NAME, call.events());
+                return <T::Returns as Handled>::refused(refused, T::NAME, false, call.events());
             }
         };
         // Read before the handler takes the arguments (ADR 0022).
@@ -324,11 +351,22 @@ impl<T: CoreTool> ToolSpec for T {
             Ok(returned) => returned.finish(call, T::NAME, preview),
             // The call target refused a call with no project before this
             // runs; unreachable, answered rather than panicked.
-            Err(refused) => <T::Returns as Handled>::refused(refused, T::NAME, call.events()),
+            Err(refused) => {
+                <T::Returns as Handled>::refused(refused, T::NAME, preview, call.events())
+            }
         }
     }
 
-    fn refused(&self, error: McpError, events: &mut dyn EventSink) -> ToolOutcome {
-        <T::Returns as Handled>::refused(Box::new(error), T::NAME, events)
+    fn refused(
+        &self,
+        error: McpError,
+        arguments: &Value,
+        events: &mut dyn EventSink,
+    ) -> ToolOutcome {
+        // Arguments that read say whether the call previews, whatever refused it (ADR 0022 M2, ADR 0229).
+        let preview = self.undeclared(arguments).is_none()
+            && crate::args::read::<T::Args>(arguments)
+                .is_ok_and(|args| <T::Args as Previews<T::Returns>>::previews(&args));
+        <T::Returns as Handled>::refused(Box::new(error), T::NAME, preview, events)
     }
 }

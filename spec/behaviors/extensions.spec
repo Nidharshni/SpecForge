@@ -75,10 +75,14 @@ behavior load_extension_manifests "Load Extension Manifests" {
     declared one. Which extension each entry names is decided once (a
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
-    read that one decision. A file that does not exist, cannot be read, does not load as a
-    component, declares another name than the one written, declares the name of a
-    builtin (only the builtin loads under a builtin's name), or declares an
-    extension another entry already loads MUST produce E028 naming the entry.
+    read that one decision. A .wasm file entry's component MUST declare a
+    package name, as add and publish hold a declaration to one: one that
+    declares none MUST produce E072 naming the entry, checked before the name
+    written, and load nothing. A file that does not exist, cannot be read, does
+    not load as a component, declares another name than the one written,
+    declares the name of a builtin (only the builtin loads under a builtin's
+    name), or declares an extension another entry already loads (whatever the
+    entry's own text) MUST produce E028 naming the entry.
     Each entry's outcome MUST record where the load takes its extension from
     (builtin, the lock entry's source, file:<path>, or unknown; a repeated
     entry, the one it repeats') and whether it loaded, with or without a
@@ -86,8 +90,11 @@ behavior load_extension_manifests "Load Extension Manifests" {
     An entry whose declaration can't be read (its handshake, a describe
     category or its protocol major) MUST produce one E028 that says so and
     names what failed, in the same words for every kind of entry. Each
-    entry's bytes are read once and loaded under one key, and its
-    declaration is read once (one handshake, then each describe category).
+    entry's bytes are read once and loaded under one key — a named entry's
+    name, a .wasm file entry's file:<entry>, which no package name can be,
+    so loading one entry never replaces an extension another entry loaded —
+    and its declaration is read once (one handshake, then each describe
+    category).
     An entry refused at any step — its bytes not a component, its
     declaration unreadable, or the name it declares not the one its entry
     admits — MUST leave nothing loaded. A .wasm file entry's load warnings
@@ -129,6 +136,11 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "each entry records where the load takes its extension from and whether it loaded"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify integration "a .wasm file entry that declares a builtin's name is E028 naming the entry, and only the builtin loads under that name"
+  verify unit "a .wasm file entry whose component declares no package name is E072 naming the entry, and nothing loads"
+  verify unit "a .wasm file entry loads under a key no extension is admitted under, so it never replaces what another entry loaded"
+  verify unit "a .wasm file entry declaring a name another entry already loads is refused, whatever its own text"
+  verify integration "check, doctor and the extensions listing report a .wasm file entry declaring no package name as E072 on its entry, not loaded"
+  verify integration "two .wasm file entries each run their own component in either order, when one declares the other's entry text"
   verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
   verify unit "an entry refused at any step of its load leaves nothing loaded"
@@ -879,8 +891,8 @@ behavior publish_to_registry "Publish to Registry" {
     created MUST be refused with E074 before any network call. Publish
     refuses in one order, each refusal before anything after it is read or
     asked: the binary (E040, E028, a binary declaring a builtin's name:
-    extension_conflict, as add refuses to install it), its declaration's errors, its name and
-    version (E072), the registry configuration (E063, E067), the registry
+    extension_conflict, as add refuses to install it), its declaration's errors (a declared
+    name that is no package name among them, E072), its scope and version (E072), the registry configuration (E063, E067), the registry
     for the name (R-OPS-001), the credential (R001, R012, R-AUTH-020,
     R-AUTH-021), the signing key (E074); then the registry's answer.
     Successful publish MUST return the registry URL for the
@@ -1035,6 +1047,7 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     decided_before_download  "The publisher is decided from the reply before the binary is downloaded, and a dry run decides it as the add does"
     broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
+    unsigned_held_to_key     "An unsigned package for a name whose publisher key is pinned or locked is refused with R-TRUST-007, whatever --allow-unsigned or consent"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
     unsigned_reported        "An unsigned package accepted with --allow-unsigned is reported as W155"
   }
@@ -1049,8 +1062,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     digests or a swapped manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
     NOT bypass it; one that isn't a package signature makes the reply
     unreadable (R009, check_registry_reply). A package with no signature MUST
-    be refused with R-TRUST-001 unless the user passes --allow-unsigned;
-    one accepted that way pins no key. Accepting it is reported as W155 on
+    be refused with R-TRUST-007 when a key is expected for its name (the
+    user's pin, else the key specforge.lock records), whatever the user
+    passes or answers, and otherwise with R-TRUST-001 unless the user passes
+    --allow-unsigned; one accepted that way pins no key. Accepting it is reported as W155 on
     every surface; the check itself writes nothing to the terminal.
   """
   verify integration "a signature over other bytes is refused even with --allow-unsigned"
@@ -1082,7 +1097,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
     pinned_when_written "A key is pinned only when the install that fetched it is written, after its lock entry: a refused or failed operation pins nothing"
     store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
-    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin; the user's own pin wins over it"
+    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin, against an unsigned package as against another key; the user's own pin wins over it"
   }
   contract   """
     Trust on first use: a signed package's publisher key id MUST be pinned
@@ -1093,7 +1108,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
     refused with R-TRUST-003 naming both key ids (and specforge.lock when
     the lock's key is the one expected) unless the user consents (--yes, an
     interactive yes, or the key on trusted_keys); --allow-unsigned is not
-    consent. Consent MUST re-pin the new key. A key
+    consent, and accepts no unsigned package for a pinned or locked name. Consent MUST re-pin the new key. A key
     on denied_keys MUST be refused with R-TRUST-005 whatever the consent.
     Fetching a package only decides: its key is pinned when the
     operation's lock plan commits, after the binaries, the lock and
@@ -1105,7 +1120,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
     the outcome. The decision on a key change belongs to the surface: it hands the
     operation who can be asked (the CLI's terminal; nobody under
     `--format json` or over MCP), and the CLI asks on its terminal (y or yes,
-    in any case, consents; any other answer refuses).
+    in any case, consents; any other answer refuses). Accepting an unsigned
+    package (--allow-unsigned) is the CLI's only.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
@@ -1126,6 +1142,10 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "a known-keys store that can't be read refuses the install and is left as it was"
   verify integration "with no pin of the user's, the key specforge.lock records is the pin"
   verify integration "a user's pin wins over the key specforge.lock records"
+  verify unit "an unsigned package is refused for a name with an expected key, whatever --allow-unsigned and consent"
+  verify integration "an unsigned package for a pinned name is refused before its download"
+  verify integration "a known-keys store that can't be read refuses an unsigned install too"
+  verify integration "with no pin of the user's, an unsigned version of a name specforge.lock records a key for is refused by add and update, and the lock keeps its key"
 }
 
 behavior configure_registries "Configure Registries" {
