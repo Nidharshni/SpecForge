@@ -386,7 +386,7 @@ fn starter_unparsed(
     );
     match origin {
         Some(name) => error.with_suggestion(format!(
-            "list another extension first in --extensions, or init without '{name}' and add it afterwards"
+            "list another extension first among the extensions, or init without '{name}' and add it afterwards"
         )),
         None => error,
     }
