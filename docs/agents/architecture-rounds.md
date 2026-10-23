@@ -6,7 +6,8 @@ the agents it launches follow a brief in `docs/agents/briefs/`. Plans live in `.
 (gitignored); the coordinator copies the folder to `../SpecForge-planning/` (a plain local folder, not version-controlled)
 when the plans are written and again when the round merges.
 
-Every step has a done condition. Do not start the next step before it holds.
+Every step has a done condition. Do not start the next step before it holds. The coordinator's own shell meets the
+traps of `briefs/_shared.md` too (BSD `sed`, zsh globs, stdin): read its list once.
 
 ## 0. Base
 
@@ -42,7 +43,8 @@ Each worktree agent builds into its own target directory, about 30 GB for the wo
 compare `df -h ..` with `du -sh ../SpecForge-targets/*`. When the disk holds fewer target directories than the wave
 has agents, run the plans **serially** instead: one agent at a time, in the README's merge order, committing straight
 onto the integration branch in the main checkout and sharing one target directory. Nothing is left to merge, so
-step 4 is skipped.
+step 4 is skipped. After each plan's final reply the coordinator runs `sync.py` and `progress.py`
+([`round-tracking.md`](round-tracking.md)), so `tracking.json` never trails the commits.
 
 ## 4. Merge
 

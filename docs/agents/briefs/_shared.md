@@ -6,7 +6,10 @@ Paste this block at the top of each brief you send.
 - Scratch files go under `<scratchpad>/<your label>/`.
 - End every commit message with the trailer from your own system context.
 - Build with `CARGO_TARGET_DIR=<repo parent>/SpecForge-targets/<your label>`, `CARGO_PROFILE_DEV_DEBUG=line-tables-only`,
-  `CARGO_INCREMENTAL=0`; never the repository's `target/`.
+  `CARGO_INCREMENTAL=0`; never the repository's `target/`. In a **serial round** (`architecture-rounds.md` step 3) the
+  opposite holds: build in the repository's own `target/` with `CARGO_TARGET_DIR` and `CARGO_PROFILE_*` unset, and name
+  the same `-p` crate set in every cargo call of the round: another set re-resolves features and rebuilds wasmtime
+  (round 25 filled the disk to 178 MB that way). `df -h .` before a heavy build.
 - First command: merge the integration tip into your branch. Last action before the final reply: merge it again and
   re-run clippy and nextest for the crates you touched.
 - No backward compatibility: SpecForge is pre-release; delete the old name and update every caller.
@@ -20,4 +23,7 @@ Paste this block at the top of each brief you send.
   without a file or a heredoc that feeds it, append `</dev/null` to any command that might read stdin, wrap long
   commands in `timeout`, and edit files with the Edit/Write tools, not piped one-offs.
 - A target directory built in one worktree bakes that worktree's path into the test binaries (`specforge-repo-root`).
-  After the worktree is deleted or moved, use a fresh `CARGO_TARGET_DIR`: the stale one fails hundreds of tests.
+  After the worktree is deleted or moved, use a fresh `CARGO_TARGET_DIR`: the stale one fails hundreds of tests. A
+  target directory last built in another checkout makes `repo_root()` panic and name the fix: `touch
+  crates/leaf/repo-root/src/lib.rs`, rebuild. `touch crates/leaf/diagnostics/src/catalog.rs` for a bogus "code not
+  found".
