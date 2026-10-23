@@ -115,15 +115,14 @@ Files can be split further by domain as the project grows. The directory structu
 Files reference symbols from other files via `use` directives at the top of the file:
 
 ```spec
-use invariants/data                      // imports all symbols from invariants/data.spec
-use invariants/data { data_persistence } // selective import
+use "invariants/data"                      // imports all symbols from invariants/data.spec
+use "invariants/data" { data_persistence } // selective import
 use "behaviors/user-crud"
 use "types/user"
-```
 
 ### Resolution Rules
 
-- `use invariants/data` resolves to `<spec_root>/invariants/data.spec`
+- `use "invariants/data"` resolves to `<spec_root>/invariants/data.spec`
 - The spec root is `spec_root` in `specforge.json`, else the project root
 - Paths use forward slashes (platform-independent)
 - The `.spec` extension is implicit -- never include it
