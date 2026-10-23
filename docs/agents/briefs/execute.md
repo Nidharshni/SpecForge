@@ -13,8 +13,11 @@ plan's text) and your plan, in full.
 3. Pins first: a characterization test asserts today's behaviour; the ticket that fixes the bug flips it in the same
    commit. A test links its spec obligation with `#[specforge_test_macros::test(behavior = "…", verify = "…")]`, and
    the `verify` text exists verbatim in the spec (`cargo run -p xtask --bin check-links` checks it).
-4. After each ticket: the plan's targeted `cargo nextest run -p <crate> -E 'test(<filter>)'`, its deletion checks,
-   `cargo clippy -p <crate> --all-targets -- -D warnings`, `cargo fmt --all`. CI also lints on Linux: beware
+4. After each ticket: the plan's targeted `cargo nextest run -p <crate> -E 'test(<filter>)'` and the whole crate's
+   `cargo nextest run -p <crate>` (source-scanning tests such as `ops::remedy_wording` read every file, not the
+   ticket's), its deletion checks, `cargo clippy -p <crate> --all-targets -- -D warnings`, `cargo fmt --all`. Before
+   the final reply, `cargo gate quick`: it runs the changed crates and their dependents, where a changed ranking or
+   message breaks another surface's snapshot. CI also lints on Linux: beware
    macOS-only `cfg` code. A ticket that shrinks, splits or moves a file listed in `gate/baseline.json`'s `file-size`
    section runs `cargo gate baseline --only file-size` and commits the file with the ticket; no ticket adds lines to a
    listed file.
@@ -25,4 +28,4 @@ plan's text) and your plan, in full.
 
 Final reply: branch name, commits (hash and title), test and clippy results verbatim, deviations, the interfaces other
 plans depend on, and what the coordinator must do next. Done when every ticket in your range is committed and the
-checks of rule 4 pass on the merged tip.
+checks of rule 4 pass on the merged tip, `cargo gate quick` included.
